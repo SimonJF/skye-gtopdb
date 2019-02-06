@@ -1,0 +1,4 @@
+(executable
+  (name sql_to_linq)
+  (libraries episql)
+)

@@ -81,7 +81,7 @@ let show_links_tables tables =
       |> String.concat ", " in
 
     let name = table.table_name in
-    Printf.sprintf "var %s = table \"%s\" with (%s);" name name field_str in
+    Printf.sprintf "var %s = table \"%s\" with (%s) from db;" name name field_str in
 
   tables
   |> List.map show_links_table

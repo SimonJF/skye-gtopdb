@@ -1,0 +1,360 @@
+var db = database "gtopdb";
+
+var accessory_protein = table "accessory_protein" with (object_id: Int, full_name: String) from db;
+
+var allele = table "allele" with (allele_id: Int, accessions: String, species_id: Int, pubmed_ids: String, ontology_id: Int, term_id: String, allelic_composition: String, allele_symbol: String, genetic_background: String) from db;
+
+var altered_expression = table "altered_expression" with (altered_expression_id: Int, object_id: Int, description: String, species_id: Int, tissue: String, technique: String) from db;
+
+var altered_expression_refs = table "altered_expression_refs" with (altered_expression_id: Int, reference_id: Int) from db;
+
+var analogue_cluster = table "analogue_cluster" with (ligand_id: Int, cluster: String) from db;
+
+var associated_protein = table "associated_protein" with (associated_protein_id: Int, object_id: Int, name: String, type: String, associated_object_id: Int, effect: String) from db;
+
+var associated_protein_refs = table "associated_protein_refs" with (associated_protein_id: Int, reference_id: Int) from db;
+
+var binding_partner = table "binding_partner" with (binding_partner_id: Int, object_id: Int, name: String, interaction: String, effect: String, partner_object_id: Int) from db;
+
+var binding_partner_refs = table "binding_partner_refs" with (binding_partner_id: Int, reference_id: Int) from db;
+
+var catalytic_receptor = table "catalytic_receptor" with (object_id: Int, rtk_class: String) from db;
+
+var celltype_assoc = table "celltype_assoc" with (celltype_assoc_id: Int, object_id: Int, immuno_celltype_id: Int, comment: String) from db;
+
+var celltype_assoc_colist = table "celltype_assoc_colist" with (celltype_assoc_id: Int, co_celltype_id: Int, cellonto_id: String) from db;
+
+var celltype_assoc_refs = table "celltype_assoc_refs" with (celltype_assoc_id: Int, reference_id: Int) from db;
+
+var cellular_location = table "cellular_location" with (cellular_location_id: Int, object_id: Int, location: String, technique: String, comments: String) from db;
+
+var cellular_location_refs = table "cellular_location_refs" with (cellular_location_id: Int, reference_id: Int) from db;
+
+var chembl_cluster = table "chembl_cluster" with (object_id: Int, chembl_id: String, cluster: String, cluster_family: String) from db;
+
+var co_celltype = table "co_celltype" with (co_celltype_id: Int, name: String, definition: String, last_modified: Int, type: String, cellonto_id: String) from db;
+
+var co_celltype_isa = table "co_celltype_isa" with (parent_id: Int, child_id: Int) from db;
+
+var co_celltype_relationship = table "co_celltype_relationship" with (co_celltype_rel_id: Int, co_celltype_id: Int, relationship_id: String, type: String) from db;
+
+var cofactor = table "cofactor" with (cofactor_id: Int, object_id: Int, species_id: Int, ligand_id: Int, name: String, comments: String, in_iuphar: Bool, in_grac: Bool) from db;
+
+var cofactor_refs = table "cofactor_refs" with (cofactor_id: Int, reference_id: Int) from db;
+
+var committee = table "committee" with (committee_id: Int, name: String, description: String, family_id: Int) from db;
+
+var conductance = table "conductance" with (conductance_id: Int, object_id: Int, overall_channel_conductance: String, macroscopic_current_rectification: String, single_channel_current_rectification: String, species_id: Int) from db;
+
+var conductance_refs = table "conductance_refs" with (conductance_id: Int, reference_id: Int) from db;
+
+var conductance_states = table "conductance_states" with (conductance_states_id: Int, object_id: Int, receptor: String, state1_high: Float, state1_low: Float, state2_high: Float, state2_low: Float, state3_high: Float, state3_low: Float, state4_high: Float, state4_low: Float, state5_high: Float, state5_low: Float, state6_high: Float, state6_low: Float, most_frequent_state: String) from db;
+
+var conductance_states_refs = table "conductance_states_refs" with (conductance_states_id: Int, reference_id: Int) from db;
+
+var contributor = table "contributor" with (contributor_id: Int, address: String, email: String, first_names: String, surname: String, suffix: String, note: String, orcid: String, country: String, description: String, institution: String) from db;
+
+var contributor2committee = table "contributor2committee" with (contributor_id: Int, committee_id: Int, role: String, display_order: Int) from db;
+
+var contributor2family = table "contributor2family" with (contributor_id: Int, family_id: Int, role: String, display_order: Int, old_display_order: Int) from db;
+
+var contributor2intro = table "contributor2intro" with (contributor_id: Int, family_id: Int, display_order: Int) from db;
+
+var contributor2object = table "contributor2object" with (contributor_id: Int, object_id: Int, display_order: Int) from db;
+
+var contributor_copy = table "contributor_copy" with (contributor_id: Int, address: String, email: String, first_names: String, surname: String, suffix: String, note: String, orcid: String, country: String, description: String, institution: String) from db;
+
+var contributor_link = table "contributor_link" with (contributor_id: Int, url: String) from db;
+
+var coregulator = table "coregulator" with (coregulator_id: Int, object_id: Int, activity: String, specific: Bool, ligand_dependent: Bool, af2_dependent: Bool, comments: String, coregulator_gene_id: Int) from db;
+
+var coregulator_gene = table "coregulator_gene" with (coregulator_gene_id: Int, primary_name: String, official_gene_id: String, other_names: String, species_id: Int, nursa_id: String, comments: String, gene_long_name: String) from db;
+
+var coregulator_refs = table "coregulator_refs" with (coregulator_id: Int, reference_id: Int) from db;
+
+var tbl_database = table "database" with (database_id: Int, name: String, url: String, specialist: Bool, db_prefix: String)
+  tablekeys [["database_id"], ["name"], ["url"], ["specialist"], ["prefix"]] from db;
+
+var database_link = table "database_link" with (database_link_id: Int, object_id: Int, species_id: Int, database_id: Int, placeholder: String) from db;
+
+var deleted_family = table "deleted_family" with (family_id: Int, name: String, previous_names: String, type: String, old_family_id: Int, new_family_id: Int) from db;
+
+var discoverx = table "discoverx" with (cat_no: String, url: String, name: String, description: String, species_id: Int) from db;
+
+var disease = table "disease" with (disease_id: Int, name: String, description: String, type: String) from db;
+
+var disease2category = table "disease2category" with (disease_id: Int, disease_category_id: Int, comment: String) from db;
+
+var disease2synonym = table "disease2synonym" with (disease2synonym_id: Int, disease_id: Int, synonym: String) from db;
+
+var disease_category = table "disease_category" with (disease_category_id: Int, name: String, description: String) from db;
+
+var disease_database_link = table "disease_database_link" with (disease_database_link_id: Int, disease_id: Int, database_id: Int, placeholder: String) from db;
+
+var disease_synonym2database_link = table "disease_synonym2database_link" with (disease2synonym_id: Int, disease_database_link_id: Int) from db;
+
+var dna_binding = table "dna_binding" with (dna_binding_id: Int, object_id: Int, structure: String, sequence: String, response_element: String) from db;
+
+var dna_binding_refs = table "dna_binding_refs" with (dna_binding_id: Int, reference_id: Int) from db;
+
+var do_disease = table "do_disease" with (do_disease_id: Int, term: String, definition: String, last_modified: Int, do_id: String) from db;
+
+var do_disease_isa = table "do_disease_isa" with (parent_id: Int, child_id: Int) from db;
+
+var drug2disease = table "drug2disease" with (ligand_id: Int, disease_id: Int) from db;
+
+var enzyme = table "enzyme" with (object_id: Int) from db;
+
+var expression_experiment = table "expression_experiment" with (expression_experiment_id: Int, description: String, technique: String, species_id: Int, baseline: Float) from db;
+
+var expression_level = table "expression_level" with (structural_info_id: Int, tissue_id: Int, expression_experiment_id: Int, value: Float) from db;
+
+var expression_pathophysiology = table "expression_pathophysiology" with (expression_pathophysiology_id: Int, object_id: Int, change: String, pathophysiology: String, species_id: Int, tissue: String, technique: String) from db;
+
+var expression_pathophysiology_refs = table "expression_pathophysiology_refs" with (expression_pathophysiology_id: Int, reference_id: Int) from db;
+
+var family = table "family" with (family_id: Int, name: String, last_modified: Int, old_family_id: Int, type: String, display_order: Int, annotation_status: Int, previous_names: String, only_grac: Bool, only_iuphar: Bool, in_cgtp: Bool) from db;
+
+var functional_assay = table "functional_assay" with (functional_assay_id: Int, object_id: Int, description: String, response_measured: String, species_id: Int, tissue: String) from db;
+
+var functional_assay_refs = table "functional_assay_refs" with (functional_assay_id: Int, reference_id: Int) from db;
+
+var further_reading = table "further_reading" with (object_id: Int, reference_id: Int) from db;
+
+var go_process = table "go_process" with (go_process_id: Int, term: String, definition: String, last_modified: Int, annotation: String, go_id: String) from db;
+
+var go_process_rel = table "go_process_rel" with (parent_id: Int, child_id: Int) from db;
+
+var gpcr = table "gpcr" with (object_id: Int, class: String, ligand: String) from db;
+
+var grac_family_text = table "grac_family_text" with (family_id: Int, overview: String, comments: String, last_modified: Int) from db;
+
+var grac_functional_characteristics = table "grac_functional_characteristics" with (object_id: Int, functional_characteristics: String) from db;
+
+var grac_further_reading = table "grac_further_reading" with (family_id: Int, reference_id: Int, key_ref: Bool) from db;
+
+var grac_ligand_rank_potency = table "grac_ligand_rank_potency" with (grac_ligand_rank_potency_id: Int, object_id: Int, description: String, rank_potency: String, species_id: Int, in_iuphar: Bool) from db;
+
+var grac_ligand_rank_potency_refs = table "grac_ligand_rank_potency_refs" with (grac_ligand_rank_potency_id: Int, reference_id: Int) from db;
+
+var grac_transduction = table "grac_transduction" with (object_id: Int, transduction: String) from db;
+
+var grouping = table "grouping" with (group_id: Int, family_id: Int, display_order: Int) from db;
+
+var gtip2go_process = table "gtip2go_process" with (gtip_process_id: Int, go_process_id: Int, comment: String, go_id: String, go_term: String) from db;
+
+var gtip_process = table "gtip_process" with (gtip_process_id: Int, term: String, definition: String, last_modified: Int, short_term: String, anchor: String) from db;
+
+var hottopic_refs = table "hottopic_refs" with (reference_id: Int, type: String, topic_date: Int) from db;
+
+var immuno2co_celltype = table "immuno2co_celltype" with (immuno_celltype_id: Int, cellonto_id: String, comment: String) from db;
+
+var immuno_celltype = table "immuno_celltype" with (immuno_celltype_id: Int, term: String, definition: String, last_modified: Int, short_term: String) from db;
+
+var immuno_disease2ligand = table "immuno_disease2ligand" with (immuno_disease2ligand_id: Int, ligand_id: Int, disease_id: Int, comment: String, immuno: Bool) from db;
+
+var immuno_disease2ligand_refs = table "immuno_disease2ligand_refs" with (immuno_disease2ligand_id: Int, reference_id: Int) from db;
+
+var immuno_disease2object = table "immuno_disease2object" with (immuno_disease2object_id: Int, object_id: Int, disease_id: Int, comment: String, immuno: Bool) from db;
+
+var immuno_disease2object_refs = table "immuno_disease2object_refs" with (immuno_disease2object_id: Int, reference_id: Int) from db;
+
+var immunopaedia2family = table "immunopaedia2family" with (immunopaedia_case_id: Int, family_id: Int, section: String, url: String, comment: String) from db;
+
+var immunopaedia2ligand = table "immunopaedia2ligand" with (immunopaedia_case_id: Int, ligand_id: Int, section: String, url: String, comment: String) from db;
+
+var immunopaedia2object = table "immunopaedia2object" with (immunopaedia_case_id: Int, object_id: Int, section: String, url: String, comment: String) from db;
+
+var immunopaedia_cases = table "immunopaedia_cases" with (immunopaedia_case_id: Int, title: String, url: String, last_modified: Int, short_title: String) from db;
+
+var inn = table "inn" with (inn_number: Int, inn: String, cas: String, smiles: String, smiles_salts_stripped: String, inchi_key_salts_stripped: String, nonisomeric_smiles_salts_stripped: String, nonisomeric_inchi_key_salts_stripped: String, neutralised_smiles: String, neutralised_inchi_key: String, neutralised_nonisomeric_smiles: String, neutralised_nonisomeric_inchi_key: String) from db;
+
+var interaction = table "interaction" with (interaction_id: Int, ligand_id: Int, object_id: Int, type: String, action: String, action_comment: String, species_id: Int, endogenous: Bool, selective: Bool, use_dependent: Bool, voltage_dependent: Bool, affinity_units: String, affinity_high: Float, affinity_median: Float, affinity_low: Float, concentration_range: String, affinity_voltage_high: Float, affinity_voltage_median: Float, affinity_voltage_low: Float, affinity_physiological_voltage: Bool, rank: Int, selectivity: String, original_affinity_low_nm: Float, original_affinity_median_nm: Float, original_affinity_high_nm: Float, original_affinity_units: String, original_affinity_relation: String, assay_description: String, assay_conditions: String, from_grac: Bool, only_grac: Bool, receptor_site: String, ligand_context: String, percent_activity: Float, assay_url: String, primary_target: Bool, target_ligand_id: Int, whole_organism_assay: Bool, hide: Bool) from db;
+
+var interaction_affinity_refs = table "interaction_affinity_refs" with (interaction_id: Int, reference_id: Int) from db;
+
+var introduction = table "introduction" with (family_id: Int, txt: String, last_modified: Int, annotation_status: Int, no_contributor_list: Bool) from db;
+
+var iuphar2discoverx = table "iuphar2discoverx" with (object_id: Int, cat_no: String) from db;
+
+var iuphar2tocris = table "iuphar2tocris" with (ligand_id: Int, cat_no: String, exact: Bool) from db;
+
+var lgic = table "lgic" with (object_id: Int, ligand: String, selectivity_comments: String) from db;
+
+var ligand = table "ligand" with (ligand_id: Int, name: String, pubchem_sid: Int, radioactive: Bool, old_ligand_id: Int, type: String, approved: Bool, approved_source: String, iupac_name: String, comments: String, withdrawn_drug: Bool, verified: Bool, abbreviation: String, clinical_use: String, mechanism_of_action: String, absorption_distribution: String, metabolism: String, elimination: String, popn_pharmacokinetics: String, organ_function_impairment: String, emc_url: String, drugs_url: String, ema_url: String, bioactivity_comments: String, labelled: Bool, in_gtip: Bool, immuno_comments: String, in_gtmp: Bool, gtmp_comments: String) from db;
+
+var ligand2family = table "ligand2family" with (ligand_id: Int, family_id: Int, display_order: Int) from db;
+
+var ligand2inn = table "ligand2inn" with (ligand_id: Int, inn_number: Int) from db;
+
+var ligand2meshpharmacology = table "ligand2meshpharmacology" with (ligand_id: Int, mesh_term: String, type: String) from db;
+
+var ligand2subunit = table "ligand2subunit" with (ligand_id: Int, subunit_id: Int) from db;
+
+var ligand2synonym = table "ligand2synonym" with (ligand_id: Int, synonym: String, from_grac: Bool, ligand2synonym_id: Int, display: Bool) from db;
+
+var ligand2synonym_refs = table "ligand2synonym_refs" with (ligand2synonym_id: Int, reference_id: Int) from db;
+
+var ligand_cluster = table "ligand_cluster" with (ligand_id: Int, cluster: String, distance: Float, cluster_centre: Int) from db;
+
+var ligand_database_link = table "ligand_database_link" with (ligand_database_link_id: Int, ligand_id: Int, database_id: Int, placeholder: String, source: String, commercial: Bool, species_id: Int) from db;
+
+var ligand_physchem = table "ligand_physchem" with (ligand_id: Int, hydrogen_bond_acceptors: Int, hydrogen_bond_donors: Int, rotatable_bonds_count: Int, topological_polar_surface_area: Float, molecular_weight: Float, xlogp: Float, lipinski_s_rule_of_five: Int) from db;
+
+var ligand_physchem_public = table "ligand_physchem_public" with (ligand_id: Int, hydrogen_bond_acceptors: Int, hydrogen_bond_donors: Int, rotatable_bonds_count: Int, topological_polar_surface_area: Float, molecular_weight: Float, xlogp: Float, lipinski_s_rule_of_five: Int) from db;
+
+var ligand_structure = table "ligand_structure" with (ligand_id: Int, isomeric_smiles: String, isomeric_standard_inchi: String, isomeric_standard_inchi_key: String, nonisomeric_smiles: String, nonisomeric_standard_inchi: String, nonisomeric_standard_inchi_key: String) from db;
+
+var list_ligand = table "list_ligand" with (object_id: Int, ligand_id: Int, display_order: Int) from db;
+
+var malaria_stage = table "malaria_stage" with (malaria_stage_id: Int, name: String, description: String, short_name: String) from db;
+
+var malaria_stage2interaction = table "malaria_stage2interaction" with (interaction_id: Int, malaria_stage_id: Int) from db;
+
+var multimer = table "multimer" with (object_id: Int, subunit_specific_agents_comments: String) from db;
+
+var mutation = table "mutation" with (mutation_id: Int, pathophysiology_id: Int, object_id: Int, type: String, amino_acid_change: String, species_id: Int, description: String, nucleotide_change: String) from db;
+
+var mutation_refs = table "mutation_refs" with (mutation_id: Int, reference_id: Int) from db;
+
+var nhr = table "nhr" with (object_id: Int, ligand: String, binding_partner_comments: String, coregulator_comments: String, dna_binding_comments: String, target_gene_comments: String) from db;
+
+var object = table "object" with (object_id: Int, name: String, last_modified: Int, comments: String, structural_info_comments: String, old_object_id: Int, annotation_status: Int, only_iuphar: Bool, grac_comments: String, only_grac: Bool, no_contributor_list: Bool, abbreviation: String, systematic_name: String, quaternary_structure_comments: String, in_cgtp: Bool, in_gtip: Bool, gtip_comment: String, in_gtmp: Bool, gtmp_comment: String) from db;
+
+var object2go_process = table "object2go_process" with (object_id: Int, go_process_id: Int, go_evidence: String, comment: String) from db;
+
+var object2reaction = table "object2reaction" with (object_id: Int, reaction_id: Int) from db;
+
+var object_vectors = table "object_vectors" with (object_id: Int) from db;
+
+var ontology = table "ontology" with (ontology_id: Int, name: String, short_name: String) from db;
+
+var ontology_term = table "ontology_term" with (ontology_id: Int, term_id: String, term: String, description: String) from db;
+
+var other_ic = table "other_ic" with (object_id: Int, selectivity_comments: String) from db;
+
+var other_protein = table "other_protein" with (object_id: Int) from db;
+
+var pathophysiology = table "pathophysiology" with (pathophysiology_id: Int, object_id: Int, disease: String, role: String, drugs: String, side_effects: String, use: String, omim: String, comments: String, orphanet: String, disease_id: Int) from db;
+
+var pathophysiology_refs = table "pathophysiology_refs" with (pathophysiology_id: Int, reference_id: Int) from db;
+
+var pdb_structure = table "pdb_structure" with (pdb_structure_id: Int, object_id: Int, ligand_id: Int, endogenous: Bool, pdb_code: String, description: String, resolution: Float, species_id: Int) from db;
+
+var pdb_structure_refs = table "pdb_structure_refs" with (pdb_structure_id: Int, reference_id: Int) from db;
+
+var peptide = table "peptide" with (ligand_id: Int, one_letter_seq: String, three_letter_seq: String, post_translational_modifications: String, chemical_modifications: String, medical_relevance: String) from db;
+
+var peptide_ligand_cluster = table "peptide_ligand_cluster" with (ligand_id: Int, cluster: String) from db;
+
+var peptide_ligand_sequence_cluster = table "peptide_ligand_sequence_cluster" with (ligand_id: Int, cluster: Int) from db;
+
+var physiological_function = table "physiological_function" with (physiological_function_id: Int, object_id: Int, description: String, species_id: Int, tissue: String) from db;
+
+var physiological_function_refs = table "physiological_function_refs" with (physiological_function_id: Int, reference_id: Int) from db;
+
+var precursor = table "precursor" with (precursor_id: Int, gene_name: String, official_gene_id: String, protein_name: String, species_id: Int, gene_long_name: String) from db;
+
+var precursor2peptide = table "precursor2peptide" with (precursor_id: Int, ligand_id: Int) from db;
+
+var precursor2synonym = table "precursor2synonym" with (precursor2synonym_id: Int, precursor_id: Int, synonym: String) from db;
+
+var primary_regulator = table "primary_regulator" with (primary_regulator_id: Int, object_id: Int, name: String, regulatory_effect: String, regulator_object_id: Int) from db;
+
+var primary_regulator_refs = table "primary_regulator_refs" with (primary_regulator_id: Int, reference_id: Int) from db;
+
+var process_assoc = table "process_assoc" with (object_id: Int, gtip_process_id: Int, comment: String, direct_annotation: Bool, go_annotation: Int, process_assoc_id: Int) from db;
+
+var process_assoc_refs = table "process_assoc_refs" with (process_assoc_id: Int, reference_id: Int) from db;
+
+var prodrug = table "prodrug" with (prodrug_ligand_id: Int, drug_ligand_id: Int) from db;
+
+var product = table "product" with (product_id: Int, object_id: Int, species_id: Int, ligand_id: Int, name: String, endogenous: Bool, in_iuphar: Bool, in_grac: Bool) from db;
+
+var product_refs = table "product_refs" with (product_id: Int, reference_id: Int) from db;
+
+var reaction = table "reaction" with (reaction_id: Int, ec_number: String, reaction: String) from db;
+
+var receptor2family = table "receptor2family" with (object_id: Int, family_id: Int, display_order: Int) from db;
+
+var receptor2subunit = table "receptor2subunit" with (receptor_id: Int, subunit_id: Int, type: String) from db;
+
+var receptor_basic = table "receptor_basic" with (object_id: Int, list_comments: String, associated_proteins_comments: String, functional_assay_comments: String, tissue_distribution_comments: String, functions_comments: String, altered_expression_comments: String, expression_pathophysiology_comments: String, mutations_pathophysiology_comments: String, variants_comments: String, xenobiotic_expression_comments: String, antibody_comments: String, agonists_comments: String, antagonists_comments: String, allosteric_modulators_comments: String, activators_comments: String, inhibitors_comments: String, channel_blockers_comments: String, gating_inhibitors_comments: String) from db;
+
+var reference = table "reference" with (reference_id: Int, type: String, title: String, article_title: String, year: Int, issue: String, volume: String, pages: String, publisher: String, publisher_address: String, editors: String, pubmed_id: Int, isbn: String, pub_status: String, topics: String, comments: String, read: Bool, useful: Bool, website: String, url: String, doi: String, accessed: Int, modified: Int, patent_number: String, priority: Int, publication: Int, authors: String, assignee: String) from db;
+
+var reference2immuno = table "reference2immuno" with (reference_id: Int, type: String) from db;
+
+var reference2ligand = table "reference2ligand" with (reference_id: Int, ligand_id: Int) from db;
+
+var screen = table "screen" with (screen_id: Int, name: String, description: String, url: String, affinity_cut_off_nm: Int, company_logo_filename: String, technology_logo_filename: String) from db;
+
+var screen_interaction = table "screen_interaction" with (screen_interaction_id: Int, screen_id: Int, ligand_id: Int, object_id: Int, type: String, action: String, action_comment: String, species_id: Int, endogenous: Bool, affinity_units: String, affinity_high: Float, affinity_median: Float, affinity_low: Float, concentration_range: String, original_affinity_low_nm: Float, original_affinity_median_nm: Float, original_affinity_high_nm: Float, original_affinity_units: String, original_affinity_relation: String, assay_description: String, percent_activity: Float, assay_url: String) from db;
+
+var screen_refs = table "screen_refs" with (screen_id: Int, reference_id: Int) from db;
+
+var selectivity = table "selectivity" with (selectivity_id: Int, object_id: Int, ion: String, conductance_high: Float, conductance_low: Float, conductance_median: Float, hide_conductance: Bool, species_id: Int) from db;
+
+var selectivity_refs = table "selectivity_refs" with (selectivity_id: Int, reference_id: Int) from db;
+
+var species = table "species" with (species_id: Int, name: String, short_name: String, scientific_name: String, ncbi_taxonomy_id: Int, comments: String, description: String) from db;
+
+var specific_reaction = table "specific_reaction" with (specific_reaction_id: Int, object_id: Int, reaction_id: Int, description: String, reaction: String) from db;
+
+var specific_reaction_refs = table "specific_reaction_refs" with (specific_reaction_id: Int, reference_id: Int) from db;
+
+var structural_info = table "structural_info" with (structural_info_id: Int, object_id: Int, species_id: Int, transmembrane_domains: Int, amino_acids: Int, pore_loops: Int, genomic_location: String, gene_name: String, official_gene_id: String, molecular_weight: Int, gene_long_name: String) from db;
+
+var structural_info_refs = table "structural_info_refs" with (structural_info_id: Int, reference_id: Int) from db;
+
+var subcommittee = table "subcommittee" with (contributor_id: Int, family_id: Int, role: String, display_order: Int) from db;
+
+var substrate = table "substrate" with (substrate_id: Int, object_id: Int, species_id: Int, ligand_id: Int, property: String, value: Float, units: String, assay_description: String, assay_conditions: String, comments: String, name: String, endogenous: Bool, in_iuphar: Bool, in_grac: Bool, standard_property: String, standard_value: Float) from db;
+
+var substrate_refs = table "substrate_refs" with (substrate_id: Int, reference_id: Int) from db;
+
+var synonym = table "synonym" with (synonym_id: Int, object_id: Int, synonym: String, display: Bool, from_grac: Bool, display_order: Int) from db;
+
+var synonym_refs = table "synonym_refs" with (synonym_id: Int, reference_id: Int) from db;
+
+var target_gene = table "target_gene" with (target_gene_id: Int, object_id: Int, species_id: Int, description: String, official_gene_id: String, effect: String, technique: String, comments: String) from db;
+
+var target_gene_refs = table "target_gene_refs" with (target_gene_id: Int, reference_id: Int) from db;
+
+var target_ligand_same_entity = table "target_ligand_same_entity" with (object_id: Int, ligand_id: Int) from db;
+
+var tissue = table "tissue" with (tissue_id: Int, name: String) from db;
+
+var tissue_distribution = table "tissue_distribution" with (tissue_distribution_id: Int, object_id: Int, tissues: String, species_id: Int, technique: String, expression_level: Int) from db;
+
+var tissue_distribution_refs = table "tissue_distribution_refs" with (tissue_distribution_id: Int, reference_id: Int) from db;
+
+var tocris = table "tocris" with (cat_no: String, url: String, name: String, smiles: String, pubchem_cid: String) from db;
+
+var transduction = table "transduction" with (transduction_id: Int, object_id: Int, secondary: Bool, t01: Bool, t02: Bool, t03: Bool, t04: Bool, t05: Bool, t06: Bool, e01: Bool, e02: Bool, e03: Bool, e04: Bool, e05: Bool, e06: Bool, e07: Bool, e08: Bool, e09: Bool, comments: String) from db;
+
+var transduction_refs = table "transduction_refs" with (transduction_id: Int, reference_id: Int) from db;
+
+var transporter = table "transporter" with (object_id: Int, grac_stoichiometry: String) from db;
+
+var variant = table "variant" with (variant_id: Int, object_id: Int, description: String, type: String, species_id: Int, amino_acids: Int, amino_acid_change: String, validation: String, global_maf: String, subpop_maf: String, minor_allele_count: String, frequency_comment: String, nucleotide_change: String) from db;
+
+var variant2database_link = table "variant2database_link" with (variant_id: Int, database_link_id: Int, type: String) from db;
+
+var variant_refs = table "variant_refs" with (variant_id: Int, reference_id: Int) from db;
+
+var version = table "version" with (version_number: String, publish_date: Int) from db;
+
+var vgic = table "vgic" with (object_id: Int, physiological_ion: String, selectivity_comments: String, voltage_dependence_comments: String) from db;
+
+var voltage_dep_activation_refs = table "voltage_dep_activation_refs" with (voltage_dependence_id: Int, reference_id: Int) from db;
+
+var voltage_dep_deactivation_refs = table "voltage_dep_deactivation_refs" with (voltage_dependence_id: Int, reference_id: Int) from db;
+
+var voltage_dep_inactivation_refs = table "voltage_dep_inactivation_refs" with (voltage_dependence_id: Int, reference_id: Int) from db;
+
+var voltage_dependence = table "voltage_dependence" with (voltage_dependence_id: Int, object_id: Int, cell_type: String, comments: String, activation_v_high: Float, activation_v_median: Float, activation_v_low: Float, activation_t_high: Float, activation_t_low: Float, inactivation_v_high: Float, inactivation_v_median: Float, inactivation_v_low: Float, inactivation_t_high: Float, inactivation_t_low: Float, deactivation_v_high: Float, deactivation_v_median: Float, deactivation_v_low: Float, deactivation_t_high: Float, deactivation_t_low: Float, species_id: Int) from db;
+
+var xenobiotic_expression = table "xenobiotic_expression" with (xenobiotic_expression_id: Int, object_id: Int, change: String, technique: String, tissue: String, species_id: Int) from db;
+
+var xenobiotic_expression_refs = table "xenobiotic_expression_refs" with (xenobiotic_expression_id: Int, reference_id: Int) from db;
