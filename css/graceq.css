@@ -1,0 +1,1018 @@
+body {
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  height: auto;
+  padding-bottom: 20px;
+}
+
+a {
+  color: #039;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration:none;
+  color:#06C;
+}
+
+h4 a {
+  color: #FFF;
+  text-decoration: none;
+}
+
+h4 a:hover {
+  text-decoration:none;
+  color:#FFF;
+}
+
+h3 a {
+   color: #1e3363;
+  text-decoration: none;
+}
+
+h3 a:hover {
+  text-decoration:none;
+ color:#06c;
+}
+
+
+h1 {
+  font-family: Georgia, serif;
+  font-weight: normal;
+  padding-top: 20px;
+  text-align: center;
+}
+
+h2 {
+  padding-top: 20px;
+  text-align: center;
+}
+
+h3 {
+	color: #1e3363;
+	font-size:13px;
+	margin-top:0px;
+	padding: 8px 0px 0px 10px;
+	text-align: left;
+	margin-bottom:2px;
+}
+
+h5 {
+	color: #666;
+	font-size:12px;
+	margin-top:0px;
+	padding: 8px 0px 0px 10px;
+	text-align: left;
+	margin-bottom:0px;
+}
+
+p {
+  overflow: visible;
+  padding: 0px 5px 0px 10px;
+  text-align: left;
+}
+
+.container_12,
+.container_16,
+.container_24 {
+  background-color: #fff;
+  background-repeat: repeat-y;
+  margin-bottom: 20px;
+}
+
+.container_12 {
+  background-image: url(../images_dev27082012/12_col.gif);
+}
+
+.container_16 {
+	/* [disabled]background-image: url(../images_dev27082012/16_col.gif); */
+}
+
+.container_24 {
+  background-image: url(../images_dev27082012/24_col.gif);
+}
+
+#footer {
+	/*height: 70px; border-top: solid #9b9fab 13px; border-bottom: solid #9b9fab 1px; background-color:#FFF;*/
+        height: 75px; border-top: solid #9b9fab 13px; border-bottom: solid #9b9fab 1px; background-color:#FFF;
+}
+div.grid_6 {
+	background-color: #1e3363;
+	/*height: 200px;*/
+	margin-bottom: 10px;
+}
+div.immuno_grid_6 {
+	background-color: #0176AF;
+	/*height: 200px;*/
+	margin-bottom: 10px;
+}
+
+.contentbox {
+/*	background-color: #fff;*/
+/*	height: 177px; */
+	width: 99.5%;
+	margin-top:0px;
+	margin-left:0px;
+	margin-bottom:0px;
+/*	border: solid #1e3363 1px;*/
+}
+.backandborder {
+	background-color: #fff;
+	border: solid #1e3363 1px;
+}
+.immuno_backandborder {
+	background-color: #fff;
+	border: solid  #0176AF 1px;
+}
+.gtmp_backandborder {
+	background-color: #fff;
+	border: solid  #990066 1px;
+}
+	
+.contentboxsmall {
+	background-color: #fff;
+	height: 135px;
+	width: 99.5%;
+	margin-top:0px;
+	margin-left:0px;
+	margin-bottom:0px;
+	/*border: solid #1e3363 1px;*/
+}
+div.grid_4 {
+/*	background-color: #1e3363;
+	margin-bottom: 10px;
+	height: 140px;*/
+}
+h4 {
+  color: #FFF;
+  font-size: 15px;
+  padding-left: 5px;
+  margin-top:0px;
+  margin-bottom:0px;
+}
+
+.imageleft {
+	float:left;
+	margin-left:5px;
+	margin-top:5px;
+}
+.textright {
+	margin-left:70px;
+        
+}
+
+
+.textright_float {
+	margin-right:25px;
+        float:right;
+}
+
+.textmiddle{
+display:inline-block;
+width:55%;
+text-align:left;
+margin-top:5px;
+margin-left:25px;
+}
+
+.graphical_browse_div {
+margin-left:40px;
+}
+
+@media screen and (max-device-width: 420px)
+{
+	.graphical_browse_div { display: none;}
+}
+
+.ligcontainer{
+width: 100%;
+overflow: hidden;
+text-align: center;
+}
+.ligleft{
+float:left;
+	margin-left:5px;
+	
+}
+.ligright{
+float:right;
+	margin-left:5px;
+	margin-top:5px;
+}
+.ligcentre{
+margin:0 auto !important;
+display:inline-block;
+width:70%;
+text-align:left;
+margin-top:5px;
+}
+
+.subbox {
+	background-color:#ebf1ff;
+	border: solid #1e3363 1px;
+	height:50px;
+	width: 330px;
+	margin:3px;
+}
+.subboxsmall {
+	background-color:#ebf1ff;
+/*	border: solid #1e3363 1px; */
+	height:28px;
+/*	width:130px; */
+margin:6px 2px 6px 80px;
+}
+ul.arrowlist{
+	list-style-image:url(../images_dev27082012/arrow.jpg)
+}
+div.mainnavcont {
+	background-color:#1e3363;
+	height: 33px;
+	width: 100%;
+	margin-bottom:2px;
+}
+div.imm_mainnavcont {
+	background-color:#0176AF;
+	height: 33px;
+	width: 100%;
+	margin-bottom:2px;
+}
+div.gtmp_mainnavcont {
+	background-color:#990066;
+	height: 33px;
+	width: 100%;
+	margin-bottom:2px;
+}
+.mainnavtext a {
+	color:#fff;
+	padding-left:40px;
+	float:left;
+	font-size:110%;
+	margin-top:0px;
+}
+
+div.breadcrumbscont {
+	border: solid #1e3363 1px;
+	background-color:#EBF1FF;
+	height:auto;
+	width:100%;
+	clear:both;
+	margin-bottom: 10px;
+	float:left;
+}
+
+div.breadcrumbscont_gtmp {
+	border: solid #1e3363 1px;
+	background-color:#EBF1FF;
+	height:auto;
+	width:100%;
+	clear:both;
+	margin-bottom: 10px;
+	float:left;
+}
+
+.crumbtext li {
+	padding-right:30px;
+	font-size:12px;
+	color:#1e3363;
+	float:left;
+	list-style-image:url(../images_dev27082012/arrow2.jpg);
+}
+ul.crumbtext {
+	margin-top:auto;
+	margin-bottom:auto;
+}
+
+
+
+div.grid_16 {
+	background-color: #1e3363;
+	margin-bottom: 10px;
+}
+
+#gtmp_lc {
+width: 50%;
+margin: auto;
+}
+
+
+.gtmp {
+background-color: #990066 !important;
+}
+.immuno {
+background-color: #0176af !important;
+}
+/* for GtoImmuPdb beta disclaimer - overrides the standard 20px table margin-bottom set in text.css */
+
+.betacrumb {
+margin-bottom: 0px !important;
+}
+.contentboxfull {
+	background-color: #ebf1ff;
+	width: 99.8%;
+	margin-top:0px;
+	margin-left:0px;
+	margin-bottom:0px;
+	border: solid #1e3363 1px;
+}
+ul.helpmenu{
+	color:#FFF;
+	font-size:12px;
+	float:left;
+}
+.contentboxfullhelp {
+	background-color: #fff;
+	width: 99.8%;
+	margin-top:0px;
+	margin-left:0px;
+	margin-bottom:0px;
+	border: solid #1e3363 1px;
+}
+.contentboxfullhelp.imm {
+	border: solid #0176af 1px !important;
+}
+.contentboxfullhelp.mal {
+	border: solid #990066 1px !important;
+}
+#searchlinks {color: #FFF;
+padding-left: 5px;}
+
+.contentboxsmall .textright {margin-left:40px;}
+
+.backandborder h4 {margin:0px; padding:4px; background-color:#1e3363; }
+.immuno_backandborder h4 {margin:0px; padding:4px; background-color:#0176AF; }
+.gtmp_backandborder h4 {margin:0px; padding:4px; background-color:#990066; }
+
+.gtmp_info h4 {margin:3px; padding:2px; color:#000000; }
+
+.grid_4 .backandborder {margin-bottom:10px;}
+.grid_4 .immuno_backandborder {margin-bottom:10px;}
+.grid_4 .gtmp_backandborder {margin-bottom:10px;}
+.grid_8 .backandborder {margin-bottom:10px;}
+.grid_7 .backandborder {margin-bottom:10px;}
+.grid_9 .backandborder {margin-bottom:10px;}
+
+.breadcrumbscont .breadcrumbscont_gtmp h3 {color:#1E3363; padding:0px 0px 0px 10px;}
+
+/* these were added by simon to style the bug report button for GtoImmuPdb beta */
+.breadcrumbscont h3 a {background:#0176AF; border: 2px solid #1e3363; border-radius: 5px;color:#FFF; padding:3px 3px 3px 3px; font-size:100%}
+.breadcrumbscont h3 a:hover {
+  text-decoration:none;
+ background:#0BA6F1;
+}
+
+.immportal_breadcrumbscont h3 {color:#ffffff; padding:2px 0px 0px 10px;}
+
+
+/* these were added by simon to style the bug report button for GtoImmuPdb beta */
+.breadcrumbscont_gtmp h3 a {background:#990066; border: 2px solid #1e3363; border-radius: 5px;color:#FFF; padding:3px 3px 3px 3px; font-size:100%}
+.breadcrumbscont_gtmp h3 a:hover {
+  text-decoration:none;
+ background:#ff00aa;
+}
+
+.sf-menu a {
+	border-left:	1px solid #fff;
+	border-top:		0px solid #CFDEFF;
+	padding: 		.75em 1em;
+	text-decoration:none;
+}
+
+.sf-menu li {
+	background:		#1e3363;
+}
+.sf-menu li li {
+	background:		#3e517c;
+}
+.sf-menu li li li {
+	background:		#566892;
+}
+.sf-menu a, .sf-menu a:visited  { /* visited pseudo selector so IE6 applies text colour*/
+	color:			#ffffff;
+}
+.sf-menu a { /* visited pseudo selector so IE6 applies text colour*/
+	color:			#ffffff;
+}
+.sf-menu {
+	float:			left;
+	margin-bottom:	1em;
+	line-height: 1;
+}
+.sf-menu li:hover, .sf-menu li.sfHover,
+.sf-menu a:focus, .sf-menu a:hover, .sf-menu a:active {
+	background:		#162852;
+	outline:		0;
+}
+.sf-menu li.immuno_portal
+{
+	background: #0176AF;
+}
+.sf-menu li.immuno_portal a:hover 
+{
+	background: #006799;
+}
+
+.immsf-menu a {
+	border-left:	1px solid #fff;
+	border-top:		0px solid #CFDEFF;
+	padding: 		.75em 1em;
+	text-decoration:none;
+}
+
+.immsf-menu li {
+	background:		#0176AF;
+}
+.immsf-menu li li {
+	background:		#038BCD;
+}
+.immsf-menu li li li {
+	background:		#0BA6F1;
+}
+.immsf-menu a, .immsf-menu a:visited  { /* visited pseudo selector so IE6 applies text colour*/
+	color:			#ffffff;
+}
+.immsf-menu a { /* visited pseudo selector so IE6 applies text colour*/
+	color:			#ffffff;
+}
+.immsf-menu {
+	float:			left;
+	margin-bottom:	1em;
+	line-height: 1;
+}
+.immsf-menu li:hover, .immsf-menu li.sfHover,
+.immsf-menu a:focus, .immsf-menu a:hover, .immsf-menu a:active {
+	background:		#006799;
+	outline:		0;
+}
+.immsf-menu li.gtop_home
+{
+	background: #1e3363;
+}
+.immsf-menu li.gtop_home a:hover 
+{
+	background: #162852;
+}
+
+/*gtmp things */
+.gtmpsf-menu a {
+	border-left:	1px solid #fff;
+	border-top:		0px solid #CFDEFF;
+	padding: 		.75em 1em;
+	text-decoration:none;
+}
+
+.gtmpsf-menu li {
+	background:		#990066;
+}
+.gtmpsf-menu li li {
+	background:		#cc0088;
+}
+.gtmpsf-menu li li li {
+	background:		#ff00aa;
+}
+.gtmpsf-menu a, .gtmpsf-menu a:visited  { /* visited pseudo selector so IE6 applies text colour*/
+	color:			#ffffff;
+}
+.gtmpsf-menu a { /* visited pseudo selector so IE6 applies text colour*/
+	color:			#ffffff;
+}
+.gtmpsf-menu {
+	float:			left;
+	margin-bottom:	1em;
+	line-height: 1;
+}
+.gtmpsf-menu li:hover, .gtmpsf-menu li.sfHover,
+.gtmpsf-menu a:focus, .gtmpsf-menu a:hover, .gtmpsf-menu a:active {
+	background:		#660044;
+	outline:		0;
+}
+.gtmpsf-menu li.gtop_home
+{
+	background: #1e3363;
+}
+.gtmpsf-menu li.gtop_home a:hover 
+{
+	background: #162852;
+}
+
+
+
+
+/*table.glossary td {
+    border:1px solid darkgrey;
+    padding:5px;
+}*/
+.heading > td {
+/*border:2px solid #AAAAAA;*/
+border:1px solid #AAAAAA;
+color:black;
+padding:5px;
+text-align:center;
+}
+ul.no_bullets {
+    list-style-type: none;
+}
+
+.search{ background-color:#1e3363;}
+.search ul li a {
+  color: #fff;
+  text-decoration: none;
+}
+
+.search ul li a:hover {
+  text-decoration:none;
+  color:#06C;
+}
+.list ul li a {
+  color: #fff;
+  text-decoration: none;
+}
+
+.list ul li a:hover {
+  text-decoration:none;
+  color:#06C;
+}
+
+img {border:none;}
+
+/* header background image and search */
+
+.brandandsearch {background: url(/images_dev27082012/gtp_header960.jpg) no-repeat; height:117px;}
+.brandandsearch_immuno {background: url(/images/immuno/immuno_banner.jpg) no-repeat; height:117px;}
+.brandandsearch_gtmp {background: url(/images/malaria/gtmp_banner.jpg) no-repeat; height:117px;}
+.searchright {width:500px; float:right; border: 0px none #FFF;}
+
+.header {
+margin-left: auto;
+  margin-right: auto;
+  width: 960px;
+}
+
+/*Navigation bar that drops down on scroll-down*/
+.navbar {
+  overflow: hidden;
+	background-color: #1e3363;
+  position: fixed;
+  top: -66px;
+ 
+  display: block;
+  transition: top 0.4s;
+  margin-left: auto;
+  margin-right: auto;
+  width: 960px;
+z-index:1;
+}
+
+.navbar a {
+  float: left;
+  display: block;
+  color: white;
+  text-align: center;
+  padding: 10px;
+  text-decoration: none;
+  font-size: 14px;
+margin-top: 4px;
+
+}
+
+.navbar a:hover {
+  background-color: white;
+  color: #1e3363;
+margin-top: 4px;
+
+}
+
+.navbar .navbar-search-container {
+  float: right;
+}
+.navbar input[type=text] {
+  padding: 6px;
+	width: 200px;
+  font-size: 14px;
+  border: none;
+}
+
+.navbar .navbar-search-container button {
+  float: right;
+  padding: 6px 10px;
+  
+  background: #ddd;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+}
+
+.navbar .navbar-search-container button:hover {
+  background: #ccc;
+}
+
+@media screen and (max-width: 600px) {
+  .navbar .navbar-search-container {
+    float: none;
+  }
+  .navbar a, .navbar input[type=text], .navbar .navbar-search-container button {
+    float: none;
+    display: block;
+    text-align: left;
+    width: 100%;
+    margin: 0;
+    padding: 14px;
+  }
+  .navbar input[type=text] {
+    border: 1px solid #ccc;  
+  }
+}
+
+fieldset.search_box_dropbar {
+   line-height:1.0; 
+   padding: 0px; 
+   background-color: white; 
+   border:none;
+	margin-bottom: 0px; !important
+}
+form.search_box_dropbar {
+padding: 10px; !important
+}
+
+#dropbarr {
+  background-color: white;
+color:#1e3363;
+  position: fixed;
+left: 844px;
+  top: -100px;
+  width: 320px;
+  display: block;
+  transition: top 0.3s;
+	z-index: 1;
+height:50px;
+
+}
+
+/* end */
+
+#gtp_main { min-width:960px;}
+#sample-menu-1 { background-color:#1e3363; border:none; min-width:960px;}
+#sample-menu-imm { background-color:#0176AF; border:none; min-width:960px;}
+#sample-menu-gtmp { background-color:#990066; border:none; min-width:960px;}
+#gtp_popup_main {min-width:960px;}
+
+fieldset.search_box_home {
+   line-height:1.0; 
+   padding: .375em 1em; 
+   background-color: transparent; 
+   border:none;
+	
+}
+
+fieldset.search_box {
+   line-height:1.0; 
+   padding: .375em 1em; 
+   background-color: #ffffff; 
+   border:none;
+}
+
+fieldset.search_box_drop {
+   line-height:1.0; 
+   /*padding: .375em 1em; */
+   background-color:white; 
+   border:1px black;
+}
+
+h6.target_summary_header {
+	color: #666;
+	font-size:11px;
+	margin-top:0px;
+	padding: 8px 0px 8px 0px;
+	text-align: left;
+	margin-bottom:0px;
+}
+
+.button_grey{
+font-size:13px;border:1px solid #adaaad; -webkit-border-radius: 3px; -moz-border-radius: 3px;border-radius: 3px; padding: 4px; text-decoration:none; display:inline-block;color:black;
+ background-color: #e3e0e3; background-image: -webkit-gradient(linear, left top, left bottom, from(#e3e0e3), to(#cccccc));
+ background-image: -webkit-linear-gradient(top, #e3e0e3, #cccccc);
+ background-image: -moz-linear-gradient(top, #e3e0e3, #cccccc);
+ background-image: -ms-linear-gradient(top, #e3e0e3, #cccccc);
+ background-image: -o-linear-gradient(top, #e3e0e3, #cccccc);
+ background-image: linear-gradient(to bottom, #e3e0e3, #cccccc);filter:progid:DXImageTransform.Microsoft.gradient(GradientType=0,startColorstr=#e3e0e3, endColorstr=#cccccc);
+}
+
+.button_grey:hover{
+ border:1px solid #adaaad;cursor:pointer;
+ background-color: #cccccc; background-image: -webkit-gradient(linear, left top, left bottom, from(#cccccc), to(#e3e0e3));
+ background-image: -webkit-linear-gradient(top, #cccccc, #e3e0e3);
+ background-image: -moz-linear-gradient(top, #cccccc, #e3e0e3);
+ background-image: -ms-linear-gradient(top, #cccccc, #e3e0e3);
+ background-image: -o-linear-gradient(top, #cccccc, #e3e0e3);
+ background-image: linear-gradient(to bottom, #cccccc, #e3e0e3);filter:progid:DXImageTransform.Microsoft.gradient(GradientType=0,startColorstr=#cccccc, endColorstr=#e3e0e3);
+}
+
+.button_gtoimmupdb{
+border:1px solid #036f90; -webkit-border-radius: 3px; -moz-border-radius: 3px;border-radius: 3px; padding: 4px; text-decoration:none; display:inline-block;color:white;
+ background-color: #0499C7; background-image: -webkit-gradient(linear, left top, left bottom, from(#0499C7), to(#0176AF));
+ background-image: -webkit-linear-gradient(top, #0499C7, #0176AF);
+ background-image: -moz-linear-gradient(top, #0499C7, #0176AF);
+ background-image: -ms-linear-gradient(top, #0499C7, #0176AF);
+ background-image: -o-linear-gradient(top, #0499C7, #0176AF);
+ background-image: linear-gradient(to bottom, #0499C7, #0176AF);filter:progid:DXImageTransform.Microsoft.gradient(GradientType=0,startColorstr=#0499C7, endColorstr=#0176AF);
+}
+
+.button_gtoimmupdb:hover{
+ border:1px solid #024c63;cursor:pointer;
+ background-color: #036C8C; background-image: -webkit-gradient(linear, left top, left bottom, from(#04B1E6), to(#04A1D1));
+ background-image: -webkit-linear-gradient(top, #04B1E6, #04A1D1);
+ background-image: -moz-linear-gradient(top, #04B1E6, #04A1D1);
+ background-image: -ms-linear-gradient(top, #04B1E6, #04A1D1);
+ background-image: -o-linear-gradient(top, #04B1E6, #04A1D1);
+ background-image: linear-gradient(to bottom, #04B1E6, #04A1D1);filter:progid:DXImageTransform.Microsoft.gradient(GradientType=0,startColorstr=#04B1E6, endColorstr=#04A1D1);
+}
+
+.button_gtoimmupdb_off{
+border:1px solid #024c63; -webkit-border-radius: 3px; -moz-border-radius: 3px;border-radius: 3px; padding: 4px; text-decoration:none; display:inline-block;color:#666666;
+ background-color: #036C8C; background-image: -webkit-gradient(linear, left top, left bottom, from(#EEEEEE), to(#F5F5F5));
+ background-image: -webkit-linear-gradient(top, #EEEEEE, #F5F5F5);
+ background-image: -moz-linear-gradient(top, #EEEEEE, #F5F5F5);
+ background-image: -ms-linear-gradient(top, #EEEEEE, #F5F5F5);
+ background-image: -o-linear-gradient(top, #EEEEEE, #F5F5F5);
+ background-image: linear-gradient(to bottom, #EEEEEE, #F5F5F5);filter:progid:DXImageTransform.Microsoft.gradient(GradientType=0,startColorstr=#EEEEEE, endColorstr=#F5F5F5);
+}
+
+.button_gtoimmupdb_off:hover{
+ border:1px solid #024c63;cursor:pointer;
+ background-color: #036C8C; background-image: -webkit-gradient(linear, left top, left bottom, from(#CCCCCC), to(#F5F5F5));
+ background-image: -webkit-linear-gradient(top, #CCCCCC, #F5F5F5);
+ background-image: -moz-linear-gradient(top, #CCCCCC, #F5F5F5);
+ background-image: -ms-linear-gradient(top, #CCCCCC, #F5F5F5);
+ background-image: -o-linear-gradient(top, #CCCCCC, #F5F5F5);
+ background-image: linear-gradient(to bottom, #CCCCCC, #F5F5F5);filter:progid:DXImageTransform.Microsoft.gradient(GradientType=0,startColorstr=#CCCCCC, endColorstr=#F5F5F5);
+}
+/* new toggle Jan 2019 */
+
+.onoffswitch {
+    position: relative; width: 183px;
+    -webkit-user-select:none; -moz-user-select:none; -ms-user-select: none;
+}
+.onoffswitch-checkbox {
+    display: none;
+}
+.onoffswitch-label {
+    display: block; overflow: hidden; cursor: pointer;
+    border: 2px solid #024C63; border-radius: 13px;
+}
+.onoffswitch-inner {
+    display: block; width: 200%; margin-left: -100%;
+    transition: margin 0.3s ease-in 0s;
+}
+.onoffswitch-inner:before, .onoffswitch-inner:after {
+    display: block; float: left; width: 50%; height: 30px; padding: 0; line-height: 30px;
+    font-size: 12px; color: white; font-family: Trebuchet, Arial, sans-serif; font-weight: bold;
+    box-sizing: border-box;
+}
+.onoffswitch-inner:before {
+    content: "GtoImmuPdb View ON";
+    padding-left: 12px;
+    background-color: #0499C7; color: #FFFFFF;
+}
+.onoffswitch-inner:after {
+    content: "GtoImmuPdb View OFF";
+    padding-right: 12px;
+    background-color: #EEEEEE; color: #8C8C8C;
+    text-align: right;
+}
+.onoffswitch-switch {
+    display: block; width: 18px; margin: 6px;
+    background: #F5F5F5;
+    position: absolute; top: 0; bottom: 0;
+    right: 149px;
+    border: 2px solid #024C63; border-radius: 13px;
+    transition: all 0.3s ease-in 0s; 
+}
+.onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-inner {
+    margin-left: 0;
+}
+.onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-switch {
+    right: 0px; 
+}
+
+/* end of new toggle Jan 2019*/
+
+/* Immunopharmacology Meeting 2018 */
+table.immuphar2018 {
+table-layout: fixed; 
+width:90%; 
+padding:0px 5px 5px 20px; 
+}
+table.immuphar2018 tr td {
+    vertical-align: top;
+
+}
+/* end */
+
+/* chem search div - when not using forms */
+#chemicalize_search{
+padding: 15px;
+
+
+}
+#chemicalize_sketch{
+padding: 15px;
+border: 3px;
+border-style: groove;
+
+}
+/* end */
+
+/* Popup stylings */
+.popup-trigger{ 
+    display: block; 
+    margin: 0 auto; 
+    cursor: pointer; 
+    
+}
+.popup{
+    display: none; 
+    position: absolute;
+    width: 400px; 
+    padding: 12px 5px 5px 5px;
+    background: #fff; 
+    color: #333; 
+    font-size: 12px; 
+    border: 4px solid #1e3363;
+    z-index: 9999;
+    
+}
+.popup a
+{
+    color: #039;
+}
+.popup a:hover
+{
+    text-decoration:none;
+    color:#000;
+}
+.popup-mobile{
+    position: relative; 
+    top: 0; 
+    left: 0; 
+    margin: 10px 0 0; 
+    width: 100%;
+}
+.popup-btn-close{
+    position: absolute; 
+    top: 5px; 
+    right: 10px; 
+    color: #1e3363; 
+    font-size: 16px; 
+    font-weight: bold; 
+    text-transform:uppercase;
+    cursor: pointer;    
+}
+
+/* Styles for return to top button */
+#return-to-top {
+    position: fixed;
+    font-size: 20px;
+  bottom: 20px;
+    right: 20px;
+    background: rgb(0, 0, 0);
+    background: rgba(0, 0, 0, 0.7);
+    width: 70px;
+    height: 35px;
+    display: block;
+    text-decoration: none;
+    -webkit-border-radius: 35px;
+    -moz-border-radius: 35px;
+    border-radius: 35px;
+    display: none;
+    -webkit-transition: all 0.3s linear;
+    -moz-transition: all 0.3s ease;
+    -ms-transition: all 0.3s ease;
+    -o-transition: all 0.3s ease;
+    transition: all 0.3s ease;
+z-index:2;
+}
+#return-to-top p {
+    color: #fff;
+    
+    margin: 0;
+    position: relative;
+    left: 3px;
+    top: 6px;
+    font-size: 15px;
+    -webkit-transition: all 0.3s ease;
+    -moz-transition: all 0.3s ease;
+    -ms-transition: all 0.3s ease;
+    -o-transition: all 0.3s ease;
+    transition: all 0.3s ease;
+}
+#return-to-top:hover {
+    background: rgba(0, 0, 0, 0.9);
+}
+#return-to-top:hover p {
+    color: #fff;
+    top: 5px;
+}
+
+/* image modal */
+/* Style the Image Used to Trigger the Modal */
+#myImg {
+    border-radius: 5px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+#myImg:hover {opacity: 0.7;}
+
+/* The Modal (background) */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1; /* Sit on top */
+    padding-top: 100px; /* Location of the box */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgb(0,0,0); /* Fallback color */
+    background-color: rgba(0,0,0,0.9); /* Black w/ opacity */
+}
+
+/* Modal Content (Image) */
+.modal-content {
+    margin: auto;
+    display: block;
+    width: 80%;
+    max-width: 700px;
+}
+
+/* Caption of Modal Image (Image Text) - Same Width as the Image */
+#caption {
+    margin: auto;
+    display: block;
+    width: 70%;
+    max-width: 500px;
+    text-align: center;
+    color: #ccc;
+    padding: 10px 0;
+    height: 150px;
+	font-weight: bold;
+	
+}
+
+#caption a{
+
+    color: #00c5ff
+}
+#caption a:hover{
+
+    color:#70d5f2;
+}
+
+/* Add Animation - Zoom in the Modal */
+.modal-content, #caption { 
+    -webkit-animation-name: zoom;
+    -webkit-animation-duration: 0.8s;
+    animation-name: zoom;
+    animation-duration: 0.8s;
+}
+
+@-webkit-keyframes zoom {
+    from {-webkit-transform:scale(0)} 
+    to {-webkit-transform:scale(1)}
+}
+
+@keyframes zoom {
+    from {transform:scale(0)} 
+    to {transform:scale(1)}
+}
+
+/* The Close Button */
+.close {
+    position: absolute;
+    top: 15px;
+    right: 35px;
+    color: #f1f1f1;
+    font-size: 20px;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.close:hover,
+.close:focus {
+    color: #bbb;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* 100% Image Width on Smaller Screens */
+@media only screen and (max-width: 700px){
+    .modal-content {
+        width: 100%;
+    }
+
+button::-moz-focus-inner {
+    border:0;
+    padding:0;
+}
+}
