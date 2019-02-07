@@ -1,0 +1,2 @@
+typename ItemTree(a) =
+  [| ItemNode:a | ItemSubtree:(String, Boolean, [ItemTree(a)]) |];
