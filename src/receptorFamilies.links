@@ -24,7 +24,10 @@ fun mkFamilyNode(name, id) {
   (name=name, familyId=id)
 }
 
-typename HierarchicalQueryResult(a) = [| Leaf:a | More:a |];
+typename HierarchicalQueryResult = (isGroup:Bool, name: String, familyId:FamilyID);
+fun mkHqr(isGroup, name, id) {
+  (isGroup=isGroup, name=name, familyId=id)
+}
 
 ### MVU Functions
 
@@ -74,28 +77,22 @@ fun updt(msg, model) {
 # }
 
 
-fun getGroupChildren(familyId) {
+fun getGroupChildren(groupId) {
   for (g <-- Tables.grouping)
     where (g.group_id == groupId)
     orderby (g.display_order)
     for (f <-- family)
       where (f.family_id == g.family_id)
-      if (f.type == "grouping") {
-        var children = populateTree(f.family_id);
-        [More(mkFamilyNode(f.name, f.family_id))]
-      } else {
-        [Leaf(mkFamilyNode(f.name, f.family_id))]
-      }
+      [mkHqr(f.type == "grouping", f.name, f.family_id)]
 }
 
-sig resolveHierarchy : (HierarchicalQueryResult(FamilyNode)) ~> ItemTree(FamilyNode)
+sig resolveHierarchy : (HierarchicalQueryResult) ~> ItemTree(FamilyNode)
 fun resolveHierarchy(hqr) {
-  switch (hqr) {
-    case Leaf(fNode) -> ItemNode(fNode)
-    case More(fNode) ->
-      # This fNode is itself a grouping. Get the children, and recursively resolve.
-      var resolved_hqrs = map(resolveHierarchy, getGroupChildren(fNode.familyId));
-      ItemSubtree(fNode.name, true, resolved_hqrs)
+  if (hqr.isGroup) {
+    var resolved_hqrs = map(resolveHierarchy, getGroupChildren(hqr.familyId));
+    ItemSubtree(hqr.name, true, resolved_hqrs)
+  } else {
+    ItemNode(mkFamilyNode(hqr.name, hqr.familyId))
   }
 }
 
@@ -126,7 +123,6 @@ fun getOtherProteins() {
 
 
 fun mainPage(targetFamily) {
-  print(url);
   page
     <html><h1>Hello, world!</h1></html>
 }
