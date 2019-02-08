@@ -1,0 +1,14 @@
+EXCLUDE_QUERY_DIR
+B /home/simon/.opam/4.06.1/lib/episql
+B /home/simon/.opam/4.06.1/lib/prime
+B /home/simon/.opam/4.06.1/lib/re
+B /home/simon/.opam/4.06.1/lib/re/glob
+B /home/simon/.opam/4.06.1/lib/xmlm
+B _build/default/.sql_to_linq.eobjs
+S /home/simon/.opam/4.06.1/lib/episql
+S /home/simon/.opam/4.06.1/lib/prime
+S /home/simon/.opam/4.06.1/lib/re
+S /home/simon/.opam/4.06.1/lib/re/glob
+S /home/simon/.opam/4.06.1/lib/xmlm
+S .
+FLG -w @a-4-29-40-41-42-44-45-48-58-59-60-40 -strict-sequence -strict-formats -short-paths -keep-locs

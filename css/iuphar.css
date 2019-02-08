@@ -898,5 +898,5 @@ table.tableizer-table {
 	font-weight: bold;
 }
 
-.inner_receptor_data_tables  div.arrow { background:transparent url(../images/arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
+.inner_receptor_data_tables  div.arrow { background:transparent url(/images/arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
 .inner_receptor_data_tables  div.up { background-position:0px 0px;}

@@ -82,15 +82,15 @@ p {
 }
 
 .container_12 {
-  background-image: url(../images_dev27082012/12_col.gif);
+  background-image: url('/images/12_col.gif');
 }
 
 .container_16 {
-	/* [disabled]background-image: url(../images_dev27082012/16_col.gif); */
+	/* [disabled]background-image: url(/images/16_col.gif); */
 }
 
 .container_24 {
-  background-image: url(../images_dev27082012/24_col.gif);
+  background-image: url(/images/24_col.gif);
 }
 
 #footer {
@@ -223,7 +223,7 @@ margin-top:5px;
 margin:6px 2px 6px 80px;
 }
 ul.arrowlist{
-	list-style-image:url(../images_dev27082012/arrow.jpg)
+	list-style-image:url(/images/arrow.jpg)
 }
 div.mainnavcont {
 	background-color:#1e3363;
@@ -276,7 +276,7 @@ div.breadcrumbscont_gtmp {
 	font-size:12px;
 	color:#1e3363;
 	float:left;
-	list-style-image:url(../images_dev27082012/arrow2.jpg);
+	list-style-image:url(/images/arrow2.jpg);
 }
 ul.crumbtext {
 	margin-top:auto;
@@ -537,7 +537,7 @@ img {border:none;}
 
 /* header background image and search */
 
-.brandandsearch {background: url(/images_dev27082012/gtp_header960.jpg) no-repeat; height:117px;}
+.brandandsearch {background: url(/images/gtp_header960.jpg) no-repeat; height:117px;}
 .brandandsearch_immuno {background: url(/images/immuno/immuno_banner.jpg) no-repeat; height:117px;}
 .brandandsearch_gtmp {background: url(/images/malaria/gtmp_banner.jpg) no-repeat; height:117px;}
 .searchright {width:500px; float:right; border: 0px none #FFF;}

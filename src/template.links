@@ -1,0 +1,71 @@
+fun template(title) {
+  page
+    <html>
+      <head>
+        <title>{ stringToXml(title) } | IUPHAR/BPS Guide to PHARMACOLOGY</title>
+        <meta name="description" content="The IUPHAR/BPS Guide to Pharmacology. GPCR families. Detailed annotation on the structure, function, physiology, pharmacology and clinical relevance of drug targets."></meta>
+        <link rel="stylesheet" type="text/css" href="css/iuphar.css"></link>
+        <link rel="stylesheet" type="text/css" href="css/grac.css"></link>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"></link>
+        <link rel="stylesheet" href="css/text.css"></link>
+        <link rel="stylesheet" href="css/960.css"></link>
+        <link rel="stylesheet" href="css/graceq.css"></link>
+        <link rel="stylesheet" href="css/mktree.css" type="text/css"></link>
+        <link rel="shortcut icon" href="/images/GTP_favicon_lg.ico"></link>
+      </head>
+      <body>
+        <div class="header">
+          <div id="header">
+            <div class="brandandsearch">
+              <div class="searchright">
+                <div style="text-align:right">
+                  <form method="get" action="/GRAC/DatabaseSearchForward">
+                     <fieldset class="search_box_home">
+                         <input type="text" id="quick_search" size="14" maxlength="200" name="searchString"></input>
+                         <input type="hidden" name="searchCategories" value="all"></input>
+                         <input type="hidden" name="species" value="none"></input>
+                         <input type="hidden" name="type" value="all"></input>
+                         <input type="hidden" name="comments" value="includeComments"></input>
+                         <input type="hidden" name="order" value="rank"></input>
+                         <input type="submit" name="submit" value="Search Database"></input>
+                     </fieldset>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="vdom_placeholder"></div>
+        <div class="clear"></div>
+        <div id="footer">
+          <div>
+            <div style="display:table-cell; vertical-align:middle; max-width:200px;  float:left; display:inline;">
+              <p style="text-align:left;margin: 5px 0px 5px 10px;">
+                <span class="invisible_link">
+                  <a href="https://twitter.com/#!/GuidetoPHARM" target="_blank" title="Follow us on Twitter">
+                    <img class="logo" style="vertical-align:middle;" src="/images/twitter.png"></img>
+                  </a>
+                  <a href="https://www.facebook.com/pages/Guide-to-PHARMACOLOGY/231393780304076" target="_blank" title="Like us on Facebook">
+                    <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/facebook.png"></img>
+                  </a>
+                  <a href="http://www.linkedin.com/company/guide-to-pharmacology" target="_blank" title="Follow us on LinkedIn">
+                    <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/LinkedIn.png"></img>
+                  </a>
+                  <a href="http://blog.guidetopharmacology.org/" target="_blank" title="Visit our blog">
+                    <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/wpmini-blue.png"/>
+                  </a>
+                    <a href="http://www.slideshare.net/GuidetoPHARM" target="_blank" title="View slide sets and posters on SlideShare">
+                      <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/slideshare_no_name.png"></img>
+                    </a>
+                </span>
+              </p>
+              <p style="text-align:left;margin: 5px 0px 0px 10px;"><small><a href="/privacyPolicy.jsp">Privacy and Cookie Policy</a></small></p>
+            </div>
+            <div style="vertical-align:middle; display:table-cell; float:right; display:inline;">
+              <p style="text-align:right; margin: 5px 10px 0px 0px; font-weight:bold; font-size:12pt;"><a href="/sponsors.jsp">Sponsors list</a></p>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+}

@@ -70,7 +70,7 @@
     font-style: normal;
     font-weight: bold;
     text-decoration: none;
-  /*  background: url('images/Banner_end.png') repeat-x;
+  /*  background: url('/images/Banner_end.png') repeat-x;
     border-right: 2px outset #AABDE6;
     border-left: 2px outset #AABDE6;*/
 }
@@ -85,14 +85,14 @@
     text-align: left;
     width:100%;
     min-width:1000px;
-   /* background: url('images/Banner_end.png') repeat-x;
+   /* background: url('/images/Banner_end.png') repeat-x;
     border-right: 2px outset #AABDE6;
     border-left: 2px outset #AABDE6;
     border-bottom: 2px outset #AABDE6;*/
     /*border-width: 2px;
     border-color: #AABDE6; 
     border-style: none none solid none;*/
-   /* background: url('images/Gtp_Header_end.png') repeat-x;*/
+   /* background: url('/images/Gtp_Header_end.png') repeat-x;*/
 }
 #sample-menu-1{
    border: 2px outset #AABDE6;
@@ -917,10 +917,10 @@ table.tablesorter thead tr .header {
     cursor: pointer;
 }
 table.tablesorter thead tr .tablesorter-headerDesc {
-    background-image: url(images/asc.gif);
+    background-image: url('/images/asc.gif');
 }
 table.tablesorter thead tr .tablesorter-headerAsc  {
-    background-image: url(images/desc.gif);
+    background-image: url('/images/desc.gif');
 }
 table.tablesorter thead tr .tablesorter-headerDesc, table.tablesorter thead tr .tablesorter-headerAsc {
     background-color: #EBF1FF;

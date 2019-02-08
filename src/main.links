@@ -8,12 +8,13 @@ fun main() {
   addRoute("/gpcrFamilies", fun(_) { ReceptorFamilies.mainPage(TFGpcr) });
   addRoute("/ionChannelFamilies", fun(_) { ReceptorFamilies.mainPage(TFIonChannel) });
   addRoute("/nhrFamilies", fun(_) { ReceptorFamilies.mainPage(TFNhr) });
-  addRoute("/kinaseFamilies", fun(_) { ReceptorFamilies.mainPage(TFKinase) });
   addRoute("/catalyticReceptorFamilies", fun(_) { ReceptorFamilies.mainPage(TFCatalyticReceptor) });
   addRoute("/transporterFamilies", fun(_) { ReceptorFamilies.mainPage(TFTransporter) });
   addRoute("/enzymeFamilies", fun(_) { ReceptorFamilies.mainPage(TFEnzyme) });
   addRoute("/otherFamilies", fun(_) { ReceptorFamilies.mainPage(TFOther) });
 
+  addStaticRoute("/css", "css", [("css", "text/css")]);
+  addStaticRoute("/images", "images", [("css", "image/png")]);
   servePages()
 }
 
