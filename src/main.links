@@ -2,17 +2,7 @@ open ReceptorFamilies;
 
 # Main routing table.
 fun main() {
-  # SJF: I don't think this will scale; ideally we'd rather just have a single
-  # entry and then pattern match on the GET parameters. Unfortunately the path
-  # we're given strips the parameters so this will require a source edit...
-  addRoute("/gpcrFamilies", fun(_) { ReceptorFamilies.mainPage(TFGpcr) });
-  addRoute("/ionChannelFamilies", fun(_) { ReceptorFamilies.mainPage(TFIonChannel) });
-  addRoute("/nhrFamilies", fun(_) { ReceptorFamilies.mainPage(TFNhr) });
-  addRoute("/catalyticReceptorFamilies", fun(_) { ReceptorFamilies.mainPage(TFCatalyticReceptor) });
-  addRoute("/transporterFamilies", fun(_) { ReceptorFamilies.mainPage(TFTransporter) });
-  addRoute("/enzymeFamilies", fun(_) { ReceptorFamilies.mainPage(TFEnzyme) });
-  addRoute("/otherFamilies", fun(_) { ReceptorFamilies.mainPage(TFOther) });
-
+  addRoute("/receptorFamilies", fun(_) { ReceptorFamilies.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/images", "images", [("css", "image/png")]);
   servePages()

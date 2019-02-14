@@ -43,7 +43,8 @@ fun mkHqr(isGroup, name, id) {
 
 ### MVU Functions
 
-typename Model = (targetFamily: TargetFamily, itemTree: Maybe(ItemTree(FamilyNode)));
+typename Model = Maybe((targetFamily: TargetFamily, itemTree: ItemTree(FamilyNode)));
+
 typename Message = [| ToggleSubtree:String | SetTreeVisibility:Bool |];
 
 fun toggleSubtree(str, tree) {
@@ -53,10 +54,13 @@ fun toggleSubtree(str, tree) {
       if (name == str) {
         ItemSubtree(name, not(shown), children)
       } else {
-# FIXME: This requires a traversal of the whole tree even if the child node is found
         ItemSubtree(name, shown, map(fun(x) { toggleSubtree(str, x) }, children))
       }
   }
+}
+
+fun toggleTree(str, tree) {
+  (treeRoots=map(fun(x) { toggleSubtree(str, x) }, tree.treeRoots))
 }
 
 fun setSubtreeVisibility(isVisible, tree) {
@@ -68,16 +72,22 @@ fun setSubtreeVisibility(isVisible, tree) {
   }
 }
 
+fun setTreeVisibility(isVisible, tree) {
+  (treeRoots=map(fun(x) { setSubtreeVisibility(isVisible, x) }, tree.treeRoots))
+}
+
 fun updt(msg, model) {
-  switch(model.itemTree) {
-    case Just(tree) ->
-      switch(msg) {
-        case ToggleSubtree(str) ->
-          (model with itemTree=Just(toggleSubtree(str, tree)))
-        case SetTreeVisibility(visibility) ->
-          (model with itemTree=Just(setSubtreeVisibility(visibility, tree)))
-      }
-    case Nothing -> model
+  switch(model) {
+    case Just(model) ->
+      var newModel =
+        switch(msg) {
+          case ToggleSubtree(str) ->
+            (model with itemTree=toggleTree(str, model.itemTree))
+          case SetTreeVisibility(visibility) ->
+            (model with itemTree=setTreeVisibility(visibility, model.itemTree))
+        };
+      Just(newModel)
+    case Nothing -> Nothing
   }
 }
 
@@ -85,7 +95,7 @@ fun view(model) {
   var a0 = MvuAttrs.empty;
   var hempty = MvuHTML.empty;
 
-  fun renderTree(tree) {
+  fun renderTreeNode(tree) {
     switch(tree) {
       case ItemNode(x) ->
         li(class("liBullet"),
@@ -95,36 +105,45 @@ fun view(model) {
         )
       case ItemSubtree(name, shown, children) ->
         var bulletClass = class(if (shown) { "liOpen" } else { "liClosed" });
-        var renderedChildren = MvuHTML.concat(map(renderTree, children));
+        var renderedChildren = MvuHTML.concat(map(renderTreeNode, children));
         li(bulletClass,
           span(class("bullet") +@ onClick(fun() { ToggleSubtree(name) }), textNode(" " ^^ name)) +*
           ul(a0, renderedChildren))
     }
   }
 
-  var tree =
-    switch(model.itemTree) {
-      case Just(tree) ->
-        ul(class("mktree"), renderTree(tree))
-      case Nothing -> textNode("Invalid family ID specified.")
+  fun renderTree(tree) {
+    MvuHTML.concat(map(renderTreeNode, tree.treeRoots))
+  }
+
+
+  var pageBody =
+    switch(model) {
+      case Just(model) ->
+        h4(a0, textNode(showFamily(model.targetFamily))) +*
+        div(class("contentboxfullhelp"),
+          div(class("textright"),
+            p(a0, hempty) +*
+            div(style("text-align:right;"),
+              button(onClick(fun() { SetTreeVisibility(true) }),
+                textNode("Expand all nodes")) +*
+              button(onClick(fun() { SetTreeVisibility(false) }),
+                textNode("Collapse all nodes"))) +*
+              ul(class("mktree"), renderTree(model.itemTree))))
+      case Nothing ->
+        div(class("contentboxfullhelp"),
+          div(class("textright"),
+            textNode("Invalid family ID specified.")))
     };
-  var familyTxt = showFamily(model.targetFamily);
+
 
   div(class("container_16"),
     div(class("grid_12"),
     div(class("grid_16 alpha"),
       a(name("top"), hempty) +*
-      h4(a0, textNode(familyTxt)) +*
-      div(class("contentboxfullhelp"),
-        div(class("textright"),
-          p(a0, hempty) +*
-          div(style("text-align:right;"),
-            button(onClick(fun() { SetTreeVisibility(true) }),
-              textNode("Expand all nodes")) +*
-            button(onClick(fun() { SetTreeVisibility(false) }),
-              textNode("Collapse all nodes"))) +*
-            tree)))))
-}
+      pageBody)))
+
+  }
 
 ### DB Accessors
 
@@ -149,15 +168,9 @@ fun view(model) {
 
 
 fun getFamilyInfo(familyId) {
-  var res =
-    for (f <-- Tables.family)
-      where (f.family_id == familyId)
-      [mkFamilyNode(f.name, f.family_id)];
-
-  switch(res) {
-    case [x] -> Just(x)
-    case _ -> Nothing
-  }
+  for (f <-- Tables.family)
+    where (f.family_id == familyId)
+    [mkFamilyNode(f.name, f.family_id)]
 }
 
 fun getGroupChildren(groupId) {
@@ -169,7 +182,7 @@ fun getGroupChildren(groupId) {
       [mkHqr(f.type == "grouping", f.name, f.family_id)]
 }
 
-sig resolveHierarchy : (HierarchicalQueryResult) ~> ItemTree(FamilyNode)
+sig resolveHierarchy : (HierarchicalQueryResult) ~> ItemTreeNode(FamilyNode)
 fun resolveHierarchy(hqr) {
   if (hqr.isGroup) {
     var resolved_hqrs = map(resolveHierarchy, getGroupChildren(hqr.familyId));
@@ -181,12 +194,8 @@ fun resolveHierarchy(hqr) {
 
 fun getToplevelGroup(groupId) {
   var familyInfo = getFamilyInfo(groupId);
-  switch(familyInfo) {
-    case Just(familyNode) ->
-      var children = map(resolveHierarchy, getGroupChildren(groupId));
-      Just (ItemSubtree(familyNode.name, true, children))
-    case Nothing -> Nothing
-  }
+  var roots = map(resolveHierarchy, getGroupChildren(groupId));
+  (treeRoots = roots)
 }
 
 fun getTree(targetFamily) {
@@ -203,9 +212,43 @@ fun getTree(targetFamily) {
   getToplevelGroup(groupId)
 }
 
-
-fun mainPage(targetFamily) {
-  var initialModel = (targetFamily=targetFamily, itemTree=getTree(targetFamily));
-  runSimple("vdom_placeholder", initialModel, view, updt);
-  template(showFamily(targetFamily))
+fun getTargetFamily(typeName) {
+  if (typeName == "GPCR") {
+    Just(TFGpcr)
+  } else if (typeName == "IC") {
+    Just(TFIonChannel)
+  } else if (typeName == "NHR") {
+    Just(TFNhr)
+  } else if (typeName == "CATALYTICRECEPTOR") {
+    Just(TFCatalyticReceptor)
+  } else if (typeName == "TRANSPORTER") {
+    Just(TFTransporter)
+  } else if (typeName == "ENZYME") {
+    Just(TFEnzyme)
+  } else if (typeName == "OTHER") {
+    Just(TFOther)
+  } else {
+    Nothing
+  }
 }
+
+# SJF: It would be lovely to have a maybe monad? Maybe worth hacking one in?
+fun getInitialModel() {
+  switch(lookup("type", environment())) {
+    case Nothing -> Nothing
+    case Just(typeName) ->
+      switch(getTargetFamily(typeName)) {
+        case Nothing -> Nothing
+        case Just(tfType) ->
+          Just(targetFamily=tfType,
+               itemTree=getTree(tfType))
+      }
+  }
+}
+
+fun mainPage() {
+  var initialModel = getInitialModel();
+  runSimple("vdom_placeholder", initialModel, view, updt);
+  template("Target Families") # SJF TODO: Plumbing to get the type
+}
+
