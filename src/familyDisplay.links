@@ -1,0 +1,68 @@
+open Contributor;
+open Reference;
+open Mvu;
+open MvuAttrs;
+open MvuHTML;
+open MvuEvents;
+
+# For now. Receptor Summaries will be the biggest bit of work for
+# this page, I think.
+typename ReceptorSummary = ();
+
+typename ContentBox(a) =
+  (boxName: String,  boxVisible: Bool, contents: a);
+
+typename Contributors =
+  (subcommittee: [Contributor], additional: [Contributor]);
+
+typename Model =
+  Maybe((familyId: Int,
+         overview: ContentBox(String),
+         receptors: ContentBox([ReceptorSummary]),
+         comments: ContentBox(String),
+         furtherReading: ContentBox([Reference]),
+         references: ContentBox([Reference]),
+         contributors: ContentBox(Contributors)));
+
+typename Message = [|
+    ToggleOverview | ToggleReceptors | ToggleComments
+  | ToggleFurtherReading | ToggleReferences | ToggleContributors
+|];
+
+fun toggleBox(box) {
+  (box with boxVisible=(not(box.boxVisible)))
+}
+
+fun updt(msg, model) {
+  switch(model) {
+    case Nothing -> Nothing
+    case Just(model) {
+      switch(msg) {
+        case ToggleOverview ->
+          (model with overview=toggleBox(model.overview))
+        case ToggleReceptors ->
+          (model with receptors=toggleBox(model.receptors))
+        case ToggleComments ->
+          (model with comments=toggleBox(model.comments))
+        case ToggleFurtherReading ->
+          (model with furtherReading=toggleBox(model.furtherReading))
+        case ToggleReferences ->
+          (model with references=toggleBox(model.references))
+        case ToggleContributors ->
+          (model with receptors=toggleBox(model.contributors))
+      }
+    }
+  }
+}
+
+fun view() {
+  sig showBox : (ContentBox(a), (a) ~> HTML(Message)) ~> HTML(Message)
+  fun showBox(box, f) {
+
+  }
+}
+
+fun mainPage() {
+}
+
+

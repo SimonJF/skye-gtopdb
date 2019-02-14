@@ -1,0 +1,31 @@
+typename Contributor =
+  (
+    contribId: Int,
+    contribAddress: String,
+    contribEmail: String,
+    contribFirstNames: String,
+    contribSurname: String,
+    contribSuffix: String,
+    contribNote: String,
+    contribOrcid: String,
+    contribCountry: String,
+    contribDescription: String,
+    contribInstitution: String
+  );
+
+fun mkContributor(id, addr, email, firstNames, surname, suffix,
+  note, orcid, country, description, institution) {
+  (
+    contribId = id,
+    contribAddress = addr,
+    contribEmail = email,
+    contribFirstNames = firstNames,
+    contribSurname = surname,
+    contribSuffix = suffix,
+    contribNote = note,
+    contribOrcid = orcid,
+    contribCountry = country,
+    contribDescription = description,
+    contribInstitution = institution
+  );
+}

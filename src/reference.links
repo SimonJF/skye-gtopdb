@@ -1,0 +1,54 @@
+# I wonder whether all of this is necessary, or whether we can
+# just use the generated DB records directly?
+
+typename ReferenceType = [| Journal | Other |]
+
+typename Reference = (
+  referenceType: ReferenceType,
+  journalName: String,
+  title: String,
+  year: Int,
+  volume: Int,
+  pages: String,
+  publisher: String,
+  publisher_address: String,
+  editors: String,
+  pubmed_id: Int
+  isbn: String,
+  authors: String
+)
+
+fun stringToRefTy(str) {
+  if (str == "Journal") {
+    Journal
+  } else {
+    Other
+  }
+}
+fun refTyToString(refTy) {
+  switch(refTy) {
+    case Journal -> "Journal"
+    case Other -> "Other"
+  }
+}
+
+fun makeReference(refTy, jName, title, y, vol, pgs, publisher,
+  pubAddr, editors, pubmed_id, isbn, authors) {
+
+  (
+    referenceType=stringToRefTy(refTy),
+    journalName=jName,
+    title=title,
+    year=y,
+    volume=stringToInt(vol),
+    pages=pgs,
+    publisher=publisher,
+    publisher_address=pubAddr,
+    editors=editors,
+    pubmed_id=pubmed_id,
+    isbn=isbn,
+    authors=authors
+  )
+
+}
+
