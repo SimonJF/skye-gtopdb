@@ -1,8 +1,10 @@
+open FamilyDisplay;
 open ReceptorFamilies;
 
 # Main routing table.
 fun main() {
   addRoute("/receptorFamilies", fun(_) { ReceptorFamilies.mainPage() });
+  addRoute("/familyDisplay", fun(_) { FamilyDisplay.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/images", "images", [("css", "image/png")]);
   servePages()

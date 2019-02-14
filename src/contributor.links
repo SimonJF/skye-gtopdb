@@ -27,5 +27,5 @@ fun mkContributor(id, addr, email, firstNames, surname, suffix,
     contribCountry = country,
     contribDescription = description,
     contribInstitution = institution
-  );
+  )
 }

@@ -1,7 +1,7 @@
 # I wonder whether all of this is necessary, or whether we can
 # just use the generated DB records directly?
 
-typename ReferenceType = [| Journal | Other |]
+typename ReferenceType = [| Journal | Other |];
 
 typename Reference = (
   referenceType: ReferenceType,
@@ -13,10 +13,10 @@ typename Reference = (
   publisher: String,
   publisher_address: String,
   editors: String,
-  pubmed_id: Int
+  pubmed_id: Int,
   isbn: String,
   authors: String
-)
+);
 
 fun stringToRefTy(str) {
   if (str == "Journal") {

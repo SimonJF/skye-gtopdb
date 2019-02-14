@@ -1,9 +1,10 @@
 open Contributor;
 open Reference;
 open Mvu;
-open MvuAttrs;
 open MvuHTML;
+open MvuAttrs;
 open MvuEvents;
+open Template;
 
 # For now. Receptor Summaries will be the biggest bit of work for
 # this page, I think.
@@ -12,11 +13,16 @@ typename ReceptorSummary = ();
 typename ContentBox(a) =
   (boxName: String,  boxVisible: Bool, contents: a);
 
+# BUG (hacky workaround): Type arguments don't appear to be renamed
+typename Contributor = Contributor;
+typename Reference = Reference;
+
 typename Contributors =
   (subcommittee: [Contributor], additional: [Contributor]);
 
 typename Model =
   Maybe((familyId: Int,
+         familyName: String,
          overview: ContentBox(String),
          receptors: ContentBox([ReceptorSummary]),
          comments: ContentBox(String),
@@ -27,16 +33,38 @@ typename Model =
 typename Message = [|
     ToggleOverview | ToggleReceptors | ToggleComments
   | ToggleFurtherReading | ToggleReferences | ToggleContributors
+  | SetAllVisibilities:Bool
 |];
 
 fun toggleBox(box) {
   (box with boxVisible=(not(box.boxVisible)))
 }
 
-fun updt(msg, model) {
+fun setBoxVisibility(box, visible) {
+  (box with boxVisible=visible)
+}
+
+fun withModel(model, f) {
   switch(model) {
+    case Just(model) -> Just(f(model))
     case Nothing -> Nothing
-    case Just(model) {
+  }
+}
+
+fun setBoxVisibilities(visible, model) {
+  fun sbv(box) { setBoxVisibility(box, visible) }
+
+  (model with
+    overview=sbv(model.overview),
+    receptors=sbv(model.receptors),
+    comments=sbv(model.comments),
+    furtherReading=sbv(model.furtherReading),
+    references=sbv(model.references),
+    contributors=sbv(model.contributors))
+}
+
+fun updt(msg, model) {
+  withModel(model, fun(model) {
       switch(msg) {
         case ToggleOverview ->
           (model with overview=toggleBox(model.overview))
@@ -50,19 +78,125 @@ fun updt(msg, model) {
           (model with references=toggleBox(model.references))
         case ToggleContributors ->
           (model with receptors=toggleBox(model.contributors))
+        case SetAllVisibilities(vis) -> setBoxVisibilities(vis, model)
       }
+  })
+}
+# span(class("split_para_right_text detailed_view_link"),
+#           a(href("familyIntroduction?familyId=" ^^ intToString(model.familyId)),
+#             textNode("More detailed introduction") +*
+#             img(src("/images/go.jpg"), h0)
+#          ))
+
+fun view(model) {
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+  fun viewModel(model) {
+
+    # showBox: Generic content box, supporting show/hide functionality.
+    # sig showBox : forall a. (ContentBox(a), Message, (a) ~> HTML(Message)) ~> HTML(Message)
+    fun showBox(box, toggleMsg, f) {
+      var inner = f(box.contents);
+      var showHideLink =
+        if(box.boxVisible) {
+          a(id("hide_overview") +@ onClick(fun() { toggleMsg }),
+            small(a0, textNode("Hide")))
+        } else {
+          a(id("show_overview") +@ onClick(fun() { toggleMsg }),
+            small(a0, textNode("Show")))
+        };
+
+      var innerSection =
+        if(box.boxVisible) {
+          div(class("visibleSection"), inner)
+        } else {
+          h0
+        };
+
+      div(class("grid_16 alpha"),
+        h4(a0, textNode(box.boxName)) +*
+        div(class("contentboxfullhelp"),
+          div(class("imageleft"), textNode("?")) +*
+          div(class("textright"),
+            p(class("split_para"),
+              showHideLink +*
+              innerSection
+            ))))
     }
+    # headerBox: Header information for given family
+    var headerBox =
+      div(class("grid_16 alpha"),
+        a(name("top"), h0) +*
+        div(class("contentboxfull"),
+          h2(style("margin-top: 0px;"), textNode(model.familyName)) +*
+          div(class("textright"),
+            p(style("font-weight:normal;font-size:90%;"),
+              textNode("Unless otherwise stated all data on this page refer to the human proteins. ") +*
+              textNode("Gene information is provided for human (Hs), mouse (Mm) and rat (Rn).")) +*
+            div(style("text-align:right;padding: 0px 5px 5px 0x;"),
+              button(onClick(fun() { SetAllVisibilities(true) }), textNode("Expand all sections")) +*
+              button(onClick(fun() { SetAllVisibilities(false) }), textNode("Collapse all sections"))
+            )
+          )));
+
+    fun displayOverview(overviewText) {
+      p(class("grac_text"), textNode(overviewText))
+    }
+    fun displayReceptors(_) {
+      MvuHTML.empty
+    }
+    fun displayComments(commentText) {
+      textNode(commentText)
+    }
+    fun displayReference(_) {
+      MvuHTML.empty
+    }
+    fun displayFurtherReading(_) {
+      MvuHTML.empty
+    }
+    fun displayReferences(_) {
+      MvuHTML.empty
+    }
+    fun displayContributors(_) {
+      MvuHTML.empty
+    }
+    fun displayCitation() {
+      MvuHTML.empty
+    }
+
+    # (boxName: String,  boxVisible: Bool, contents: a);
+    headerBox +*
+    showBox(model.overview, ToggleOverview, displayOverview) +*
+    showBox(model.receptors, ToggleReceptors, displayReceptors) +*
+    showBox(model.comments, ToggleComments, displayComments) +*
+    showBox(model.furtherReading, ToggleFurtherReading, displayFurtherReading) +*
+    showBox(model.references, ToggleReferences, displayReferences) +*
+    showBox(model.contributors, ToggleContributors, displayContributors)
   }
+
+  div(class("container_16"),
+    div(class("grid_12"),
+      switch(model) {
+        case Just(model) -> viewModel(model)
+        case Nothing -> p(a0, textNode("Invalid family ID."))
+      }))
 }
 
-fun view() {
-  sig showBox : (ContentBox(a), (a) ~> HTML(Message)) ~> HTML(Message)
-  fun showBox(box, f) {
-
-  }
+fun getInitialModel() {
+  Just((familyId=0, familyName="Trump",
+        overview=(boxName="Overview", boxVisible=true, contents="The best, really"),
+        receptors=(boxName="Receptors", boxVisible=true, contents=[]),
+        comments=(boxName="Comments", boxVisible=true,
+          contents="The best comment, really, it is. Those other comments? Total disasters."),
+        furtherReading=(boxName="Further Reading", boxVisible=true, contents=[]),
+        references=(boxName="References", boxVisible=true, contents=[]),
+        contributors=(boxName="Contributors", boxVisible=true, contents=[])))
 }
 
 fun mainPage() {
+  var initialModel = getInitialModel();
+  runSimple("vdom_placeholder", initialModel, view, updt);
+  template("Family Display")
 }
 
 
