@@ -4,6 +4,7 @@ open Mvu;
 open MvuHTML;
 open MvuAttrs;
 open MvuEvents;
+open Tables;
 open Template;
 
 # For now. Receptor Summaries will be the biggest bit of work for
@@ -146,7 +147,7 @@ fun view(model) {
       MvuHTML.empty
     }
     fun displayComments(commentText) {
-      textNode(commentText)
+      p(class("grac_text"), textNode(commentText))
     }
     fun displayReference(_) {
       MvuHTML.empty
@@ -183,14 +184,40 @@ fun view(model) {
 }
 
 fun getInitialModel() {
-  Just((familyId=0, familyName="Trump",
-        overview=(boxName="Overview", boxVisible=true, contents="The best, really"),
-        receptors=(boxName="Receptors", boxVisible=true, contents=[]),
-        comments=(boxName="Comments", boxVisible=true,
-          contents="The best comment, really, it is. Those other comments? Total disasters."),
-        furtherReading=(boxName="Further Reading", boxVisible=true, contents=[]),
-        references=(boxName="References", boxVisible=true, contents=[]),
-        contributors=(boxName="Contributors", boxVisible=true, contents=[])))
+  fun getFamilyInfo(familyId) {
+    var basicInfo =
+      for (f <-- Tables.family)
+        where (f.family_id == familyId)
+        for (g <-- Tables.grac_family_text)
+          where (g.family_id == familyId)
+          [ (f.name, g.overview, g.comments) ];
+
+    switch(basicInfo) {
+      case [] -> Nothing
+      case (name, overview, comments)::_ ->
+        Just((familyId=0, familyName=name,
+         overview=(boxName="Overview", boxVisible=true, contents=overview),
+         receptors=(boxName="Receptors", boxVisible=true, contents=[]),
+         comments=(boxName="Comments", boxVisible=true, contents=comments),
+         furtherReading=(boxName="Further Reading", boxVisible=true, contents=[]),
+         references=(boxName="References", boxVisible=true, contents=[]),
+         contributors=(boxName="Contributors", boxVisible=true, contents=[])))
+    }
+  }
+
+  switch(lookup("familyId", environment())) {
+    case Just(id) -> getFamilyInfo(stringToInt(id))
+    case Nothing -> Nothing
+  }
+
+  # Just((familyId=0, familyName="Trump",
+  #     overview=(boxName="Overview", boxVisible=true, contents="The best, really"),
+  #     receptors=(boxName="Receptors", boxVisible=true, contents=[]),
+  #     comments=(boxName="Comments", boxVisible=true,
+  #       contents="The best comment, really, it is. Those other comments? Total disasters."),
+  #     furtherReading=(boxName="Further Reading", boxVisible=true, contents=[]),
+  #     references=(boxName="References", boxVisible=true, contents=[]),
+  #     contributors=(boxName="Contributors", boxVisible=true, contents=[])))
 }
 
 fun mainPage() {

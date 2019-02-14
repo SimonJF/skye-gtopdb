@@ -100,7 +100,7 @@ fun view(model) {
       case ItemNode(x) ->
         li(class("liBullet"),
           span(class("bullet"), textNode(" ")) +*
-          a(href("/viewFamily?familyId=" ^^ intToString(x.familyId)),
+          a(href("/familyDisplay?familyId=" ^^ intToString(x.familyId)),
             textNode(x.name))
         )
       case ItemSubtree(name, shown, children) ->
