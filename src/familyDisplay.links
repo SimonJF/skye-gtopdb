@@ -121,10 +121,8 @@ fun view(model) {
         div(class("contentboxfullhelp"),
           div(class("imageleft"), textNode("?")) +*
           div(class("textright"),
-            p(class("split_para"),
-              showHideLink +*
-              innerSection
-            ))))
+            p(class("split_para"), showHideLink) +*
+            innerSection)))
     }
     # headerBox: Header information for given family
     var headerBox =
@@ -216,8 +214,39 @@ fun view(model) {
     }
 
     sig displayContributors : (Contributors) ~> HTML(Message)
-    fun displayContributors(x) {
-      MvuHTML.empty
+    fun displayContributors(contributors) {
+      fun renderContributor(c) {
+        var roleNode =
+          if (c.contribRole == "") {
+            MvuHTML.empty
+          } else {
+            textNode(" (" ^^ c.contribRole ^^ ")")
+          };
+
+        p(a0, b(a0,
+          a(href("/contributorDisplay?contributorId="
+            ^^ intToString(c.contribId)),
+            textNode(c.contribName)) +* roleNode) +*
+          br(a0, h0) +*
+          textNode(c.contribAddress)
+        )
+      }
+
+      var subcommitteeMembers =
+        MvuHTML.concat(map(renderContributor, contributors.subcommittee));
+      var otherContributors =
+        MvuHTML.concat(map(renderContributor, contributors.additional));
+
+      div(id("13_subcommittee") +@ class("visibleSection") +@ style("display: block;"),
+        table_(a0,
+          tbody(a0,
+            tr(a0,
+            td(style("vertical-align: top;"),
+              h3(a0, textNode("Subcommittee members:")) +*
+              subcommitteeMembers) +*
+            td(style("vertical-align: top;"),
+              h3(a0, textNode("Other contributors:")) +*
+              otherContributors)))))
     }
 
     # (boxName: String,  boxVisible: Bool, contents: a);
@@ -270,7 +299,8 @@ fun getInitialModel() {
           var furtherReading = reverse(furtherReading);
 
         # It's not possible to abstract over the table here,
-        # unfortunately. There could be a way to make this slightly
+        # unfortunately, I don't think? Maybe we could do a
+        # row annotation? There could be a way to make this slightly
         # neater, perhaps?
         var (subcommitteeMembers: [Contributor]) =
           for (t <-- Tables.subcommittee)
