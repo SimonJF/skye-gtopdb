@@ -6,9 +6,39 @@ open MvuEvents;
 open Tables;
 open Template;
 
-# For now. Receptor Summaries will be the biggest bit of work for
-# this page, I think.
-typename ReceptorSummary = ();
+typename ExternalRef = (
+  refId: String,
+  refSpeciesName: String,
+  refUrl: String
+);
+
+
+typename Interaction = (
+  interactionLigandId: Int,
+  interactionLigandName: String,
+  interactionType: String,
+  interactionAction: String,
+  interactionSelective: Bool,
+  interactionLabelled: Bool
+);
+
+typename Synonym = (synonymName: String, synonymOrder: Int);
+
+typename ReceptorSummary = (
+   receptorId: Int,
+   receptorNomenclature: String,
+   receptorSynonyms: [String],
+   receptorGenes: [String],
+   receptorEnsemblRefs: [ExternalRef],
+   receptorUniprotRefs: [ExternalRef],
+   receptorPrincipalTransduction: String,
+   receptorInteractions: [Interaction],
+   # Need to sort in-memory, since `orderby` not supported w/ shredding
+   receptorDisplayOrder: Int
+  );
+
+typename ReceptorBox =
+  (receptorSummary: ReceptorSummary, boxVisible: Bool);
 
 typename ContentBox(a) =
   (boxName: String,  boxVisible: Bool, contents: a);
@@ -281,8 +311,9 @@ fun getInitialModel() {
     switch(basicInfo) {
       case [] -> Nothing
       case (name, overview, comments)::_ ->
-        # Next, grab the further reading.
-        # TODO: Ordering -- ideally we want to order by authors
+        # At this point, we need to populate the rest of the data
+        # (further reading, contributors, and interaction data).
+        ### Further reading
         var furtherReading =
           for (fr <-- Tables.grac_further_reading)
             where (fr.family_id == familyId)
@@ -298,6 +329,7 @@ fun getInitialModel() {
               ];
           var furtherReading = reverse(furtherReading);
 
+        ### Contributors
         # It's not possible to abstract over the table here,
         # unfortunately, I don't think? Maybe we could do a
         # row annotation? There could be a way to make this slightly
@@ -328,9 +360,31 @@ fun getInitialModel() {
         var (contributors: Contributors) =
           (subcommittee=subcommitteeMembers, additional=additionalContributors);
 
+        ### Receptors
+        var receptors =
+          for (r2f <-- receptor2family)
+            where (r2f.family_id == familyId)
+            for (receptor <-- object)
+              where (receptor.object_id == r2f.object_id)
+              [
+                 (receptorId=receptor.object_id,
+                 receptorNomenclature=receptor.name,
+                 receptorSynonyms =
+                   for (s <-- Tables.synonym)
+                     where (s.object_id == receptor.object_id && s.from_grac && s.display)
+                     [(synonymName=s.synonym, synonymOrder=s.display_order)],
+                 receptorGenes=[], # TODO
+                 receptorEnsemblRefs=[], # TODO
+                 receptorUniprotRefs=[], # TODO
+                 receptorPrincipalTransduction="", # TODO
+                 receptorInteractions=[], # TODO
+                 receptorDisplayOrder=r2f.display_order)
+              ];
+
+
         Just((familyId=familyId, familyName=name,
          overview=(boxName="Overview", boxVisible=true, contents=overview),
-         receptors=(boxName="Receptors", boxVisible=true, contents=[]),
+         receptors=(boxName="Receptors", boxVisible=true, contents=receptors),
          comments=(boxName="Comments", boxVisible=true, contents=comments),
          furtherReading=(boxName="Further Reading", boxVisible=true, contents=furtherReading),
          references=(boxName="References", boxVisible=true, contents=[]),
