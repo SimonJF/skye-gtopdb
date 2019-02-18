@@ -27,7 +27,7 @@ typename Model =
          overview: ContentBox(String),
          receptors: ContentBox([ReceptorSummary]),
          comments: ContentBox(String),
-         furtherReading: ContentBox([Reference]),
+         furtherReading: ContentBox([(Reference, Bool)]),
          references: ContentBox([Reference]),
          contributors: ContentBox(Contributors)));
 
@@ -140,6 +140,50 @@ fun view(model) {
             )
           )));
 
+    # Core rendering function for references.
+    # TODO: Consider moving to reference.links, since this might be useful
+    # in different files.
+    fun renderReference(reference) {
+      fun tn(x) { textNode(x) }
+      var issueNode =
+        if(reference.issue == "") {
+          MvuHTML.empty
+        } else {
+          tn(" (" ^^ reference.issue ^^ ")")
+        };
+
+      var pubMedHref =
+        "javascript:newWindow('http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=pubmed&dopt=AbstractPlus&list_uids="
+        ^^ intToString(reference.pubmedId) ^^ "', 800, 500)";
+
+      var pubMedNode =
+        tn("[PMID:") +*
+        a(href(pubMedHref), tn(intToString(reference.pubmedId))) +*
+        tn("]");
+
+      var keyNode =
+        if(reference.isKey) {
+          textNode("* ")
+        } else {
+          MvuHTML.empty
+        };
+
+      p(class("grac_text"),
+        keyNode
+        +* tn(reference.authors)
+        +* tn(". ")
+        +* tn(reference.title)
+        +* tn(". ")
+        +* i(a0, tn(reference.journalName))
+        +* tn(", ")
+        +* b(a0, tn(intToString(reference.volume)))
+        +* issueNode
+        +* tn(": ")
+        +* tn(reference.pages)
+        +* tn(". ")
+        +* pubMedNode)
+    }
+
     fun displayOverview(overviewText) {
       p(class("grac_text"), textNode(overviewText))
     }
@@ -149,22 +193,29 @@ fun view(model) {
     fun displayComments(commentText) {
       p(class("grac_text"), textNode(commentText))
     }
-    fun displayReference(_) {
-      MvuHTML.empty
+    fun displayFurtherReading(refs) {
+      p(a0, textNode("* Key further reading is highlighted with an asterisk")) +*
+      MvuHTML.concat(map(fun(x) { renderReference(x)}, refs))
     }
-    fun displayFurtherReading(_) {
-      MvuHTML.empty
+
+    fun displayReferences(refs) {
+      # SJF TODO: Define mapi in prelude
+      fun mapi(f, xs) {
+        fun go(f, i, xs) {
+          switch(xs) {
+            case [] -> []
+            case x :: xs -> f(i, x) :: go(f, i+1, xs)
+          }
+        }
+        go(f, 0, xs)
+      }
+      MvuHTML.concat(mapi(fun(i, x) { textNode(intToString(i) ^^ " ") +*
+        renderReference(x)}, refs))
     }
-    fun displayReferences(_) {
-      MvuHTML.empty
-    }
+
     fun displayContributors(_) {
       MvuHTML.empty
     }
-    fun displayCitation() {
-      MvuHTML.empty
-    }
-
     # (boxName: String,  boxVisible: Bool, contents: a);
     headerBox +*
     showBox(model.overview, ToggleOverview, displayOverview) +*
@@ -185,6 +236,7 @@ fun view(model) {
 
 fun getInitialModel() {
   fun getFamilyInfo(familyId) {
+    # First, grab the basic information.
     var basicInfo =
       for (f <-- Tables.family)
         where (f.family_id == familyId)
@@ -195,11 +247,28 @@ fun getInitialModel() {
     switch(basicInfo) {
       case [] -> Nothing
       case (name, overview, comments)::_ ->
+        # Next, grab the further reading.
+        # TODO: Ordering -- ideally we want to order by authors
+        var furtherReading =
+          for (fr <-- Tables.grac_further_reading)
+            where (fr.family_id == familyId)
+            for (ref <-- Tables.reference)
+              where (ref.reference_id == fr.reference_id)
+              orderby(ref.authors)
+              [
+                (makeReference(
+                   ref.type, ref.title, ref.article_title, ref.year,
+                   ref.volume, ref.issue, ref.pages, ref.publisher,
+                   ref.publisher_address, ref.editors, ref.pubmed_id,
+                   ref.isbn, ref.authors, fr.key_ref))
+              ];
+          var furtherReading = reverse(furtherReading);
+
         Just((familyId=0, familyName=name,
          overview=(boxName="Overview", boxVisible=true, contents=overview),
          receptors=(boxName="Receptors", boxVisible=true, contents=[]),
          comments=(boxName="Comments", boxVisible=true, contents=comments),
-         furtherReading=(boxName="Further Reading", boxVisible=true, contents=[]),
+         furtherReading=(boxName="Further Reading", boxVisible=true, contents=furtherReading),
          references=(boxName="References", boxVisible=true, contents=[]),
          contributors=(boxName="Contributors", boxVisible=true, contents=[])))
     }
@@ -225,5 +294,3 @@ fun mainPage() {
   runSimple("vdom_placeholder", initialModel, view, updt);
   template("Family Display")
 }
-
-
