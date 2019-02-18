@@ -1,4 +1,3 @@
-open Contributor;
 open Reference;
 open Mvu;
 open MvuHTML;
@@ -15,8 +14,11 @@ typename ContentBox(a) =
   (boxName: String,  boxVisible: Bool, contents: a);
 
 # BUG (hacky workaround): Type arguments don't appear to be renamed
-typename Contributor = Contributor;
 typename Reference = Reference;
+
+typename Contributor =
+  (contribId: Int, contribName: String,
+   contribRole: String, contribAddress: String);
 
 typename Contributors =
   (subcommittee: [Contributor], additional: [Contributor]);
@@ -27,7 +29,7 @@ typename Model =
          overview: ContentBox(String),
          receptors: ContentBox([ReceptorSummary]),
          comments: ContentBox(String),
-         furtherReading: ContentBox([(Reference, Bool)]),
+         furtherReading: ContentBox([Reference]),
          references: ContentBox([Reference]),
          contributors: ContentBox(Contributors)));
 
@@ -78,7 +80,7 @@ fun updt(msg, model) {
         case ToggleReferences ->
           (model with references=toggleBox(model.references))
         case ToggleContributors ->
-          (model with receptors=toggleBox(model.contributors))
+          (model with contributors=toggleBox(model.contributors))
         case SetAllVisibilities(vis) -> setBoxVisibilities(vis, model)
       }
   })
@@ -213,9 +215,11 @@ fun view(model) {
         renderReference(x)}, refs))
     }
 
-    fun displayContributors(_) {
+    sig displayContributors : (Contributors) ~> HTML(Message)
+    fun displayContributors(x) {
       MvuHTML.empty
     }
+
     # (boxName: String,  boxVisible: Bool, contents: a);
     headerBox +*
     showBox(model.overview, ToggleOverview, displayOverview) +*
@@ -234,6 +238,7 @@ fun view(model) {
       }))
 }
 
+# sig getInitialModel : () ~> Model
 fun getInitialModel() {
   fun getFamilyInfo(familyId) {
     # First, grab the basic information.
@@ -264,13 +269,42 @@ fun getInitialModel() {
               ];
           var furtherReading = reverse(furtherReading);
 
-        Just((familyId=0, familyName=name,
+        # It's not possible to abstract over the table here,
+        # unfortunately. There could be a way to make this slightly
+        # neater, perhaps?
+        var (subcommitteeMembers: [Contributor]) =
+          for (t <-- Tables.subcommittee)
+            where (t.family_id == familyId)
+            for (contrib <-- Tables.contributor_copy)
+              where (contrib.contributor_id == t.contributor_id)
+              orderby (-(t.display_order))
+              [(contribId=contrib.contributor_id,
+                contribName=(contrib.first_names ^^ " " ^^ contrib.surname),
+                contribAddress=contrib.address,
+                contribRole=t.role)];
+
+        var (additionalContributors: [Contributor]) =
+          for (t <-- Tables.contributor2family)
+            where (t.family_id == familyId)
+            for (contrib <-- Tables.contributor_copy)
+              where (contrib.contributor_id == t.contributor_id)
+              orderby (-(t.display_order))
+              [(contribId=contrib.contributor_id,
+                contribName=(contrib.first_names ^^ " " ^^ contrib.surname),
+                contribAddress=contrib.address,
+                contribRole=t.role)];
+
+
+        var (contributors: Contributors) =
+          (subcommittee=subcommitteeMembers, additional=additionalContributors);
+
+        Just((familyId=familyId, familyName=name,
          overview=(boxName="Overview", boxVisible=true, contents=overview),
          receptors=(boxName="Receptors", boxVisible=true, contents=[]),
          comments=(boxName="Comments", boxVisible=true, contents=comments),
          furtherReading=(boxName="Further Reading", boxVisible=true, contents=furtherReading),
          references=(boxName="References", boxVisible=true, contents=[]),
-         contributors=(boxName="Contributors", boxVisible=true, contents=[])))
+         contributors=(boxName="Contributors", boxVisible=true, contents=contributors)))
     }
   }
 
@@ -278,15 +312,6 @@ fun getInitialModel() {
     case Just(id) -> getFamilyInfo(stringToInt(id))
     case Nothing -> Nothing
   }
-
-  # Just((familyId=0, familyName="Trump",
-  #     overview=(boxName="Overview", boxVisible=true, contents="The best, really"),
-  #     receptors=(boxName="Receptors", boxVisible=true, contents=[]),
-  #     comments=(boxName="Comments", boxVisible=true,
-  #       contents="The best comment, really, it is. Those other comments? Total disasters."),
-  #     furtherReading=(boxName="Further Reading", boxVisible=true, contents=[]),
-  #     references=(boxName="References", boxVisible=true, contents=[]),
-  #     contributors=(boxName="Contributors", boxVisible=true, contents=[])))
 }
 
 fun mainPage() {
