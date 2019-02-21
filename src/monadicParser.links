@@ -1,0 +1,78 @@
+# An implementation of Hutton & Meijer's monadic parser combinators.
+
+typename Parser(a) = (String) ~> [(a, String)]
+
+fun return(v) {
+  fun(inp) {
+    [(v, inp)]
+  }
+}
+
+var zero = fun(inp) { [] }
+
+var item = fun(inp) {
+  switch(inp) {
+    case [] -> []
+    case x :: xs -> [(x, xs)]
+  }
+}
+
+fun bind(m, f) {
+  fun(inp) {
+    var results = m(inp);
+    concat(map(f, results));
+  }
+}
+
+infix m >>= f { bind(m, f) }
+
+fun seq(m, n) {
+  m >>= fun(x) {
+    n >>= fun(y) {
+      return(x, y)
+    }
+  }
+}
+
+fun sat(p) {
+  item >>= fun(x) {
+    if(p(x)) {
+      return(x)
+    } else {
+      zero
+    }
+  }
+}
+
+fun char(x) {
+  sat(fun(y) {
+    x == y
+  })
+}
+
+fun digit() {
+  sat(fun(x) {
+    (0 <= x) && (x <= '9')
+  })
+}
+
+fun lower() {
+  sat(fun(x) {
+    'a' <= x && x <= 'z'
+  })
+}
+
+fun upper() {
+  sat(fun(x) {
+    'A' <= x && x <= 'Z'
+  })
+}
+
+fun plus(m, n) {
+  fun(inp) {
+    (m(inp) ++ n(inp))
+  }
+}
+
+infix m +++ n { plus(m, n) }
+

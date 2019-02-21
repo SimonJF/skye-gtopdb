@@ -1,0 +1,22 @@
+# A simple recursive descent parser for the GtoPdb markup.
+
+typename Markup = [|
+  | Empty
+  | Append:(Markup, Markup)
+  | Text:String
+  | BrTag:String
+  | ReferenceTag:Int
+  | HTMLTag:((tagName: String, contents:Markup))
+|]
+
+
+fun parseReferenceTag(tokens) {
+  switch(tokens) {
+    # Might be worth making this more robust by maybe consuming spaces around equals?
+    case (LeftAngle :: Word("Reference") :: Space ::
+      Word("id") :: Equals :: Word(refId) :: FowardSlash :: RightAngle :: xs) ->
+      Just(ReferenceTag(stringToInt(refId)), tokens)
+  }
+}
+
+fun parseBr:

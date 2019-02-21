@@ -24,6 +24,8 @@ typename Interaction = (
 
 typename Synonym = (synonymName: String, synonymOrder: Int);
 
+var emptyER = (refId="", refSpeciesName="", refUrl="");
+
 typename ReceptorSummary = (
    receptorId: Int,
    receptorNomenclature: String,
@@ -32,7 +34,7 @@ typename ReceptorSummary = (
    receptorEnsemblRefs: [ExternalRef],
    receptorUniprotRefs: [ExternalRef],
    receptorPrincipalTransduction: String,
-   receptorInteractions: [Interaction],
+#   receptorInteractions: [Interaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    receptorDisplayOrder: Int
   );
@@ -360,31 +362,33 @@ fun getInitialModel() {
         var (contributors: Contributors) =
           (subcommittee=subcommitteeMembers, additional=additionalContributors);
 
-        ### Receptors
+        # Receptors
         var receptors =
-          for (r2f <-- receptor2family)
-            where (r2f.family_id == familyId)
-            for (receptor <-- object)
-              where (receptor.object_id == r2f.object_id)
-              [
-                 (receptorId=receptor.object_id,
-                 receptorNomenclature=receptor.name,
-                 receptorSynonyms =
-                   for (s <-- Tables.synonym)
-                     where (s.object_id == receptor.object_id && s.from_grac && s.display)
-                     [(synonymName=s.synonym, synonymOrder=s.display_order)],
-                 receptorGenes=[], # TODO
-                 receptorEnsemblRefs=[], # TODO
-                 receptorUniprotRefs=[], # TODO
-                 receptorPrincipalTransduction="", # TODO
-                 receptorInteractions=[], # TODO
-                 receptorDisplayOrder=r2f.display_order)
-              ];
+          query {
+            for (r2f <-- receptor2family)
+              where (r2f.family_id == familyId)
+              for (receptor <-- object)
+                where (receptor.object_id == r2f.object_id)
+                [
+                   (receptorId=receptor.object_id,
+                   receptorNomenclature=receptor.name,
+                   receptorSynonyms =
+                     for (s <-- Tables.synonym)
+                       where (s.object_id == receptor.object_id && s.from_grac && s.display)
+                       [(synonymName=s.synonym, synonymOrder=s.display_order)],
+                   receptorGenes="", # TODO
+                   receptorEnsemblRefs=emptyER, # TODO
+                   receptorUniprotRefs=emptyER, # TODO
+                   receptorPrincipalTransduction="", # TODO
+                   # receptorInteractions=[], # TODO
+                   receptorDisplayOrder=r2f.display_order)
+                ]
+          };
 
 
         Just((familyId=familyId, familyName=name,
          overview=(boxName="Overview", boxVisible=true, contents=overview),
-         receptors=(boxName="Receptors", boxVisible=true, contents=receptors),
+         receptors=(boxName="Receptors", boxVisible=true, contents=[]),
          comments=(boxName="Comments", boxVisible=true, contents=comments),
          furtherReading=(boxName="Further Reading", boxVisible=true, contents=furtherReading),
          references=(boxName="References", boxVisible=true, contents=[]),

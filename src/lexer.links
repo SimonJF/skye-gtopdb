@@ -1,0 +1,70 @@
+# GtoPdb stores textual information in the database. However, this isn't just
+# plain text: it's XML-style markup. Interesting features:
+#  - <Reference id=XYZ/>
+#  - <Ligand id=XYZ/>
+#  - <br> (no closing tag)
+#  - standard text
+#  - HTML tags
+
+# This module acts as a lexer. We'll also implement a simple recursive-descent
+# parser.
+
+typename Token = [|
+    Word:String
+  | Space
+  | Newline
+  | LeftAngle
+  | RightAngle
+  | ForwardSlash
+  | BackSlash
+  | SingleQuote
+  | DoubleQuote
+  | Equals
+|];
+
+sig lex : (String) ~> [Token]
+fun lex(str) {
+
+  fun lexInner(chars, wordAcc, tokensAcc) {
+    fun endWord() {
+      if (wordAcc == []) {
+        tokensAcc
+      } else {
+        Word(implode(reverse(wordAcc))) :: tokensAcc
+      }
+    }
+
+    switch(chars) {
+      case [] ->
+        if (wordAcc == []) {
+          reverse(tokensAcc)
+        } else {
+          var finalWord = Word(implode(reverse(wordAcc)));
+          reverse(finalWord :: tokensAcc)
+        }
+
+      case x :: xs ->
+        if (x == ' ') {
+          lexInner(xs, [], Space :: endWord())
+        } else if (x == '<') {
+          lexInner(xs, [], LeftAngle :: endWord())
+        } else if (x == '>') {
+          lexInner(xs, [], RightAngle :: endWord())
+        } else if (x == '/') {
+          lexInner(xs, [], ForwardSlash :: endWord())
+        } else if (x == '\\') {
+          lexInner(xs, [], BackSlash :: endWord())
+        } else if (x == ''') {
+          lexInner(xs, [], SingleQuote :: endWord())
+        } else if (x == '\"') {
+          lexInner(xs, [], DoubleQuote :: endWord())
+        } else if (x == '=') {
+          lexInner(xs, [], Equals :: endWord())
+        } else {
+          lexInner(xs, x :: wordAcc, tokensAcc)
+        }
+    }
+  }
+
+  lexInner(explode(str), [], [])
+}
