@@ -1,39 +1,49 @@
-# An implementation of Hutton & Meijer's monadic parser combinators.
+# A Links implementation of Hutton & Meijer's monadic parser combinators.
 
-typename Parser(a) = (String) ~> [(a, String)]
+typename Chars = [Char]; # Shadow Chars here.
 
+typename Parser(a) = ((Chars) {}~> [(a, Chars)]);
+
+sig return : (a) {}~> Parser(a)
 fun return(v) {
   fun(inp) {
     [(v, inp)]
   }
 }
 
-var zero = fun(inp) { [] }
+var zero = fun(inp) { [] };
 
 var item = fun(inp) {
   switch(inp) {
     case [] -> []
     case x :: xs -> [(x, xs)]
   }
-}
+};
 
+# Wrong. We're interpreting this in the list monad...
+sig bind : (Parser(a), (a) {}~> Parser(b)) {}~> Parser(b)
 fun bind(m, f) {
   fun(inp) {
-    var results = m(inp);
-    concat(map(f, results));
+    var results = m(inp); # [(a, Chars)]
+    var mapped = map(fun((v, inp2)) { (f(v))(inp2) }, results);
+    var concatted = concat(mapped);
+    concatted
   }
 }
 
-infix m >>= f { bind(m, f) }
+op m >>= f { bind(m, f) }
+
+op m >> f { bind(m, fun(_) { f }) }
 
 fun seq(m, n) {
   m >>= fun(x) {
     n >>= fun(y) {
-      return(x, y)
+      return((x, y))
     }
   }
 }
 
+sig sat : ((Char) {}~> Bool) {}~> Parser(Char)
 fun sat(p) {
   item >>= fun(x) {
     if(p(x)) {
@@ -50,23 +60,20 @@ fun char(x) {
   })
 }
 
-fun digit() {
+var digit =
   sat(fun(x) {
-    (0 <= x) && (x <= '9')
-  })
-}
+    ('0' <= x) && (x <= '9')
+  });
 
-fun lower() {
+var lower =
   sat(fun(x) {
     'a' <= x && x <= 'z'
-  })
-}
+  });
 
-fun upper() {
+var upper =
   sat(fun(x) {
     'A' <= x && x <= 'Z'
-  })
-}
+  });
 
 fun plus(m, n) {
   fun(inp) {
@@ -74,5 +81,30 @@ fun plus(m, n) {
   }
 }
 
-infix m +++ n { plus(m, n) }
+op m +++ n { plus(m, n) }
 
+var letter = lower +++ upper;
+
+fun nonEmptyWord() {
+  letter >>= fun(x) {
+  word() >>= fun(xs) {
+    return (x :: xs)
+  }}
+}
+
+fun word() { nonEmptyWord() +++ return([]) }
+
+# Must match given string
+sig string : (Chars) {}~> Parser(Chars)
+fun string(str) {
+  switch(str) {
+    case [] -> return([])
+    case x :: xs ->
+      char(x) >>
+      string(xs) >>
+      return(x :: xs)
+  }
+}
+
+
+string(explode("Hello"))(explode("Hello"))
