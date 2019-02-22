@@ -37,8 +37,24 @@ fun plus(m, n) {
 
 op m +++ n { plus(m, n) }
 
+fun lazyChoice(m, n) {
+  fun(inp) {
+    switch(m(inp)) {
+      case [] ->
+        switch(n(inp)) {
+          case [] -> []
+          case x :: _ -> [x]
+        }
+      case x :: _ -> [x]
+    }
+  }
+}
 
-op m ++! n { first(m +++ n) }
+# D'oh! We're not in a lazy language, so this will enumerate all of
+# the results and then pick the first!
+# op m ++! n { first(m +++ n) }
+op m ++! n { lazyChoice(m, n) }
+
 
 sig bind : (Parser(a), (a) {}~> Parser(b)) {}~> Parser(b)
 fun bind(m, f) {
@@ -147,5 +163,11 @@ var nat =
     return(eval(map(fun(x) { ord(x) - ord('0') }, xs)))
   };
 
+fun spaces() {
+  fun isSpace(x) {
+    x == ' ' || x == '\t' || x == '\r' || x == '\n'
+  }
 
+  many1(sat(isSpace)) >> return(())
+}
 

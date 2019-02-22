@@ -1,6 +1,9 @@
 open MonadicParser;
 
 # A simple parser for the GtoPdb markup.
+# Limitations right now:
+#  1. Cannot handle '<' and '>' characters which do not refer to tags
+#  2. Doesn't handle HTML attributes yet
 
 typename Markup = [|
     Empty
@@ -27,8 +30,7 @@ var textStream =
   fun(str) { return(Text(implode(str))) };
 
 fun htmlTag() {
-  char('<') >>
-  nonEmptyWord() >>= fun (tagName) {
+  word() >>= fun (tagName) {
   char('>') >>
   markup() >>= fun (contents) {
   stringE("</") >>
@@ -39,15 +41,15 @@ fun htmlTag() {
 }
 
 fun brTag() {
-  (stringE("<br>") ++!
-   stringE("<br/>") ++!
-   stringE("<br />")) >>
+  (stringE("br>") ++!
+   stringE("br/>") ++!
+   stringE("br />")) >>
   return(mkHtmlTag("br", Empty))
 }
 
 fun referenceTag() {
-  stringE("<Reference") >>
-  char(' ') >>
+  stringE("Reference") >>
+  spaces() >>
   stringE("id") >>
   char('=') >>
   nat >>= fun(id) {
@@ -57,8 +59,8 @@ fun referenceTag() {
 }
 
 fun ligandTag() {
-  stringE("<Ligand") >>
-  char(' ') >>
+  stringE("Ligand") >>
+  spaces() >>
   stringE("id") >>
   char('=') >>
   nat >>= fun(id) {
@@ -68,6 +70,7 @@ fun ligandTag() {
 }
 
 fun tag() {
+  char('<') >>
   brTag() ++! referenceTag() ++! ligandTag() ++! htmlTag()
 }
 
@@ -75,10 +78,10 @@ sig markup : () {}~> Parser(Markup)
 fun markup() {
 
   fun markupInner() {
-    textStream ++!
     tag() ++!
-    (char('<') >> return(Text("<"))) ++!
-    (char('>') >> return(Text(">")))
+    textStream
+    #(char('<') >> return(Text("<"))) ++!
+    #(char('>') >> return(Text(">")))
   }
 
   many(markupInner()) >>= fun(xs) {
@@ -101,4 +104,5 @@ var testStr =
   id=13691/>.<br><br>There are currently three licenced cannabinoid medicines each of which contains a compound that can activate CB<sub>1</sub> and CB<sub>2</sub> receptors <Reference id=32075/>. Two of these medicines were developed to suppress nausea and vomiting produced by chemotherapy. These are <Ligand id=9071/> (Cesamet&reg;), a synthetic CB<sub>1</sub>/CB<sub>2</sub> receptor agonist, and synthetic <Ligand id=2424/> (Marinol&reg;; dronabinol), which can also be used as an appetite
   stimulant. The third medicine, Sativex&reg;, contains mainly <Ligand id=2424/> and <Ligand id=4150/>, both extracted from cannabis, and is used to treat multiple sclerosis and cancer pain.";
 
+#parse("<b>hello, world!</b>")
 parse(testStr)
