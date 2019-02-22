@@ -1,22 +1,104 @@
-# A simple recursive descent parser for the GtoPdb markup.
+open MonadicParser;
+
+# A simple parser for the GtoPdb markup.
 
 typename Markup = [|
-  | Empty
+    Empty
   | Append:(Markup, Markup)
   | Text:String
-  | BrTag:String
   | ReferenceTag:Int
+  | LigandTag:Int
   | HTMLTag:((tagName: String, contents:Markup))
-|]
+|];
 
+typename ParseResult = [| OK:Markup | Error:String |];
 
-fun parseReferenceTag(tokens) {
-  switch(tokens) {
-    # Might be worth making this more robust by maybe consuming spaces around equals?
-    case (LeftAngle :: Word("Reference") :: Space ::
-      Word("id") :: Equals :: Word(refId) :: FowardSlash :: RightAngle :: xs) ->
-      Just(ReferenceTag(stringToInt(refId)), tokens)
+fun mkHtmlTag(tagName, contents) {
+  HTMLTag(tagName=tagName, contents=contents)
+}
+
+# Useful parser combinators for us
+
+# streamChar: runs of characters that are not used to start or end tags.
+var streamChar = sat(fun(c) { implode([c]) =~ /[^<>]/ });
+
+var textStream =
+  many1(streamChar) >>=
+  fun(str) { return(Text(implode(str))) };
+
+fun htmlTag() {
+  char('<') >>
+  nonEmptyWord() >>= fun (tagName) {
+  char('>') >>
+  markup() >>= fun (contents) {
+  stringE("</") >>
+  string(tagName) >>
+  char('>') >>
+  return(mkHtmlTag(implode(tagName), contents))
+  }}
+}
+
+fun brTag() {
+  (stringE("<br>") ++!
+   stringE("<br/>") ++!
+   stringE("<br />")) >>
+  return(mkHtmlTag("br", Empty))
+}
+
+fun referenceTag() {
+  stringE("<Reference") >>
+  char(' ') >>
+  stringE("id") >>
+  char('=') >>
+  nat >>= fun(id) {
+  stringE("/>") >>
+  return(ReferenceTag(id))
   }
 }
 
-fun parseBr:
+fun ligandTag() {
+  stringE("<Ligand") >>
+  char(' ') >>
+  stringE("id") >>
+  char('=') >>
+  nat >>= fun(id) {
+  stringE("/>") >>
+  return(LigandTag(id))
+  }
+}
+
+fun tag() {
+  brTag() ++! referenceTag() ++! ligandTag() ++! htmlTag()
+}
+
+sig markup : () {}~> Parser(Markup)
+fun markup() {
+
+  fun markupInner() {
+    textStream ++!
+    tag() ++!
+    (char('<') >> return(Text("<"))) ++!
+    (char('>') >> return(Text(">")))
+  }
+
+  many(markupInner()) >>= fun(xs) {
+    return(fold_right(fun(x, acc) { Append(x, acc) }, Empty, xs))
+  }
+}
+
+fun parse(str) {
+  switch((markup())(explode(str))) {
+    case [] -> Error("Nothing matched.")
+    case [(markup, [])] -> OK(markup)
+    case [(markup, xs)] -> Error("Unconsumed input: " ^^ implode(xs))
+    case xs -> Error("Ambiguous parse: " ^^ (show(xs)))
+  }
+}
+
+
+var testStr =
+  "Cannabinoid receptors (<b>nomenclature as agreed by the <u>NC-IUPHAR</u> Subcommittee on Cannabinoid Receptors <Reference id=14916/></b>) are activated by endogenous ligands that include N-arachidonoylethanolamine (<Ligand id=2364/>), <Ligand id=5444/>, <Ligand id=5445/> and <Ligand id=729/>. Potency determinations of endogenous agonists at these receptors are complicated by the possibility of differential susceptibility of endogenous ligands to enzymatic conversion <Reference
+  id=13691/>.<br><br>There are currently three licenced cannabinoid medicines each of which contains a compound that can activate CB<sub>1</sub> and CB<sub>2</sub> receptors <Reference id=32075/>. Two of these medicines were developed to suppress nausea and vomiting produced by chemotherapy. These are <Ligand id=9071/> (Cesamet&reg;), a synthetic CB<sub>1</sub>/CB<sub>2</sub> receptor agonist, and synthetic <Ligand id=2424/> (Marinol&reg;; dronabinol), which can also be used as an appetite
+  stimulant. The third medicine, Sativex&reg;, contains mainly <Ligand id=2424/> and <Ligand id=4150/>, both extracted from cannabis, and is used to treat multiple sclerosis and cancer pain.";
+
+parse(testStr)

@@ -20,10 +20,30 @@ var item = fun(inp) {
   }
 };
 
-# Wrong. We're interpreting this in the list monad...
+fun first(p) {
+  fun(inp) {
+    switch(p(inp)) {
+      case [] -> []
+      case x :: _ -> [x]
+    }
+  }
+}
+
+fun plus(m, n) {
+  fun(inp) {
+    (m(inp) ++ n(inp))
+  }
+}
+
+op m +++ n { plus(m, n) }
+
+
+op m ++! n { first(m +++ n) }
+
 sig bind : (Parser(a), (a) {}~> Parser(b)) {}~> Parser(b)
 fun bind(m, f) {
   fun(inp) {
+    # print("inp: " ^^ implode(inp) ^^ "\n\n\n");
     var results = m(inp); # [(a, Chars)]
     var mapped = map(fun((v, inp2)) { (f(v))(inp2) }, results);
     var concatted = concat(mapped);
@@ -75,15 +95,7 @@ var upper =
     'A' <= x && x <= 'Z'
   });
 
-fun plus(m, n) {
-  fun(inp) {
-    (m(inp) ++ n(inp))
-  }
-}
-
-op m +++ n { plus(m, n) }
-
-var letter = lower +++ upper;
+var letter = lower ++! upper;
 
 fun nonEmptyWord() {
   letter >>= fun(x) {
@@ -92,7 +104,7 @@ fun nonEmptyWord() {
   }}
 }
 
-fun word() { nonEmptyWord() +++ return([]) }
+fun word() { nonEmptyWord() ++! return([]) }
 
 # Must match given string
 sig string : (Chars) {}~> Parser(Chars)
@@ -106,5 +118,34 @@ fun string(str) {
   }
 }
 
+fun stringE(str) {
+  string(explode(str))
+}
 
-string(explode("Hello"))(explode("Hello"))
+
+fun many(p) {
+  p >>= fun(x) {
+  many(p) >>= fun(xs) {
+  return(x :: xs)
+  }} ++! return([])
+}
+
+fun many1(p) {
+  p >>= fun(x) {
+  many(p) >>= fun(xs) {
+  return(x :: xs)
+  }}
+}
+
+sig eval : ([Int]) {}~> Int
+fun eval(digits) {
+  fold_left(fun(acc, x) { (acc * 10) + x}, 0, digits)
+}
+
+var nat =
+  many1(digit) >>= fun(xs) {
+    return(eval(map(fun(x) { ord(x) - ord('0') }, xs)))
+  };
+
+
+
