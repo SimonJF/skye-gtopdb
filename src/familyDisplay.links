@@ -47,6 +47,7 @@ typename ContentBox(a) =
 
 # BUG (hacky workaround): Type arguments don't appear to be renamed
 typename Reference = Reference;
+typename Markup = Markup;
 
 typename Contributor =
   (contribId: Int, contribName: String,
@@ -58,9 +59,9 @@ typename Contributors =
 typename Model =
   Maybe((familyId: Int,
          familyName: String,
-         overview: ContentBox(String),
+         overview: ContentBox(Markup),
          receptors: ContentBox([ReceptorSummary]),
-         comments: ContentBox(String),
+         comments: ContentBox(Markup),
          furtherReading: ContentBox([Reference]),
          references: ContentBox([Reference]),
          contributors: ContentBox(Contributors)));
@@ -384,6 +385,34 @@ fun getInitialModel() {
                    receptorDisplayOrder=r2f.display_order)
                 ]
           };
+
+        # Given some markup, either parses it, or dumps it raw and displays
+        # the error.
+        fun markupOrError(str) {
+          switch (Parser.parse(str)) {
+            case OK(markup) -> markup
+            case Error(str) ->
+              MarkupAppend(MarkupText("Error: " ^^ str),
+              MarkupAppend(MarkupHTMLTag("br", MarkupEmpty), MarkupText(str)))
+          }
+        }
+
+        # TODO: Duplicate handling
+        # Right, here we need to parse the markup we get, and use it to
+        # get the required information from the DB.
+        var overviewMarkup = markupOrError(overview);
+        var commentsMarkup = markupOrError(comments);
+        var (oRefs, oLigands) = collectIds(overviewMarkup);
+        var (cRefs, cLigands) = collectIds(commentsMarkup);
+        var refs = oRefs ++ cRefs;
+        var ligands = oLigands ++ cLigands;
+
+        # Now, we need to get the references and ligand names from the DB.
+        # The tricky thing is we can't do a simple LINQ query (as far as I can see),
+        # since list membership is wild.
+        # We have two (unappealing) options: a single query for each reference (which would lead to
+        # somewhere in the order of 20-30 queries), or fetching the data into memory and filtering
+        # (which is about 9000 tuples for Ligands, and about 35000 tuples for references)
 
 
         Just((familyId=familyId, familyName=name,

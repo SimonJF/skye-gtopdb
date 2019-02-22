@@ -6,18 +6,18 @@ open MonadicParser;
 #  2. Doesn't handle HTML attributes yet
 
 typename Markup = [|
-    Empty
-  | Append:(Markup, Markup)
-  | Text:String
-  | ReferenceTag:Int
-  | LigandTag:Int
-  | HTMLTag:((tagName: String, contents:Markup))
+    MarkupEmpty
+  | MarkupAppend:(Markup, Markup)
+  | MarkupText:String
+  | MarkupReferenceTag:Int
+  | MarkupLigandTag:Int
+  | MarkupHTMLTag:(String, Markup)
 |];
 
 typename ParseResult = [| OK:Markup | Error:String |];
 
 fun mkHtmlTag(tagName, contents) {
-  HTMLTag(tagName=tagName, contents=contents)
+  MarkupHTMLTag(tagName, contents)
 }
 
 # Useful parser combinators for us
@@ -27,7 +27,7 @@ var streamChar = sat(fun(c) { implode([c]) =~ /[^<>]/ });
 
 var textStream =
   many1(streamChar) >>=
-  fun(str) { return(Text(implode(str))) };
+  fun(str) { return(MarkupText(implode(str))) };
 
 fun htmlTag() {
   word() >>= fun (tagName) {
@@ -44,17 +44,17 @@ fun brTag() {
   (stringE("br>") ++!
    stringE("br/>") ++!
    stringE("br />")) >>
-  return(mkHtmlTag("br", Empty))
+  return(mkHtmlTag("br", MarkupEmpty))
 }
 
 fun referenceTag() {
-  stringE("Reference") >>
+  stringE("MarkupReference") >>
   spaces() >>
   stringE("id") >>
   char('=') >>
   nat >>= fun(id) {
   stringE("/>") >>
-  return(ReferenceTag(id))
+  return(MarkupReferenceTag(id))
   }
 }
 
@@ -65,7 +65,7 @@ fun ligandTag() {
   char('=') >>
   nat >>= fun(id) {
   stringE("/>") >>
-  return(LigandTag(id))
+  return(MarkupLigandTag(id))
   }
 }
 
@@ -80,12 +80,12 @@ fun markup() {
   fun markupInner() {
     tag() ++!
     textStream
-    #(char('<') >> return(Text("<"))) ++!
-    #(char('>') >> return(Text(">")))
+    #(char('<') >> return(MarkupText("<"))) ++!
+    #(char('>') >> return(MarkupText(">")))
   }
 
   many(markupInner()) >>= fun(xs) {
-    return(fold_right(fun(x, acc) { Append(x, acc) }, Empty, xs))
+    return(fold_right(fun(x, acc) { MarkupAppend(x, acc) }, MarkupEmpty, xs))
   }
 }
 

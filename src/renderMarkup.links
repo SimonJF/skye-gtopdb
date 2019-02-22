@@ -1,0 +1,55 @@
+# Renders markup as MVU HTML, as well as providing a list of reference IDs.
+open MvuAttrs;
+open MvuHTML;
+open Parser;
+
+typename LigandId = Int;
+typename ReferenceId = Int;
+typename ReferenceNumber = Int;
+
+# Given Markup parsed from the DB, return a list of reference and ligand IDs.
+sig collectIds : (Parser.Markup) ~> ([ReferenceId], [LigandId])
+fun collectIds(m) {
+  fun go(m) {
+    switch(m) {
+      case MarkupEmpty -> ([], [])
+      case MarkupAppend ->
+        var (m1Refs, m1Ligands) = go(m1);
+        var (m2Refs, m2Ligands) = go(m2);
+        (m1Refs ++ m2Refs, m1Ligands ++ m2Ligands)
+      case MarkupText(_) -> ([], [])
+      case MarkupReferenceTag(id) -> ([id], [])
+      case MarkupLigandTag(id) -> ([], [id])
+      case MarkupHTMLTag(_, m) -> go(m)
+    }
+  }
+
+  go(m)
+}
+
+sig renderMarkup :
+  (Parser.Markup, [(ReferenceId, ReferenceNumber)], [(LigandId, String)]) ~> HTML(a)
+fun renderMarkup(m, refs, ligands) {
+  switch(m) {
+    case MarkupEmpty -> (MvuHtml.empty, [])
+    case MarkupAppend(m1, m2) -> renderMarkup(m1) +* renderMarkup(m2)
+    case MarkupText(txt) -> textNode(txt)
+    case MarkupReferenceTag(id) ->
+      var refId = switch(lookup(id, refs)) {
+        case Just(refId) -> intToString(refNode)
+        case Nothing -> "?"
+      };
+
+      var strId = intToString(id);
+      textNode("[") +*
+      a(href("#ref" ^^ refId), textNode(refId)) +*
+      textNode("]")
+    case MarkupLigandTag(id) ->
+      var ligandName = switch(lookup(id, ligands)) {
+        case Just(ligandName) -> ligandName
+        case Nothing -> "?"
+      };
+      a(href("/ligandDisplay?id=" ^^ intToString(id)),
+        textNode(ligandName))
+  }
+}
