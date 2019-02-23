@@ -4,6 +4,7 @@
 typename ReferenceType = [| Journal | Other |];
 
 typename Reference = (
+  referenceId: Int,
   referenceType: String,
   journalName: String,
   title: String,
@@ -34,10 +35,12 @@ fun refTyToString(refTy) {
   }
 }
 
-fun makeReference(refTy, jName, title, y, vol, issue, pgs, publisher,
+fun makeReference(refId,
+  refTy, jName, title, y, vol, issue, pgs, publisher,
   pubAddr, editors, pubmed_id, isbn, authors, isKey) {
 
   (
+    referenceId=refId,
     referenceType=refTy, #stringToRefTy(refTy),
     journalName=jName,
     title=title,

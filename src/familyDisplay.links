@@ -5,6 +5,8 @@ open MvuAttrs;
 open MvuEvents;
 open Tables;
 open Template;
+open Parser;
+open RenderMarkup;
 
 typename ExternalRef = (
   refId: String,
@@ -56,6 +58,11 @@ typename Contributor =
 typename Contributors =
   (subcommittee: [Contributor], additional: [Contributor]);
 
+typename ReferenceId = Int;
+typename ReferenceNumber = Int;
+typename LigandId = Int;
+typename LigandName = String;
+
 typename Model =
   Maybe((familyId: Int,
          familyName: String,
@@ -63,8 +70,11 @@ typename Model =
          receptors: ContentBox([ReceptorSummary]),
          comments: ContentBox(Markup),
          furtherReading: ContentBox([Reference]),
-         references: ContentBox([Reference]),
-         contributors: ContentBox(Contributors)));
+         references: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
+         contributors: ContentBox(Contributors),
+         referenceData: [(ReferenceId, (ReferenceNumber, Reference))],
+         ligandNames: [(LigandId, LigandName)]
+        ));
 
 typename Message = [|
     ToggleOverview | ToggleReceptors | ToggleComments
@@ -232,18 +242,8 @@ fun view(model) {
     }
 
     fun displayReferences(refs) {
-      # SJF TODO: Define mapi in prelude
-      fun mapi(f, xs) {
-        fun go(f, i, xs) {
-          switch(xs) {
-            case [] -> []
-            case x :: xs -> f(i, x) :: go(f, i+1, xs)
-          }
-        }
-        go(f, 0, xs)
-      }
-      MvuHTML.concat(mapi(fun(i, x) { textNode(intToString(i) ^^ " ") +*
-        renderReference(x)}, refs))
+      MvuHTML.concat(map(fun((_, (i, ref))) { textNode(intToString(i) ^^ " ") +*
+        renderReference(ref)}, refs))
     }
 
     sig displayContributors : (Contributors) ~> HTML(Message)
@@ -288,7 +288,7 @@ fun view(model) {
     showBox(model.receptors, ToggleReceptors, displayReceptors) +*
     showBox(model.comments, ToggleComments, displayComments) +*
     showBox(model.furtherReading, ToggleFurtherReading, displayFurtherReading) +*
-    showBox(model.references, ToggleReferences, displayReferences) +*
+    showBox(model.referenceData, ToggleReferences, displayReferences) +*
     showBox(model.contributors, ToggleContributors, displayContributors)
   }
 
@@ -324,7 +324,7 @@ fun getInitialModel() {
               where (ref.reference_id == fr.reference_id)
               orderby(ref.authors)
               [
-                (makeReference(
+                (makeReference(ref.reference_id,
                    ref.type, ref.title, ref.article_title, ref.year,
                    ref.volume, ref.issue, ref.pages, ref.publisher,
                    ref.publisher_address, ref.editors, ref.pubmed_id,
@@ -413,15 +413,49 @@ fun getInitialModel() {
         # We have two (unappealing) options: a single query for each reference (which would lead to
         # somewhere in the order of 20-30 queries), or fetching the data into memory and filtering
         # (which is about 9000 tuples for Ligands, and about 35000 tuples for references)
+        # I'm going to go to the former, I suppose.
+        var references =
+          concatMap(fun(ref) {
+            query {
+              for (r <-- reference)
+                where (r.reference_id == ref.referenceId)
+                [
+                  (makeReference(ref.referenceId,
+                     ref.type, ref.title, ref.article_title, ref.year,
+                     ref.volume, ref.issue, ref.pages, ref.publisher,
+                     ref.publisher_address, ref.editors, ref.pubmed_id,
+                     ref.isbn, ref.authors, ref.key_ref))
+                ]
+            }
+          }, refs);
+
+        # References need to be numbered based on ordering.
+        # This constructs a map from reference IDs to pairs of reference
+        # numbers and references.
+        var referenceData =
+          mapi(fun(i, x) { (ref.reference_id, (i, x)) },
+            sortBy(fun(ref) { ref.authors }, references));
+
+        var ligands = concatMap(fun(ligandId) {
+          query {
+            for (l <-- ligand)
+              where (l.ligand_id == ligandId)
+              [ (ligandId, l.name) ]
+          }
+        });
 
 
         Just((familyId=familyId, familyName=name,
-         overview=(boxName="Overview", boxVisible=true, contents=overview),
-         receptors=(boxName="Receptors", boxVisible=true, contents=[]),
-         comments=(boxName="Comments", boxVisible=true, contents=comments),
-         furtherReading=(boxName="Further Reading", boxVisible=true, contents=furtherReading),
-         references=(boxName="References", boxVisible=true, contents=[]),
-         contributors=(boxName="Contributors", boxVisible=true, contents=contributors)))
+           overview=(boxName="Overview", boxVisible=true, contents=overview),
+           receptors=(boxName="Receptors", boxVisible=true, contents=[]),
+           comments=(boxName="Comments", boxVisible=true, contents=comments),
+           furtherReading=(boxName="Further Reading", boxVisible=true,
+             contents=furtherReading),
+           references=(boxName="References", boxVisible=true,
+             contents=referenceData),
+           contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
+           referenceData = referenceData,
+           ligandNames = ligands))
     }
   }
 
