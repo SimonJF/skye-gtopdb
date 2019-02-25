@@ -72,7 +72,6 @@ typename Model =
          furtherReading: ContentBox([Reference]),
          references: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
          contributors: ContentBox(Contributors),
-         referenceData: [(ReferenceId, (ReferenceNumber, Reference))],
          ligandNames: [(LigandId, LigandName)]
         ));
 
@@ -227,15 +226,26 @@ fun view(model) {
         +* pubMedNode)
     }
 
-    fun displayOverview(overviewText) {
-      p(class("grac_text"), textNode(overviewText))
+    fun displayOverview(overviewMarkup) {
+      var renderedMarkup =
+        RenderMarkup.renderMarkup(overviewMarkup,
+          model.references.contents, model.ligandNames);
+
+      p(class("grac_text"), renderedMarkup)
     }
+
     fun displayReceptors(_) {
       MvuHTML.empty
     }
-    fun displayComments(commentText) {
-      p(class("grac_text"), textNode(commentText))
+
+    fun displayComments(commentMarkup) {
+      var renderedMarkup =
+        RenderMarkup.renderMarkup(commentMarkup,
+          model.references.contents, model.ligandNames);
+
+      p(class("grac_text"), renderedMarkup)
     }
+
     fun displayFurtherReading(refs) {
       p(a0, textNode("* Key further reading is highlighted with an asterisk")) +*
       MvuHTML.concat(map(fun(x) { renderReference(x)}, refs))
@@ -288,7 +298,7 @@ fun view(model) {
     showBox(model.receptors, ToggleReceptors, displayReceptors) +*
     showBox(model.comments, ToggleComments, displayComments) +*
     showBox(model.furtherReading, ToggleFurtherReading, displayFurtherReading) +*
-    showBox(model.referenceData, ToggleReferences, displayReferences) +*
+    showBox(model.references, ToggleReferences, displayReferences) +*
     showBox(model.contributors, ToggleContributors, displayContributors)
   }
 
@@ -446,16 +456,13 @@ fun getInitialModel() {
 
 
         Just((familyId=familyId, familyName=name,
-           overview=(boxName="Overview", boxVisible=true, contents=overview),
+           overview=(boxName="Overview", boxVisible=true, contents=overviewMarkup),
            receptors=(boxName="Receptors", boxVisible=true, contents=[]),
-           comments=(boxName="Comments", boxVisible=true, contents=comments),
+           comments=(boxName="Comments", boxVisible=true, contents=commentsMarkup),
            furtherReading=(boxName="Further Reading", boxVisible=true,
              contents=furtherReading),
-           references=(boxName="References", boxVisible=true,
-             contents=referenceData),
+           references=(boxName="References", boxVisible=true, contents=referenceData),
            contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
-           referenceData = (boxName="References", boxVisible=true,
-           contents=referenceData),
            ligandNames = ligands))
     }
   }

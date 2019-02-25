@@ -48,7 +48,7 @@ fun brTag() {
 }
 
 fun referenceTag() {
-  stringE("MarkupReference") >>
+  stringE("Reference") >>
   spaces() >>
   stringE("id") >>
   char('=') >>
@@ -78,8 +78,8 @@ sig markup : () {}~> Parser(Markup)
 fun markup() {
 
   fun markupInner() {
-    tag() ++!
-    textStream
+    textStream ++!
+    tag()
     #(char('<') >> return(MarkupText("<"))) ++!
     #(char('>') >> return(MarkupText(">")))
   }

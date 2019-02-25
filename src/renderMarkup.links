@@ -29,9 +29,9 @@ fun collectIds(m) {
   go(m)
 }
 
-sig renderMarkup :
-  (Parser.Markup, [(ReferenceId, (Int, Reference))],
-    [(LigandId, String)]) ~> HTML(a)
+#sig renderMarkup :
+#  (Parser.Markup, [(ReferenceId, (Int, Reference))],
+#    [(LigandId, String)]) ~> HTML(a)
 fun renderMarkup(m, refs, ligands) {
   sig go : (Parser.Markup) ~> HTML(a)
   fun go(m) {

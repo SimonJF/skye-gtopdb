@@ -165,8 +165,7 @@ var nat =
 
 fun spaces() {
   fun isSpace(x) {
-    x == ' ' || x == '\t' || x == '\n'
-# FIXME: \r not compiled correctly to client
+    x == ' ' || x == '\t' || x == '\r' || x == '\n'
   }
 
   many1(sat(isSpace)) >> return(())
