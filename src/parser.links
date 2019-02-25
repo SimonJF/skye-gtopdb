@@ -5,46 +5,71 @@ open MonadicParser;
 #  1. Cannot handle '<' and '>' characters which do not refer to tags
 #  2. Doesn't handle HTML attributes yet
 
+typename Attribute = (String, String);
+
 typename Markup = [|
     MarkupEmpty
   | MarkupAppend:(Markup, Markup)
   | MarkupText:String
   | MarkupReferenceTag:Int
   | MarkupLigandTag:Int
-  | MarkupHTMLTag:(String, Markup)
+  | MarkupHTMLTag:(String, [Attribute], Markup)
 |];
 
 typename ParseResult = [| OK:Markup | Error:String |];
 
-fun mkHtmlTag(tagName, contents) {
-  MarkupHTMLTag(tagName, contents)
+fun mkHtmlTag(tagName, attrs, contents) {
+  MarkupHTMLTag(tagName, attrs, contents)
 }
 
 # Useful parser combinators for us
 
 # streamChar: runs of characters that are not used to start or end tags.
 var streamChar = sat(fun(c) { implode([c]) =~ /[^<>]/ });
+var noQuoteChar = sat(fun(c) { implode([c]) =~ /[^"]/ });
 
 var textStream =
   many1(streamChar) >>=
   fun(str) { return(MarkupText(implode(str))) };
 
+var noQuotes =
+  many1(noQuoteChar) >>=
+  fun(str) { return(implode(str)) };
+
+fun maybeSpaces() {
+  many(space())
+}
+
+fun attribute() {
+  spaces() >>
+  nonEmptyWord() >>= fun (attrName) {
+  maybeSpaces() >>
+  char('=') >>
+  maybeSpaces() >>
+  (char(''') ++! char('\"')) >>= fun(quote) {
+  noQuotes >>= fun (val) {
+  char(quote) >>
+  return((implode(attrName), val))
+  }}}
+}
+
 fun htmlTag() {
-  word() >>= fun (tagName) {
+  nonEmptyWord() >>= fun (tagName) {
+  many(attribute()) >>= fun(attrs) {
   char('>') >>
   markup() >>= fun (contents) {
   stringE("</") >>
   string(tagName) >>
   char('>') >>
-  return(mkHtmlTag(implode(tagName), contents))
-  }}
+  return(mkHtmlTag(implode(tagName), attrs, contents))
+  }}}
 }
 
 fun brTag() {
   (stringE("br>") ++!
    stringE("br/>") ++!
    stringE("br />")) >>
-  return(mkHtmlTag("br", MarkupEmpty))
+  return(mkHtmlTag("br", [], MarkupEmpty))
 }
 
 fun referenceTag() {
@@ -100,9 +125,8 @@ fun parse(str) {
 
 
 var testStr =
-  "Cannabinoid receptors (<b>nomenclature as agreed by the <u>NC-IUPHAR</u> Subcommittee on Cannabinoid Receptors <Reference id=14916/></b>) are activated by endogenous ligands that include N-arachidonoylethanolamine (<Ligand id=2364/>), <Ligand id=5444/>, <Ligand id=5445/> and <Ligand id=729/>. Potency determinations of endogenous agonists at these receptors are complicated by the possibility of differential susceptibility of endogenous ligands to enzymatic conversion <Reference
-  id=13691/>.<br><br>There are currently three licenced cannabinoid medicines each of which contains a compound that can activate CB<sub>1</sub> and CB<sub>2</sub> receptors <Reference id=32075/>. Two of these medicines were developed to suppress nausea and vomiting produced by chemotherapy. These are <Ligand id=9071/> (Cesamet&reg;), a synthetic CB<sub>1</sub>/CB<sub>2</sub> receptor agonist, and synthetic <Ligand id=2424/> (Marinol&reg;; dronabinol), which can also be used as an appetite
-  stimulant. The third medicine, Sativex&reg;, contains mainly <Ligand id=2424/> and <Ligand id=4150/>, both extracted from cannabis, and is used to treat multiple sclerosis and cancer pain.";
+  "<a href=\"FamilyDisplayForward?familyId=78#show_object_507\">TRPV1</a>) and <a href=\"FamilyDisplayForward?familyId=86\">PPARs</a> <Reference id=13694/><Reference id=2031/>. There is evidence for an allosteric site on the CB<sub>1</sub> receptor <Reference id=13695/>. All of the compounds listed as antagonists behave as inverse agonists in some bioassay systems <Reference id=14916/>. For some cannabinoid receptor ligands, additional pharmacological targets that include GPR55 and GPR119 have been
+  identified <Reference id=14916/>. Moreover, <a href= \"FamilyDisplayForward?familyId=114\">GPR18, GPR55 and GPR119</a>, although showing little structural similarity to CB<sub>1</sub> and CB<sub>2 </sub>receptors, respond to endogenous agents that are structurally similar to the endogenous cannabinoid ligands <Reference id=14916/>.";
 
 #parse("<b>hello, world!</b>")
 parse(testStr)

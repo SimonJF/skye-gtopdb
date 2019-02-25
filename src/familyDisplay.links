@@ -5,8 +5,8 @@ open MvuAttrs;
 open MvuEvents;
 open Tables;
 open Template;
-open Parser;
 open RenderMarkup;
+open Parser;
 
 typename ExternalRef = (
   refId: String,
@@ -49,11 +49,11 @@ typename ContentBox(a) =
 
 # BUG (hacky workaround): Type arguments don't appear to be renamed
 typename Reference = Reference;
-typename Markup = Markup;
+typename Markup = Parser.Markup;
 
 typename Contributor =
   (contribId: Int, contribName: String,
-   contribRole: String, contribAddress: String);
+   contribRole: String, contribAddress: Parser.Markup);
 
 typename Contributors =
   (subcommittee: [Contributor], additional: [Contributor]);
@@ -185,7 +185,7 @@ fun view(model) {
     # Core rendering function for references.
     # TODO: Consider moving to reference.links, since this might be useful
     # in different files.
-    fun renderReference(reference) {
+    fun renderReference(prefixNode, reference) {
       fun tn(x) { textNode(x) }
       var issueNode =
         if(reference.issue == "") {
@@ -203,15 +203,8 @@ fun view(model) {
         a(href(pubMedHref), tn(intToString(reference.pubmedId))) +*
         tn("]");
 
-      var keyNode =
-        if(reference.isKey) {
-          textNode("* ")
-        } else {
-          MvuHTML.empty
-        };
-
       p(class("grac_text"),
-        keyNode
+        prefixNode
         +* tn(reference.authors)
         +* tn(". ")
         +* tn(reference.title)
@@ -248,12 +241,18 @@ fun view(model) {
 
     fun displayFurtherReading(refs) {
       p(a0, textNode("* Key further reading is highlighted with an asterisk")) +*
-      MvuHTML.concat(map(fun(x) { renderReference(x)}, refs))
+      MvuHTML.concat(map(fun(x) {
+        var prefixNode = if(x.isKey) { textNode("* ") } else { MvuHTML.empty };
+        renderReference(prefixNode, x)
+      }, refs))
     }
 
     fun displayReferences(refs) {
-      MvuHTML.concat(map(fun((_, (i, ref))) { textNode(intToString(i) ^^ " ") +*
-        renderReference(ref)}, refs))
+      MvuHTML.concat(map(fun((_, (i, ref))) {
+        var prefixNode =
+          a(id("ref" ^^ intToString(i)), MvuHTML.empty) +*
+          textNode(intToString(i + 1) ^^ ". ");
+        renderReference(prefixNode, ref)}, refs))
     }
 
     sig displayContributors : (Contributors) ~> HTML(Message)
@@ -271,7 +270,7 @@ fun view(model) {
             ^^ intToString(c.contribId)),
             textNode(c.contribName)) +* roleNode) +*
           br(a0, h0) +*
-          textNode(c.contribAddress)
+          RenderMarkup.renderMarkup(c.contribAddress, [], [])
         )
       }
 
@@ -342,32 +341,59 @@ fun getInitialModel() {
               ];
           var furtherReading = reverse(furtherReading);
 
+
+        # Given some markup, either parses it, or dumps it raw and displays
+        # the error.
+        fun markupOrError(str) {
+          switch (Parser.parse(str)) {
+            case OK(markup) -> markup
+            case Error(str) ->
+              MarkupAppend(MarkupText("Error: " ^^ str),
+              MarkupAppend(MarkupHTMLTag("br", [], MarkupEmpty), MarkupText(str)))
+          }
+        }
+
         ### Contributors
         # It's not possible to abstract over the table here,
         # unfortunately, I don't think? Maybe we could do a
         # row annotation? There could be a way to make this slightly
         # neater, perhaps?
-        var (subcommitteeMembers: [Contributor]) =
+        var subcommitteeMembers =
           for (t <-- Tables.subcommittee)
             where (t.family_id == familyId)
             for (contrib <-- Tables.contributor_copy)
               where (contrib.contributor_id == t.contributor_id)
               orderby (-(t.display_order))
-              [(contribId=contrib.contributor_id,
-                contribName=(contrib.first_names ^^ " " ^^ contrib.surname),
-                contribAddress=contrib.address,
-                contribRole=t.role)];
+              [(resultId=contrib.contributor_id,
+                resultName=(contrib.first_names ^^ " " ^^ contrib.surname),
+                resultAddress=contrib.address,
+                resultRole=t.role)];
 
-        var (additionalContributors: [Contributor]) =
+        var additionalContributors =
           for (t <-- Tables.contributor2family)
             where (t.family_id == familyId)
             for (contrib <-- Tables.contributor_copy)
               where (contrib.contributor_id == t.contributor_id)
               orderby (-(t.display_order))
-              [(contribId=contrib.contributor_id,
-                contribName=(contrib.first_names ^^ " " ^^ contrib.surname),
-                contribAddress=contrib.address,
-                contribRole=t.role)];
+              [(resultId=contrib.contributor_id,
+                resultName=(contrib.first_names ^^ " " ^^ contrib.surname),
+                resultAddress=contrib.address,
+                resultRole=t.role)];
+
+        var subcommitteeMembers = map(fun(res) {
+          (contribId=res.resultId,
+          contribName=res.resultName,
+          contribAddress=markupOrError(res.resultAddress),
+          contribRole=res.resultRole)
+        }, subcommitteeMembers);
+
+        var additionalContributors = map(fun(res) {
+          (contribId=res.resultId,
+          contribName=res.resultName,
+          contribAddress=markupOrError(res.resultAddress),
+          contribRole=res.resultRole)
+        }, additionalContributors);
+
 
 
         var (contributors: Contributors) =
@@ -395,17 +421,6 @@ fun getInitialModel() {
                    receptorDisplayOrder=r2f.display_order)
                 ]
           };
-
-        # Given some markup, either parses it, or dumps it raw and displays
-        # the error.
-        fun markupOrError(str) {
-          switch (Parser.parse(str)) {
-            case OK(markup) -> markup
-            case Error(str) ->
-              MarkupAppend(MarkupText("Error: " ^^ str),
-              MarkupAppend(MarkupHTMLTag("br", MarkupEmpty), MarkupText(str)))
-          }
-        }
 
         # TODO: Duplicate handling
         # Right, here we need to parse the markup we get, and use it to

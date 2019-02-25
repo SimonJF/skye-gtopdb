@@ -163,11 +163,14 @@ var nat =
     return(eval(map(fun(x) { ord(x) - ord('0') }, xs)))
   };
 
-fun spaces() {
+fun space() {
   fun isSpace(x) {
     x == ' ' || x == '\t' || x == '\r' || x == '\n'
   }
+  sat(isSpace)
+}
 
-  many1(sat(isSpace)) >> return(())
+fun spaces() {
+  many1(space()) >> return(())
 }
 

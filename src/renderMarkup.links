@@ -10,7 +10,7 @@ typename ReferenceNumber = Int;
 typename Reference = Reference;
 
 # Given Markup parsed from the DB, return a list of reference and ligand IDs.
-sig collectIds : (Parser.Markup) ~> ([ReferenceId], [LigandId])
+#sig collectIds : (Parser.Markup) ~> ([ReferenceId], [LigandId])
 fun collectIds(m) {
   fun go(m) {
     switch(m) {
@@ -22,7 +22,7 @@ fun collectIds(m) {
       case MarkupText(_) -> ([], [])
       case MarkupReferenceTag(id) -> ([id], [])
       case MarkupLigandTag(id) -> ([], [id])
-      case MarkupHTMLTag(_, m) -> go(m)
+      case MarkupHTMLTag(_, _, m) -> go(m)
     }
   }
 
@@ -33,7 +33,7 @@ fun collectIds(m) {
 #  (Parser.Markup, [(ReferenceId, (Int, Reference))],
 #    [(LigandId, String)]) ~> HTML(a)
 fun renderMarkup(m, refs, ligands) {
-  sig go : (Parser.Markup) ~> HTML(a)
+#  sig go : (Parser.Markup) ~> HTML(a)
   fun go(m) {
     switch(m) {
       case MarkupEmpty -> MvuHTML.empty
@@ -41,7 +41,7 @@ fun renderMarkup(m, refs, ligands) {
       case MarkupText(txt) -> textNode(txt)
       case MarkupReferenceTag(id) ->
         var refId = switch(lookup(id, refs)) {
-          case Just((refNum, _)) -> intToString(refNum)
+          case Just((refNum, _)) -> intToString(refNum + 1)
           case Nothing -> "?"
         };
 
@@ -56,8 +56,9 @@ fun renderMarkup(m, refs, ligands) {
         };
         a(href("/ligandDisplay?id=" ^^ intToString(id)),
           textNode(ligandName))
-      case MarkupHTMLTag(tagName, children) ->
-        MvuHTML.tag(tagName, MvuAttrs.empty, go(children))
+      case MarkupHTMLTag(tagName, attrs, children) ->
+        var attrs = MvuAttrs.concat(map(fun((k, v)) { MvuAttrs.attr(k, v) }, attrs));
+        MvuHTML.tag(tagName, attrs, go(children))
     }
   }
   go(m)
