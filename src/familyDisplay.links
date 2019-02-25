@@ -415,16 +415,16 @@ fun getInitialModel() {
         # (which is about 9000 tuples for Ligands, and about 35000 tuples for references)
         # I'm going to go to the former, I suppose.
         var references =
-          concatMap(fun(ref) {
+          concatMap(fun(refId) {
             query {
-              for (r <-- reference)
-                where (r.reference_id == ref.referenceId)
+              for (ref <-- reference)
+                where (ref.reference_id == refId)
                 [
-                  (makeReference(ref.referenceId,
+                  (makeReference(ref.reference_id,
                      ref.type, ref.title, ref.article_title, ref.year,
                      ref.volume, ref.issue, ref.pages, ref.publisher,
                      ref.publisher_address, ref.editors, ref.pubmed_id,
-                     ref.isbn, ref.authors, ref.key_ref))
+                     ref.isbn, ref.authors, false))
                 ]
             }
           }, refs);
@@ -433,7 +433,7 @@ fun getInitialModel() {
         # This constructs a map from reference IDs to pairs of reference
         # numbers and references.
         var referenceData =
-          mapi(fun(i, x) { (ref.reference_id, (i, x)) },
+          mapi(fun(ref, i) { (ref.referenceId, (i, ref)) },
             sortBy(fun(ref) { ref.authors }, references));
 
         var ligands = concatMap(fun(ligandId) {
@@ -442,7 +442,7 @@ fun getInitialModel() {
               where (l.ligand_id == ligandId)
               [ (ligandId, l.name) ]
           }
-        });
+        }, ligands);
 
 
         Just((familyId=familyId, familyName=name,
@@ -454,7 +454,8 @@ fun getInitialModel() {
            references=(boxName="References", boxVisible=true,
              contents=referenceData),
            contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
-           referenceData = referenceData,
+           referenceData = (boxName="References", boxVisible=true,
+           contents=referenceData),
            ligandNames = ligands))
     }
   }
