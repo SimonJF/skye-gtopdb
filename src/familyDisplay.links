@@ -252,11 +252,33 @@ fun view(model) {
         var showHideLink =
           if(box.receptorBoxVisible) {
             a(onClick(fun() { toggleMsg }),
-              span(class("object_summary_link"), textNode("Hide summary")))
+              span(class("object_summary_link"), textNode("  Hide summary")))
           } else {
             a(onClick(fun() { toggleMsg }),
-              small(class("object_summary_link"), textNode("Show summary")))
+              small(class("object_summary_link"), textNode("  Show summary")))
           };
+
+        fun mkRow(name, contents) {
+          hr(class("divider_dashed"), MvuHTML.empty) +*
+          table_(class("grac_data_table fullwidth"),
+            tr(a0,
+              td(class("grac_category_simple"), textNode(name)) +*
+              td(class("grac_info_simple"), contents)))
+        }
+
+        fun showSummary() {
+          if (box.receptorBoxVisible) {
+            var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.receptorSynonyms);
+            var synonyms = map(fun(x) { [textNode(x.synonymName)] }, synonyms);
+            var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
+
+            mkRow("Target Id", textNode(intToString(summary.receptorId))) +*
+            mkRow("Nomenclature", textNode(summary.receptorNomenclature)) +*
+            mkRow("Previous and unofficial names", separatedSynonyms)
+          } else {
+            MvuHTML.empty
+          }
+        }
 
         tr(a0,
           td(class("grac_info"),
@@ -268,14 +290,16 @@ fun view(model) {
               span(class("split_para_right_text detailed_view_link"),
                 a(href("objectDisplay?objectId=" ^^ intToString(summary.receptorId)),
                   textNode("More detailed page") +*
-                  img(attr("src", "/images/go.jpg"), MvuHTML.empty))))
+                  img(attr("src", "/images/go.jpg"), MvuHTML.empty)))) +*
+              showSummary()
             ))
       }
 
       div(class("data_tables_container"),
         table_(class("receptor_data_tables fullwidth"),
-          MvuHTML.concat(
-            map(fun(x) { displayReceptorBox(x) }, boxes))))
+          tbody(a0,
+            MvuHTML.concat(
+              map(fun(x) { displayReceptorBox(x) }, boxes)))))
     }
 
     fun displayComments(commentMarkup) {
