@@ -331,7 +331,6 @@ fun getInitialModel() {
             where (fr.family_id == familyId)
             for (ref <-- Tables.reference)
               where (ref.reference_id == fr.reference_id)
-              orderby(ref.authors)
               [
                 (makeReference(ref.reference_id,
                    ref.type, ref.title, ref.article_title, ref.year,
@@ -339,8 +338,8 @@ fun getInitialModel() {
                    ref.publisher_address, ref.editors, ref.pubmed_id,
                    ref.isbn, ref.authors, fr.key_ref))
               ];
-          var furtherReading = reverse(furtherReading);
-
+        var furtherReading =
+          sortBy(fun(ref) { ref.authors }, furtherReading);
 
         # Given some markup, either parses it, or dumps it raw and displays
         # the error.
