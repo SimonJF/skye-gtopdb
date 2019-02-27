@@ -42,7 +42,7 @@ typename ReceptorSummary = (
   );
 
 typename ReceptorBox =
-  (receptorSummary: ReceptorSummary, boxVisible: Bool);
+  (receptorSummary: ReceptorSummary, receptorBoxVisible: Bool);
 
 typename ContentBox(a) =
   (boxName: String,  boxVisible: Bool, contents: a);
@@ -79,6 +79,7 @@ typename Message = [|
     ToggleOverview | ToggleReceptors | ToggleComments
   | ToggleFurtherReading | ToggleReferences | ToggleContributors
   | SetAllVisibilities:Bool
+  | ToggleReceptorSummary:Int
 |];
 
 fun toggleBox(box) {
@@ -108,6 +109,20 @@ fun setBoxVisibilities(visible, model) {
     contributors=sbv(model.contributors))
 }
 
+fun toggleReceptor(receptorBox, id) {
+  var contents = receptorBox.contents;
+
+  var newContents =
+    map(fun(receptorBox) {
+      if (receptorBox.receptorSummary.receptorId == id) {
+        (receptorBox with receptorBoxVisible = not(receptorBox.receptorBoxVisible))
+      } else {
+        receptorBox
+      }
+    }, contents);
+  (receptorBox with contents = newContents)
+}
+
 fun updt(msg, model) {
   withModel(model, fun(model) {
       switch(msg) {
@@ -124,6 +139,8 @@ fun updt(msg, model) {
         case ToggleContributors ->
           (model with contributors=toggleBox(model.contributors))
         case SetAllVisibilities(vis) -> setBoxVisibilities(vis, model)
+        case ToggleReceptorSummary(id) ->
+          (model with receptors=toggleReceptor(model.receptors, id))
       }
   })
 }
@@ -227,8 +244,38 @@ fun view(model) {
       p(class("grac_text"), renderedMarkup)
     }
 
-    fun displayReceptors(_) {
-      MvuHTML.empty
+    fun displayReceptors(boxes) {
+
+      fun displayReceptorBox(box) {
+        var summary = box.receptorSummary;
+        var toggleMsg = ToggleReceptorSummary(summary.receptorId);
+        var showHideLink =
+          if(box.receptorBoxVisible) {
+            a(onClick(fun() { toggleMsg }),
+              span(class("object_summary_link"), textNode("Hide summary")))
+          } else {
+            a(onClick(fun() { toggleMsg }),
+              small(class("object_summary_link"), textNode("Show summary")))
+          };
+
+        tr(a0,
+          td(class("grac_info"),
+            p(class("grac_heading split_para"),
+              # TODO: This needs to be parsed and rendered as markup
+              textNode(box.receptorSummary.receptorNomenclature) +*
+              span(class("cgtp"), textNode(" C")) +*
+              showHideLink +*
+              span(class("split_para_right_text detailed_view_link"),
+                a(href("objectDisplay?objectId=" ^^ intToString(summary.receptorId)),
+                  textNode("More detailed page") +*
+                  img(attr("src", "/images/go.jpg"), MvuHTML.empty))))
+            ))
+      }
+
+      div(class("data_tables_container"),
+        table_(class("receptor_data_tables fullwidth"),
+          MvuHTML.concat(
+            map(fun(x) { displayReceptorBox(x) }, boxes))))
     }
 
     fun displayComments(commentMarkup) {
@@ -421,6 +468,10 @@ fun getInitialModel() {
                 ]
           };
 
+        var receptorBoxes =
+          map(fun (r) { (receptorSummary=r, receptorBoxVisible=false) },
+            receptors);
+
         # TODO: Duplicate handling
         # Right, here we need to parse the markup we get, and use it to
         # get the required information from the DB.
@@ -471,7 +522,7 @@ fun getInitialModel() {
 
         Just((familyId=familyId, familyName=name,
            overview=(boxName="Overview", boxVisible=true, contents=overviewMarkup),
-           receptors=(boxName="Receptors", boxVisible=true, contents=[]),
+           receptors=(boxName="Receptors", boxVisible=true, contents=receptorBoxes),
            comments=(boxName="Comments", boxVisible=true, contents=commentsMarkup),
            furtherReading=(boxName="Further Reading", boxVisible=true,
              contents=furtherReading),
