@@ -28,11 +28,13 @@ typename Synonym = (synonymName: String, synonymOrder: Int);
 
 var emptyER = (refId="", refSpeciesName="", refUrl="");
 
+typename GeneRef = (geneName: String, geneSpeciesId: Int); # TODO: URL
+
 typename ReceptorSummary = (
    receptorId: Int,
    receptorNomenclature: String,
    receptorSynonyms: [String],
-   receptorGenes: [String],
+   receptorGenes: [GeneRef],
    receptorEnsemblRefs: [ExternalRef],
    receptorUniprotRefs: [ExternalRef],
    receptorPrincipalTransductions: [String],
@@ -62,6 +64,8 @@ typename ReferenceId = Int;
 typename ReferenceNumber = Int;
 typename LigandId = Int;
 typename LigandName = String;
+typename SpeciesId = Int;
+typename SpeciesName = String;
 
 typename Model =
   Maybe((familyId: Int,
@@ -72,7 +76,8 @@ typename Model =
          furtherReading: ContentBox([Reference]),
          references: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
          contributors: ContentBox(Contributors),
-         ligandNames: [(LigandId, LigandName)]
+         ligandNames: [(LigandId, LigandName)],
+         speciesShortNames: [(SpeciesId, SpeciesName)]
         ));
 
 typename Message = [|
@@ -266,15 +271,27 @@ fun view(model) {
               td(class("grac_info_simple"), contents)))
         }
 
+        fun resolveSpeciesName(speciesId) {
+          switch (lookup(speciesId, model.speciesShortNames)) {
+            case Just(name) -> name
+            case Nothing -> "?"
+          }
+        }
+
         fun showSummary() {
           if (box.receptorBoxVisible) {
             var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.receptorSynonyms);
             var synonyms = map(fun(x) { [textNode(x.synonymName)] }, synonyms);
             var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
+            var genes = map(fun((name, id)) {
+              [textNode(name) +* textNode("(" ^^ resolveSpeciesName(id) ^^ ")")]
+              }, summary.receptorGenes);
+            var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
             mkRow("Target Id", textNode(intToString(summary.receptorId))) +*
             mkRow("Nomenclature", textNode(summary.receptorNomenclature)) +*
             mkRow("Previous and unofficial names", separatedSynonyms) +*
+            mkRow("Genes", separatedGenes) +*
             mkRow("Principal transduction",
               MvuHTML.concat(map(fun(x) { textNode(x) },
                 summary.receptorPrincipalTransductions)))
@@ -486,7 +503,10 @@ fun getInitialModel() {
                      for (s <-- Tables.synonym)
                        where (s.object_id == receptor.object_id && s.display)
                        [(synonymName=s.synonym, synonymOrder=s.display_order)],
-                   receptorGenes="", # TODO
+                   receptorGenes=
+                      for (g <-- structural_info)
+                        where (g.object_id == receptor.object_id)
+                        [ (g.gene_name, g.species_id) ],
                    receptorEnsemblRefs=emptyER, # TODO
                    receptorUniprotRefs=emptyER, # TODO
                    receptorPrincipalTransductions=
@@ -549,6 +569,13 @@ fun getInitialModel() {
           }
         }, ligands);
 
+        # Species mapping is simple enough for us to just do in memory
+        # and saves us the faff of doing joins.
+        var speciesMap = query {
+          for (s <-- Tables.species)
+            [(s.species_id, s.short_name)]
+        };
+
 
         Just((familyId=familyId, familyName=name,
            overview=(boxName="Overview", boxVisible=true, contents=overviewMarkup),
@@ -558,7 +585,9 @@ fun getInitialModel() {
              contents=furtherReading),
            references=(boxName="References", boxVisible=true, contents=referenceData),
            contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
-           ligandNames = ligands))
+           ligandNames = ligands,
+           speciesShortNames=speciesMap
+           ))
     }
   }
 
