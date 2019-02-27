@@ -35,7 +35,7 @@ typename ReceptorSummary = (
    receptorGenes: [String],
    receptorEnsemblRefs: [ExternalRef],
    receptorUniprotRefs: [ExternalRef],
-   receptorPrincipalTransduction: String,
+   receptorPrincipalTransductions: [String],
 #   receptorInteractions: [Interaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    receptorDisplayOrder: Int
@@ -274,7 +274,10 @@ fun view(model) {
 
             mkRow("Target Id", textNode(intToString(summary.receptorId))) +*
             mkRow("Nomenclature", textNode(summary.receptorNomenclature)) +*
-            mkRow("Previous and unofficial names", separatedSynonyms)
+            mkRow("Previous and unofficial names", separatedSynonyms) +*
+            mkRow("Principal transduction",
+              MvuHTML.concat(map(fun(x) { textNode(x) },
+                summary.receptorPrincipalTransductions)))
           } else {
             MvuHTML.empty
           }
@@ -481,12 +484,15 @@ fun getInitialModel() {
                    receptorNomenclature=receptor.name,
                    receptorSynonyms =
                      for (s <-- Tables.synonym)
-                       where (s.object_id == receptor.object_id && s.from_grac && s.display)
+                       where (s.object_id == receptor.object_id && s.display)
                        [(synonymName=s.synonym, synonymOrder=s.display_order)],
                    receptorGenes="", # TODO
                    receptorEnsemblRefs=emptyER, # TODO
                    receptorUniprotRefs=emptyER, # TODO
-                   receptorPrincipalTransduction="", # TODO
+                   receptorPrincipalTransductions=
+                      for (tr <-- Tables.grac_transduction)
+                        where (tr.object_id == receptor.object_id)
+                        [tr.transduction], # There should only be one.
                    # receptorInteractions=[], # TODO
                    receptorDisplayOrder=r2f.display_order)
                 ]
