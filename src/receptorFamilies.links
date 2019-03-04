@@ -36,9 +36,9 @@ fun mkFamilyNode(name, id) {
   (name=name, familyId=id)
 }
 
-typename HierarchicalQueryResult = (isGroup:Bool, name: String, familyId:FamilyID);
-fun mkHqr(isGroup, name, id) {
-  (isGroup=isGroup, name=name, familyId=id)
+typename HierarchicalQueryResult = (isGroup:Bool, displayOrder:Int, name: String, familyId:FamilyID);
+fun mkHqr(isGroup, order, name, id) {
+  (isGroup=isGroup, displayOrder=order, name=name, familyId=id)
 }
 
 ### MVU Functions
@@ -176,17 +176,17 @@ fun getFamilyInfo(familyId) {
 fun getGroupChildren(groupId) {
   for (g <-- Tables.grouping)
     where (g.group_id == groupId)
-    orderby (-(g.display_order))
     for (f <-- family)
       where (f.family_id == g.family_id)
-      [mkHqr(f.type == "grouping", f.name, f.family_id)]
+      [mkHqr(f.type == "grouping", g.display_order, f.name, f.family_id)]
 }
 
 sig resolveHierarchy : (HierarchicalQueryResult) ~> ItemTreeNode(FamilyNode)
 fun resolveHierarchy(hqr) {
   if (hqr.isGroup) {
-    var resolved_hqrs = map(resolveHierarchy, getGroupChildren(hqr.familyId));
-    ItemSubtree(hqr.name, true, resolved_hqrs)
+    var sortedChildren = sortBy(fun(x) { x.displayOrder }, getGroupChildren(hqr.familyId));
+    var resolvedHqrs = map(resolveHierarchy, sortedChildren);
+    ItemSubtree(hqr.name, true, resolvedHqrs)
   } else {
     ItemNode(mkFamilyNode(hqr.name, hqr.familyId))
   }
@@ -194,7 +194,8 @@ fun resolveHierarchy(hqr) {
 
 fun getToplevelGroup(groupId) {
   var familyInfo = getFamilyInfo(groupId);
-  var roots = map(resolveHierarchy, getGroupChildren(groupId));
+  var sortedChildren = sortBy(fun(x) { x.displayOrder }, getGroupChildren(groupId));
+  var roots = map(resolveHierarchy, sortedChildren);
   (treeRoots = roots)
 }
 
