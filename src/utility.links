@@ -3,3 +3,28 @@ typename ItemTreeNode(a) =
 
 typename ItemTree(a) = (treeRoots: [ItemTreeNode(a)]);
 
+## Useful in defining list predicates in LINQ.
+# sig contains : ([a]) ~> ((a) {}-> Bool)
+# fun contains(l) {
+#   switch (l) {
+#     case [] -> fun (x) {false}
+#     case x::xs -> fun (y) { x == y || contains(xs)(x) }
+#   }
+# }
+
+
+sig contains : ([a]) ~> ((a) {}-> Bool)
+fun contains(xs) {
+  fun containsInner(xs, q) {
+    switch(xs) {
+      case [] -> q
+      case x :: xs ->
+        containsInner(xs, fun(y) {
+          x == y || q(y)
+        })
+    }
+  }
+
+  containsInner(xs, fun(_) { false })
+}
+
