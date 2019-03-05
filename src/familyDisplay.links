@@ -21,14 +21,16 @@ typename Interaction = (
   interactionType: String,
   interactionAction: String,
   interactionSelective: Bool,
-  interactionLabelled: Bool
+  interactionLabelled: Bool,
+  interactionSpeciesId: String
 );
 
-fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous) {
+fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, speciesId) {
   (interactionLigandId=id, interactionLigandName=name, interactionType=type, interactionAction=action,
    interactionSelective=(selectivity == "Selective"),
    interactionLabelled=labelled,
-   interactionEndogenous=endogenous
+   interactionEndogenous=endogenous,
+   interactionSpeciesId=speciesId
   )
 }
 
@@ -73,7 +75,8 @@ typename ReferenceNumber = Int;
 typename LigandId = Int;
 typename LigandName = String;
 typename SpeciesId = Int;
-typename SpeciesName = String;
+typename SpeciesShortName = String;
+typename SpeciesLongName = String;
 
 typename Model =
   Maybe((familyId: Int,
@@ -85,7 +88,7 @@ typename Model =
          references: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
          contributors: ContentBox(Contributors),
          ligandNames: [(LigandId, LigandName)],
-         speciesShortNames: [(SpeciesId, SpeciesName)]
+         speciesNames: [(SpeciesId, (SpeciesShortName, SpeciesLongName))]
         ));
 
 typename Message = [|
@@ -280,12 +283,20 @@ fun view(model) {
               td(class("grac_info_simple"), contents)))
         }
 
-        fun resolveSpeciesName(speciesId) {
+        fun resolveSpeciesShortName(speciesId) {
           switch (lookup(speciesId, model.speciesShortNames)) {
-            case Just(name) -> name
+            case Just((name, _)) -> name
             case Nothing -> "?"
           }
         }
+
+        fun resolveSpeciesLongName(speciesId) {
+          switch (lookup(speciesId, model.speciesShortNames)) {
+            case Just((_, name)) -> name
+            case Nothing -> "?"
+          }
+        }
+
 
         # In the case that an interaction is with a labelled ligand, it is
         # only classed as labelled. Similarly, if the interaction is endogenous,
@@ -323,16 +334,24 @@ fun view(model) {
         var labelledLigands = labelledAgonists ++ labelledAntagonists;
 
         fun showInteraction(i) {
-          var interactionTypeNode =
-            if (not(i.interactionType == "Agonist"
-                  || i.interactionType == "Antagonist")) {
-              textNode(i.interactionType)
+          var interactionActionNode =
+            if (not(i.interactionAction == "Agonist"
+                  || i.interactionAction == "Antagonist")) {
+              textNode(" (" ^^ i.interactionAction ^^ ")")
             } else { MvuHTML.empty };
+          var speciesName = resolveSpeciesLongName(i.interactionSpeciesId);
+          var speciesNode =
+            if (speciesName <> "Human") {
+              textNode(" - " ^^ speciesName)
+            } else {
+              MvuHTML.empty
+            };
 
             a(href("ligandDisplay?ligandId=" ^^
                 intToString(i.interactionLigandId)),
                 textNode(i.interactionLigandName)) +*
-            interactionTypeNode
+            interactionActionNode +*
+            speciesNode
         }
 
         fun mkInteractionRow(interactionType, interactions) {
@@ -355,7 +374,7 @@ fun view(model) {
             var synonyms = map(fun(x) { [textNode(x.synonymName)] }, synonyms);
             var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
             var genes = map(fun((name, id)) {
-              [textNode(name) +* textNode("(" ^^ resolveSpeciesName(id) ^^ ")")]
+              [textNode(name) +* textNode("(" ^^ resolveSpeciesShortName(id) ^^ ")")]
               }, summary.receptorGenes);
             var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
@@ -596,7 +615,7 @@ fun getInitialModel() {
                         where (i.object_id == receptor.object_id && i.from_grac)
                           for (l <-- Tables.ligand)
                             where (l.ligand_id == i.ligand_id)
-                              [ (makeInteraction(l.ligand_id, l.name, i.type, i.action, i.selectivity, l.labelled, i.endogenous)) ],
+                              [ (makeInteraction(l.ligand_id, l.name, i.type, i.action, i.selectivity, l.labelled, i.endogenous, i.species_id)) ],
                    receptorDisplayOrder=r2f.display_order)
                 ]
           };
@@ -651,7 +670,7 @@ fun getInitialModel() {
         # and saves us the faff of doing joins.
         var speciesMap = query {
           for (s <-- Tables.species)
-            [(s.species_id, s.short_name)]
+            [(s.species_id, (s.short_name, s.name))]
         };
 
 
