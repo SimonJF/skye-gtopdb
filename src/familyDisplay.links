@@ -216,6 +216,12 @@ fun view(model) {
         } else {
           tn(" (" ^^ reference.issue ^^ ")")
         };
+      var volumeNode =
+        if (reference.volume == "") {
+          MvuHTML.empty
+        } else {
+          b(a0, tn(reference.volume))
+        };
 
       var pubMedHref =
         "javascript:newWindow('http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=pubmed&dopt=AbstractPlus&list_uids="
@@ -234,7 +240,7 @@ fun view(model) {
         +* tn(". ")
         +* i(a0, tn(reference.journalName))
         +* tn(", ")
-        +* b(a0, tn(intToString(reference.volume)))
+        +* volumeNode
         +* issueNode
         +* tn(": ")
         +* tn(reference.pages)
