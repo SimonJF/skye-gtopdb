@@ -41,3 +41,5 @@ fun uniquify(xs) {
 
   reverse(fold_left(fun(xs, x) { uniqueCons(x, xs) }, [], xs))
 }
+
+fun listEmpty(xs) { empty(xs) }

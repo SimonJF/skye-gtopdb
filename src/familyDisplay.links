@@ -15,7 +15,6 @@ typename ExternalRef = (
   refUrl: String
 );
 
-
 typename Interaction = (
   interactionLigandId: Int,
   interactionLigandName: String,
@@ -24,6 +23,14 @@ typename Interaction = (
   interactionSelective: Bool,
   interactionLabelled: Bool
 );
+
+fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous) {
+  (interactionLigandId=id, interactionLigandName=name, interactionType=type, interactionAction=action,
+   interactionSelective=(selectivity == "Selective"),
+   interactionLabelled=labelled,
+   interactionEndogenous=endogenous
+  )
+}
 
 typename Synonym = (synonymName: String, synonymOrder: Int);
 
@@ -39,7 +46,7 @@ typename ReceptorSummary = (
    receptorEnsemblRefs: [ExternalRef],
    receptorUniprotRefs: [ExternalRef],
    receptorPrincipalTransductions: [String],
-#   receptorInteractions: [Interaction],
+   receptorInteractions: [Interaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    receptorDisplayOrder: Int
   );
@@ -150,11 +157,6 @@ fun updt(msg, model) {
       }
   })
 }
-# span(class("split_para_right_text detailed_view_link"),
-#           a(href("familyIntroduction?familyId=" ^^ intToString(model.familyId)),
-#             textNode("More detailed introduction") +*
-#             img(src("/images/go.jpg"), h0)
-#          ))
 
 fun view(model) {
   var a0 = MvuAttrs.empty;
@@ -285,6 +287,68 @@ fun view(model) {
           }
         }
 
+        # In the case that an interaction is with a labelled ligand, it is
+        # only classed as labelled. Similarly, if the interaction is endogenous,
+        # it is only classed as endogenous.
+        fun splitInteractions(interactions) {
+          fun go(is, labelled, endogenous, selective, neither) {
+            switch(is) {
+              case [] -> (labelled, endogenous, selective, neither)
+              case i :: is ->
+              if (i.interactionLabelled) {
+                go(is, i :: labelled, endogenous, selective, neither)
+              } else if (i.interactionEndogenous) {
+                go(is, labelled, i :: endogenous, selective, neither)
+              } else if (i.interactionSelective) {
+                go(is, labelled, endogenous, i :: selective, neither)
+              } else {
+                go(is, labelled, endogenous, selective, i :: neither)
+              }
+            }
+          }
+
+          var (labelled, endogenous, selective, neither) = go(interactions, [], [], [], []);
+          (reverse(labelled), reverse(endogenous), reverse(selective), reverse(neither))
+        }
+
+        var allAgonists =
+          filter(fun(i) { i.interactionType == "Agonist" }, summary.receptorInteractions);
+        var allAntagonists =
+          filter(fun(i) { i.interactionType == "Antagonist" }, summary.receptorInteractions);
+        var (labelledAgonists, endogenousAgonists,
+            selectiveAgonists, otherAgonists) = splitInteractions(allAgonists);
+        var (labelledAntagonists, endogenousAntagonists,
+            selectiveAntagonists, otherAntagonists) = splitInteractions(allAntagonists);
+
+        var labelledLigands = labelledAgonists ++ labelledAntagonists;
+
+        fun showInteraction(i) {
+          var interactionTypeNode =
+            if (not(i.interactionType == "Agonist"
+                  || i.interactionType == "Antagonist")) {
+              textNode(i.interactionType)
+            } else { MvuHTML.empty };
+
+            a(href("ligandDisplay?ligandId=" ^^
+                intToString(i.interactionLigandId)),
+                textNode(i.interactionLigandName)) +*
+            interactionTypeNode
+        }
+
+        fun mkInteractionRow(interactionType, interactions) {
+          if (listEmpty(interactions)) {
+            MvuHTML.empty
+          } else {
+            var renderedInteractions =
+              map(fun(i) { [showInteraction(i)] }, interactions);
+
+            var separatedInteractions =
+              MvuHTML.concat(join([br(MvuAttrs.empty, MvuHTML.empty)], renderedInteractions));
+            mkRow(interactionType, separatedInteractions)
+          }
+        }
+
+
         fun showSummary() {
           if (box.receptorBoxVisible) {
             var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.receptorSynonyms);
@@ -301,7 +365,14 @@ fun view(model) {
             mkRow("Genes", separatedGenes) +*
             mkRow("Principal transduction",
               MvuHTML.concat(map(fun(x) { textNode(x) },
-                summary.receptorPrincipalTransductions)))
+                summary.receptorPrincipalTransductions))) +*
+            mkInteractionRow("Endogenous agonists", endogenousAgonists) +*
+            mkInteractionRow("Endogenous antagonists", endogenousAntagonists) +*
+            mkInteractionRow("Agonists", otherAgonists) +*
+            mkInteractionRow("Selective agonists", selectiveAgonists) +*
+            mkInteractionRow("Antagonists", otherAntagonists) +*
+            mkInteractionRow("Selective antagonists", selectiveAntagonists) +*
+            mkInteractionRow("Labelled ligands", labelledLigands)
           } else {
             MvuHTML.empty
           }
@@ -520,7 +591,12 @@ fun getInitialModel() {
                       for (tr <-- Tables.grac_transduction)
                         where (tr.object_id == receptor.object_id)
                         [tr.transduction], # There should only be one.
-                   # receptorInteractions=[], # TODO
+                    receptorInteractions=
+                      for (i <-- Tables.interaction)
+                        where (i.object_id == receptor.object_id && i.from_grac)
+                          for (l <-- Tables.ligand)
+                            where (l.ligand_id == i.ligand_id)
+                              [ (makeInteraction(l.ligand_id, l.name, i.type, i.action, i.selectivity, l.labelled, i.endogenous)) ],
                    receptorDisplayOrder=r2f.display_order)
                 ]
           };
