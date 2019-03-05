@@ -28,3 +28,16 @@ fun contains(xs) {
   containsInner(xs, fun(_) { false })
 }
 
+
+sig uniquify : ([a]) ~> [a]
+fun uniquify(xs) {
+  fun uniqueCons(x, xs) {
+    if (elem(x, xs)) {
+      xs
+    } else {
+      x :: xs
+    }
+  }
+
+  reverse(fold_left(fun(xs, x) { uniqueCons(x, xs) }, [], xs))
+}

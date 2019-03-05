@@ -523,15 +523,14 @@ fun getInitialModel() {
           map(fun (r) { (receptorSummary=r, receptorBoxVisible=false) },
             receptors);
 
-        # TODO: Duplicate handling
         # We need to parse the markup we get, and use it to
         # get the required information from the DB.
         var overviewMarkup = markupOrError(overview);
         var commentsMarkup = markupOrError(comments);
         var (oRefs, oLigands) = collectIds(overviewMarkup);
         var (cRefs, cLigands) = collectIds(commentsMarkup);
-        var refs = oRefs ++ cRefs;
-        var ligands = oLigands ++ cLigands;
+        var refs = uniquify(oRefs ++ cRefs);
+        var ligands = uniquify(oLigands ++ cLigands);
 
         # `contains` allows us to construct a (tame) predicate which checks
         # list membership and can be efficiently compiled to the DB. It can
