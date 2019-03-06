@@ -489,12 +489,10 @@ fun view(model) {
     showBox(model.contributors, ToggleContributors, displayContributors)
   }
 
-  div(class("container_16"),
-    div(class("grid_12"),
-      switch(model) {
-        case Just(model) -> viewModel(model)
-        case Nothing -> p(a0, textNode("Invalid family ID."))
-      }))
+  switch(model) {
+    case Just(model) -> viewModel(model)
+    case Nothing -> p(a0, textNode("Invalid family ID."))
+  }
 }
 
 # sig getInitialModel : () ~> Model

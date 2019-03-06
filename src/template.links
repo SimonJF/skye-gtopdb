@@ -35,7 +35,18 @@ fun template(title) {
             </div>
           </div>
         </div>
-        <div id="vdom_placeholder"></div>
+        <div class="container_16">
+          <div class="grid_12">
+            <div class ="grid_16 alpha">
+              <div class="contentboxfull">
+                <h3>Unofficial Links implementation</h3>
+                <p>The definitive guide can be found at <a href="http://www.guidetopharmacology.org">
+                  http://www.guidetopharmacology.org</a>.</p>
+              </div>
+            </div>
+            <div id="vdom_placeholder"></div>
+          </div>
+        </div>
         <div class="clear"></div>
         <div id="footer">
           <div>
