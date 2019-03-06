@@ -150,6 +150,9 @@ fun view(model) {
 ## hierarchical data access, through the use of the `CONNECT BY`
 ## statement...
 
+# TODO: Tradeoff performance vs. beauty here.
+# TODO: How much faster is this in Postgres?
+# TODO: Staged way of doing this?
 # fun populateTree(groupId) {
 #   for (g <-- Tables.grouping)
 #     where (g.group_id == groupId)
