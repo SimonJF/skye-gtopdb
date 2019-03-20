@@ -286,7 +286,6 @@ fun view(model) {
           };
 
         fun mkRow(name, contents) {
-          hr(class("divider_dashed"), MvuHTML.empty) +*
           table_(class("grac_data_table fullwidth"),
             tr(a0,
               td(class("grac_category_simple"), textNode(name)) +*
@@ -336,6 +335,9 @@ fun view(model) {
           filter(fun(i) { i.interactionType == "Agonist" }, summary.receptorInteractions);
         var allAntagonists =
           filter(fun(i) { i.interactionType == "Antagonist" }, summary.receptorInteractions);
+        var allostericModulators =
+          filter(fun(i) { i.interactionType == "Allosteric modulator" }, summary.receptorInteractions);
+
         var (labelledAgonists, endogenousAgonists,
             selectiveAgonists, otherAgonists) = splitInteractions(allAgonists);
         var (labelledAntagonists, endogenousAntagonists,
@@ -432,6 +434,7 @@ fun view(model) {
               }, summary.receptorGenes);
             var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
+            hr(class("divider_dashed"), MvuHTML.empty) +*
             mkRow("Target Id", textNode(intToString(summary.receptorId))) +*
             mkRow("Nomenclature", renderM(summary.receptorNomenclature)) +*
             mkRow("Previous and unofficial names", separatedSynonyms) +*
@@ -443,6 +446,7 @@ fun view(model) {
             mkInteractionRow("Selective agonists", selectiveAgonists) +*
             mkInteractionRow("Antagonists", otherAntagonists) +*
             mkInteractionRow("Selective antagonists", selectiveAntagonists) +*
+            mkInteractionRow("Allosteric modulators", allostericModulators) +*
             mkInteractionRow("Labelled ligands", labelledLigands)
           } else {
             MvuHTML.empty
