@@ -50,12 +50,12 @@ fun renderMarkup(m, refs, ligands) {
         a(href("#ref" ^^ refId), textNode(refId)) +*
         textNode("]")
       case MarkupLigandTag(id) ->
-        var ligandName = switch(lookup(id, ligands)) {
-          case Just(ligandName) -> ligandName
-          case Nothing -> "?"
+        var ligandMarkup = switch(lookup(id, ligands)) {
+          case Just(ligandMarkup) -> ligandMarkup
+          case Nothing -> MarkupText("?")
         };
         a(href("/ligandDisplay?id=" ^^ intToString(id)),
-          textNode(ligandName))
+          go(ligandMarkup))
       case MarkupHTMLTag(tagName, attrs, children) ->
         var attrs = MvuAttrs.concat(map(fun((k, v)) { MvuAttrs.attr(k, v) }, attrs));
         MvuHTML.tag(tagName, attrs, go(children))

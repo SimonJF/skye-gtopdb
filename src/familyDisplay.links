@@ -17,7 +17,7 @@ typename ExternalRef = (
 
 typename Interaction = (
   interactionLigandId: Int,
-  interactionLigandName: String,
+  interactionLigandName: Markup,
   interactionType: String,
   interactionAction: String,
   interactionSelective: Bool,
@@ -73,7 +73,7 @@ typename Contributors =
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
 typename LigandId = Int;
-typename LigandName = String;
+typename LigandName = Markup;
 typename SpeciesId = Int;
 typename SpeciesShortName = String;
 typename SpeciesLongName = String;
@@ -350,7 +350,7 @@ fun view(model) {
 
             a(href("ligandDisplay?ligandId=" ^^
                 intToString(i.interactionLigandId)),
-                textNode(i.interactionLigandName)) +*
+                renderM(i.interactionLigandName)) +*
             interactionActionNode +*
             speciesNode
         }
@@ -599,7 +599,7 @@ fun getInitialModel() {
                         where (i.object_id == receptor.object_id && i.from_grac)
                           for (l <-- Tables.ligand)
                             where (l.ligand_id == i.ligand_id)
-                              [ (makeInteraction(l.ligand_id, l.name, i.type, i.action, i.selectivity, l.labelled, i.endogenous, i.species_id)) ],
+                              [ (l.ligand_id, l.name, i.type, i.action, i.selectivity, l.labelled, i.endogenous, i.species_id) ],
                    displayOrder=r2f.display_order)
                 ]
           };
@@ -622,7 +622,11 @@ fun getInitialModel() {
                 receptorUniprotRefs=r.uniprotRefs,
                 receptorPrincipalTransductions=
                   map(parseOrError, r.principalTransductions),
-                receptorInteractions=r.interactions, # FIXME: Parse interaction names correctly
+                receptorInteractions=
+                  map(fun((id, name, ty, act, sel, labelled, endo, species_id)) {
+                      makeInteraction(id, parseOrError(name), ty, act, sel,
+                          labelled, endo, species_id)
+                  }, r.interactions),
                 receptorDisplayOrder=r.displayOrder
             )
           }, receptors);
@@ -672,6 +676,9 @@ fun getInitialModel() {
               where (containsLigand(l.ligand_id))
               [ (l.ligand_id, l.name) ]
           };
+        # Ensure that ligand names are parsed so they can be rendered
+        # correctly
+        var ligands = map(fun((id, name)) { (id, parseOrError(name)) }, ligands);
 
         # Species mapping is simple enough for us to just do in memory
         # and saves us the faff of doing joins.
