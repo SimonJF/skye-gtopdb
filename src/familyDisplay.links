@@ -24,6 +24,10 @@ typename ExternalRef = (
   refUrl: String
 );
 
+typename InteractionAffinity =
+  (affinityUnits: String, affinityLow: Float,
+   affinityMedian: Float, affinityHigh: Float);
+
 typename Interaction = (
   interactionLigandId: Int,
   interactionLigandName: Markup,
@@ -32,16 +36,18 @@ typename Interaction = (
   interactionSelective: Bool,
   interactionLabelled: Bool,
   interactionSpeciesId: String,
-  interactionReferences: [Int]
+  interactionReferences: [Int],
+  interactionAffinity: InteractionAffinity
 );
 
-fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, speciesId, references) {
+fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, speciesId, references, affinity) {
   (interactionLigandId=id, interactionLigandName=name, interactionType=type, interactionAction=action,
    interactionSelective=(selectivity == "Selective"),
    interactionLabelled=labelled,
    interactionEndogenous=endogenous,
    interactionSpeciesId=speciesId,
-   interactionReferences=references
+   interactionReferences=references,
+   interactionAffinity=affinity
   )
 }
 
@@ -351,6 +357,25 @@ fun view(model) {
               MvuHTML.empty
             };
 
+          var affinityNode = {
+            var af = i.interactionAffinity;
+            # Some interactions do not have affinity data.
+            # Others have a range. Others have a median.
+            if ((af.affinityLow == 0.0) && (af.affinityMedian == 0.0) && (af.affinityHigh == 0.0)) {
+              # No information.
+              MvuHTML.empty
+            } else if ((af.affinityLow == 0.0) && (af.affinityHigh == 0.0)) {
+              # Only a median.
+              textNode(" " ^^ af.affinityUnits ^^ " ") +*
+              textNode(floatToString(af.affinityMedian))
+            } else {
+              # Range.
+              textNode(" " ^^ af.affinityUnits ^^ " ") +*
+              textNode(floatToString(af.affinityLow) ^^
+                  " - " ^^ floatToString(af.affinityHigh))
+            }
+          };
+
           var citationsNode =
             textNode(" ") +*
             renderCitationList(i.interactionReferences,
@@ -361,6 +386,7 @@ fun view(model) {
               intToString(i.interactionLigandId)),
               renderM(i.interactionLigandName)) +*
           interactionActionNode +*
+          affinityNode +*
           citationsNode +*
           speciesNode
         }
@@ -635,6 +661,10 @@ fun getInitialModel() {
                                  i_labelled=l.labelled,
                                  i_endogenous=i.endogenous,
                                  i_species_id=i.species_id,
+                                 i_affinity_low=i.affinity_low,
+                                 i_affinity_median=i.affinity_median,
+                                 i_affinity_high=i.affinity_high,
+                                 i_affinity_units=i.affinity_units,
                                  # Unforunately, this doesn't work: we get an int_of_string
                                  # runtime error. I think this must be a bug.
                                  i_references=[-1]
@@ -660,9 +690,13 @@ fun getInitialModel() {
                       where (ar.interaction_id == i.i_id)
                       [ar.reference_id]
                   };
+                  var affinity =
+                    (affinityUnits=i.i_affinity_units, affinityLow=i.i_affinity_low,
+                     affinityMedian=i.i_affinity_median, affinityHigh=i.i_affinity_high);
+
                   makeInteraction(i.i_id, parseOrError(i.i_name), i.i_type,
                       i.i_action, i.i_selectivity, i.i_labelled, i.i_endogenous,
-                      i.i_species_id, references)
+                      i.i_species_id, references, affinity)
               }, r.interactions)
             }
 
