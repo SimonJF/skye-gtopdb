@@ -34,7 +34,7 @@ fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, s
   )
 }
 
-typename Synonym = (synonymName: String, synonymOrder: Int);
+typename Synonym = (synonymName: Markup, synonymOrder: Int);
 
 var emptyER = (refId="", refSpeciesName="", refUrl="");
 
@@ -42,12 +42,12 @@ typename GeneRef = (geneName: String, geneSpeciesId: Int); # TODO: URL
 
 typename ReceptorSummary = (
    receptorId: Int,
-   receptorNomenclature: String,
-   receptorSynonyms: [String],
+   receptorNomenclature: Markup,
+   receptorSynonyms: [Synonym],
    receptorGenes: [GeneRef],
    receptorEnsemblRefs: [ExternalRef],
    receptorUniprotRefs: [ExternalRef],
-   receptorPrincipalTransductions: [String],
+   receptorPrincipalTransductions: [Markup],
    receptorInteractions: [Interaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    receptorDisplayOrder: Int
@@ -164,7 +164,12 @@ fun updt(msg, model) {
 fun view(model) {
   var a0 = MvuAttrs.empty;
   var h0 = MvuHTML.empty;
+
   fun viewModel(model) {
+    fun renderM(markup) {
+        RenderMarkup.renderMarkup(markup,
+          model.references.contents, model.ligandNames)
+    }
 
     # showBox: Generic content box, supporting show/hide functionality.
     # sig showBox : forall a. (ContentBox(a), Message, (a) ~> HTML(Message)) ~> HTML(Message)
@@ -254,11 +259,7 @@ fun view(model) {
     }
 
     fun displayOverview(overviewMarkup) {
-      var renderedMarkup =
-        RenderMarkup.renderMarkup(overviewMarkup,
-          model.references.contents, model.ligandNames);
-
-      p(class("grac_text"), renderedMarkup)
+      p(class("grac_text"), renderM(overviewMarkup))
     }
 
     fun displayReceptors(boxes) {
@@ -371,19 +372,19 @@ fun view(model) {
         fun showSummary() {
           if (box.receptorBoxVisible) {
             var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.receptorSynonyms);
-            var synonyms = map(fun(x) { [textNode(x.synonymName)] }, synonyms);
+            var synonyms = map(fun(x) { [renderM(x.synonymName)] }, synonyms);
             var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
             var genes = map(fun((name, id)) {
-              [textNode(name) +* textNode("(" ^^ resolveSpeciesShortName(id) ^^ ")")]
+              [renderM(name) +* textNode("(" ^^ resolveSpeciesShortName(id) ^^ ")")]
               }, summary.receptorGenes);
             var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
             mkRow("Target Id", textNode(intToString(summary.receptorId))) +*
-            mkRow("Nomenclature", textNode(summary.receptorNomenclature)) +*
+            mkRow("Nomenclature", renderM(summary.receptorNomenclature)) +*
             mkRow("Previous and unofficial names", separatedSynonyms) +*
             mkRow("Genes", separatedGenes) +*
             mkRow("Principal transduction",
-              MvuHTML.concat(map(fun(x) { textNode(x) },
+              MvuHTML.concat(map(fun(x) { renderM(x) },
                 summary.receptorPrincipalTransductions))) +*
             mkInteractionRow("Endogenous agonists", endogenousAgonists) +*
             mkInteractionRow("Endogenous antagonists", endogenousAntagonists) +*
@@ -401,7 +402,7 @@ fun view(model) {
           td(class("grac_info"),
             p(class("grac_heading split_para"),
               # TODO: This needs to be parsed and rendered as markup
-              textNode(box.receptorSummary.receptorNomenclature) +*
+              renderM(box.receptorSummary.receptorNomenclature) +*
               span(class("cgtp"), textNode(" C")) +*
               showHideLink +*
               span(class("split_para_right_text detailed_view_link"),
@@ -420,11 +421,7 @@ fun view(model) {
     }
 
     fun displayComments(commentMarkup) {
-      var renderedMarkup =
-        RenderMarkup.renderMarkup(commentMarkup,
-          model.references.contents, model.ligandNames);
-
-      p(class("grac_text"), renderedMarkup)
+      p(class("grac_text"), renderM(commentMarkup))
     }
 
     fun displayFurtherReading(refs) {
@@ -458,7 +455,7 @@ fun view(model) {
             ^^ intToString(c.contribId)),
             textNode(c.contribName)) +* roleNode) +*
           br(a0, h0) +*
-          RenderMarkup.renderMarkup(c.contribAddress, [], [])
+          renderM(c.contribAddress)
         )
       }
 
@@ -527,17 +524,6 @@ fun getInitialModel() {
         var furtherReading =
           sortBy(fun(ref) { ref.authors }, furtherReading);
 
-        # Given some markup, either parses it, or dumps it raw and displays
-        # the error.
-        fun markupOrError(str) {
-          switch (Parser.parse(str)) {
-            case OK(markup) -> markup
-            case Error(str) ->
-              MarkupAppend(MarkupText("Error: " ^^ str),
-              MarkupAppend(MarkupHTMLTag("br", [], MarkupEmpty), MarkupText(str)))
-          }
-        }
-
         ### Contributors
         # It's not possible to abstract over the table here,
         # unfortunately, I don't think? Maybe we could do a
@@ -568,14 +554,14 @@ fun getInitialModel() {
         var subcommitteeMembers = map(fun(res) {
           (contribId=res.resultId,
           contribName=res.resultName,
-          contribAddress=markupOrError(res.resultAddress),
+          contribAddress=parseOrError(res.resultAddress),
           contribRole=res.resultRole)
         }, subcommitteeMembers);
 
         var additionalContributors = map(fun(res) {
           (contribId=res.resultId,
           contribName=res.resultName,
-          contribAddress=markupOrError(res.resultAddress),
+          contribAddress=parseOrError(res.resultAddress),
           contribRole=res.resultRole)
         }, additionalContributors);
 
@@ -592,31 +578,54 @@ fun getInitialModel() {
               for (receptor <-- object)
                 where (receptor.object_id == r2f.object_id)
                 [
-                   (receptorId=receptor.object_id,
-                   receptorNomenclature=receptor.name,
-                   receptorSynonyms =
+                   (id=receptor.object_id,
+                    nomenclature=receptor.name,
+                    synonyms=
                      for (s <-- Tables.synonym)
                        where (s.object_id == receptor.object_id && s.display)
-                       [(synonymName=s.synonym, synonymOrder=s.display_order)],
-                   receptorGenes=
+                       [(name=s.synonym, order=s.display_order)],
+                    genes=
                       for (g <-- structural_info)
                         where (g.object_id == receptor.object_id)
                         [ (g.gene_name, g.species_id) ],
-                   receptorEnsemblRefs=emptyER, # TODO
-                   receptorUniprotRefs=emptyER, # TODO
-                   receptorPrincipalTransductions=
+                   ensemblRefs=emptyER, # TODO
+                   uniprotRefs=emptyER, # TODO
+                   principalTransductions=
                       for (tr <-- Tables.grac_transduction)
                         where (tr.object_id == receptor.object_id)
-                        [tr.transduction], # There should only be one.
-                    receptorInteractions=
+                        [tr.transduction],
+                   interactions=
                       for (i <-- Tables.interaction)
                         where (i.object_id == receptor.object_id && i.from_grac)
                           for (l <-- Tables.ligand)
                             where (l.ligand_id == i.ligand_id)
                               [ (makeInteraction(l.ligand_id, l.name, i.type, i.action, i.selectivity, l.labelled, i.endogenous, i.species_id)) ],
-                   receptorDisplayOrder=r2f.display_order)
+                   displayOrder=r2f.display_order)
                 ]
           };
+
+        # We can't run markup parsing from within a query, unfortunately,
+        # so need to construct a new record with the parsed markup.
+        # It's kind of a shame we need this boilerplate. I wonder whether
+        # it would be possible to relax the LINQ query constraint s.t. "leaf"
+        # queries needn't be tame, and we can do them in memory?
+        var receptors = map(fun(r) {
+            (
+                receptorId=r.id,
+                receptorNomenclature=parseOrError(r.nomenclature),
+                receptorSynonyms=
+                  map(fun (s) { (synonymName=parseOrError(s.name),
+                        synonymOrder=s.order) }, r.synonyms),
+                receptorGenes=
+                  map(fun ((name, id)) { (parseOrError(name), id) }, r.genes),
+                receptorEnsemblRefs=r.ensemblRefs,
+                receptorUniprotRefs=r.uniprotRefs,
+                receptorPrincipalTransductions=
+                  map(parseOrError, r.principalTransductions),
+                receptorInteractions=r.interactions, # FIXME: Parse interaction names correctly
+                receptorDisplayOrder=r.displayOrder
+            )
+          }, receptors);
 
         var receptorBoxes =
           map(fun (r) { (receptorSummary=r, receptorBoxVisible=false) },
@@ -624,8 +633,8 @@ fun getInitialModel() {
 
         # We need to parse the markup we get, and use it to
         # get the required information from the DB.
-        var overviewMarkup = markupOrError(overview);
-        var commentsMarkup = markupOrError(comments);
+        var overviewMarkup = parseOrError(overview);
+        var commentsMarkup = parseOrError(comments);
         var (oRefs, oLigands) = collectIds(overviewMarkup);
         var (cRefs, cLigands) = collectIds(commentsMarkup);
         var refs = uniquify(oRefs ++ cRefs);

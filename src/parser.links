@@ -123,6 +123,16 @@ fun parse(str) {
   }
 }
 
+# Given some markup, either parses it, or dumps it raw and displays
+# the error.
+fun parseOrError(str) {
+  switch (parse(str)) {
+    case OK(markup) -> markup
+    case Error(str) ->
+      MarkupAppend(MarkupText("Error: " ^^ str),
+      MarkupAppend(MarkupHTMLTag("br", [], MarkupEmpty), MarkupText(str)))
+  }
+}
 
 var testStr =
   "<a href=\"FamilyDisplayForward?familyId=78#show_object_507\">TRPV1</a>) and <a href=\"FamilyDisplayForward?familyId=86\">PPARs</a> <Reference id=13694/><Reference id=2031/>. There is evidence for an allosteric site on the CB<sub>1</sub> receptor <Reference id=13695/>. All of the compounds listed as antagonists behave as inverse agonists in some bioassay systems <Reference id=14916/>. For some cannabinoid receptor ligands, additional pharmacological targets that include GPR55 and GPR119 have been
