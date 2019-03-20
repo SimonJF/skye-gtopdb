@@ -398,11 +398,12 @@ fun view(model) {
             MvuHTML.empty
           } else {
             var renderedInteractions =
-              map(fun(i) { [showInteraction(i)] }, interactions);
+              MvuHTML.concat(map(fun(i) { tr(MvuAttrs.empty,
+                    td(class("grac_info_simple"), showInteraction(i))) }, interactions));
+            var interactionTable =
+              table_(class("grac_inner_table"), renderedInteractions);
 
-            var separatedInteractions =
-              MvuHTML.concat(join([br(MvuAttrs.empty, MvuHTML.empty)], renderedInteractions));
-            mkRow(interactionType, separatedInteractions)
+            mkRow(interactionType, interactionTable)
           }
         }
 
