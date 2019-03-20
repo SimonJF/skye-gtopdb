@@ -1,5 +1,7 @@
 # I wonder whether all of this is necessary, or whether we can
 # just use the generated DB records directly?
+open MvuHTML;
+open MvuAttrs;
 
 typename ReferenceType = [| Journal | Other |];
 
@@ -59,3 +61,36 @@ fun makeReference(refId,
 
 }
 
+
+fun renderCitation(id, refs) {
+  var refId = switch(lookup(id, refs)) {
+    case Just((refNum, _)) -> intToString(refNum + 1)
+    case Nothing -> "?"
+  };
+
+  var strId = intToString(id);
+  textNode("[") +*
+  a(href("#ref" ^^ refId), textNode(refId)) +*
+  textNode("]")
+}
+
+sig renderCitationList : ([Int], [(Int, (Int, Reference))]) ~> HTML(_)
+fun renderCitationList(ids, refs) {
+  fun citationLink(id) {
+    switch(lookup(id, refs)) {
+        case Just((refNum, _)) ->
+          var refId = intToString(refNum + 1);
+          a(href("#ref" ^^ refId), textNode(refId))
+        case Nothing -> textNode("?")
+    }
+  }
+
+  if (length(ids) > 0) {
+    var links = map(fun(i) { [citationLink(i)] }, ids);
+    var separatedLinks = 
+      MvuHTML.concat(join([textNode(", ")], links));
+    textNode("[") +* separatedLinks +* textNode("]")
+  } else {
+    MvuHTML.empty
+  }
+}

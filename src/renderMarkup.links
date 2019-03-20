@@ -39,16 +39,7 @@ fun renderMarkup(m, refs, ligands) {
       case MarkupEmpty -> MvuHTML.empty
       case MarkupAppend(m1, m2) -> go(m1) +* go(m2)
       case MarkupText(txt) -> textNode(txt)
-      case MarkupReferenceTag(id) ->
-        var refId = switch(lookup(id, refs)) {
-          case Just((refNum, _)) -> intToString(refNum + 1)
-          case Nothing -> "?"
-        };
-
-        var strId = intToString(id);
-        textNode("[") +*
-        a(href("#ref" ^^ refId), textNode(refId)) +*
-        textNode("]")
+      case MarkupReferenceTag(id) -> Reference.renderCitation(id, refs)
       case MarkupLigandTag(id) ->
         var ligandMarkup = switch(lookup(id, ligands)) {
           case Just(ligandMarkup) -> ligandMarkup
