@@ -9,6 +9,15 @@ open RenderMarkup;
 open Parser;
 open Utility;
 
+typename ReferenceId = Int;
+typename ReferenceNumber = Int;
+typename LigandId = Int;
+typename LigandName = Markup;
+typename SpeciesId = Int;
+typename SpeciesShortName = String;
+typename SpeciesLongName = String;
+
+
 typename ExternalRef = (
   refId: String,
   refSpeciesName: String,
@@ -36,7 +45,7 @@ fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, s
   )
 }
 
-typename Synonym = (synonymName: Markup, synonymOrder: Int);
+typename Synonym = (synonymName: Markup, synonymOrder: Int, synonymReferences: [ReferenceId]);
 
 var emptyER = (refId="", refSpeciesName="", refUrl="");
 
@@ -71,14 +80,6 @@ typename Contributor =
 
 typename Contributors =
   (subcommittee: [Contributor], additional: [Contributor]);
-
-typename ReferenceId = Int;
-typename ReferenceNumber = Int;
-typename LigandId = Int;
-typename LigandName = Markup;
-typename SpeciesId = Int;
-typename SpeciesShortName = String;
-typename SpeciesLongName = String;
 
 typename Model =
   Maybe((familyId: Int,
@@ -391,7 +392,14 @@ fun view(model) {
         fun showSummary() {
           if (box.receptorBoxVisible) {
             var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.receptorSynonyms);
-            var synonyms = map(fun(x) { [renderM(x.synonymName)] }, synonyms);
+            var synonyms = map(fun(x) {
+                var citationNode =
+                  if (length(x.synonymReferences) > 0) {
+                    textNode(" ") +* renderCitationList(x.synonymReferences,
+                        model.references.contents)
+                  } else { MvuHTML.empty };
+                [renderM(x.synonymName) +* citationNode]
+            }, synonyms);
             var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
             var genes = map(fun((name, id)) {
               [renderM(name) +* textNode("(" ^^ resolveSpeciesShortName(id) ^^ ")")]
@@ -600,7 +608,10 @@ fun getInitialModel() {
                     synonyms=
                      for (s <-- Tables.synonym)
                        where (s.object_id == receptor.object_id && s.display)
-                       [(name=s.synonym, order=s.display_order)],
+                       [(name=s.synonym, order=s.display_order, refs=
+                          for (sr <-- Tables.synonym_refs)
+                          where (s.synonym_id == sr.synonym_id)
+                          [sr.reference_id])],
                     genes=
                       for (g <-- structural_info)
                         where (g.object_id == receptor.object_id)
@@ -660,7 +671,7 @@ fun getInitialModel() {
                 receptorNomenclature=parseOrError(r.nomenclature),
                 receptorSynonyms=
                   map(fun (s) { (synonymName=parseOrError(s.name),
-                        synonymOrder=s.order) }, r.synonyms),
+                        synonymOrder=s.order, synonymReferences=s.refs) }, r.synonyms),
                 receptorGenes=
                   map(fun ((name, id)) { (parseOrError(name), id) }, r.genes),
                 receptorEnsemblRefs=r.ensemblRefs,
@@ -674,7 +685,9 @@ fun getInitialModel() {
 
         var receptorReferences = concatMap(fun (receptor) {
             concatMap(fun (interaction) { interaction.interactionReferences },
-                receptor.receptorInteractions)
+                receptor.receptorInteractions) ++
+            concatMap(fun (synonym) { synonym.synonymReferences },
+                receptor.receptorSynonyms)
         }, receptors);
 
         var receptorBoxes =
