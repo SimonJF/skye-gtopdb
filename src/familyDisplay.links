@@ -368,6 +368,16 @@ fun view(model) {
           }
         }
 
+        var ptRow =
+          if (length(summary.receptorPrincipalTransductions) > 0) {
+              mkRow("Principal transduction",
+                MvuHTML.concat(map(fun(x) { renderM(x) },
+                  summary.receptorPrincipalTransductions)))
+          } else {
+            MvuHTML.empty
+          };
+
+
 
         fun showSummary() {
           if (box.receptorBoxVisible) {
@@ -383,9 +393,7 @@ fun view(model) {
             mkRow("Nomenclature", renderM(summary.receptorNomenclature)) +*
             mkRow("Previous and unofficial names", separatedSynonyms) +*
             mkRow("Genes", separatedGenes) +*
-            mkRow("Principal transduction",
-              MvuHTML.concat(map(fun(x) { renderM(x) },
-                summary.receptorPrincipalTransductions))) +*
+            ptRow +*
             mkInteractionRow("Endogenous agonists", endogenousAgonists) +*
             mkInteractionRow("Endogenous antagonists", endogenousAntagonists) +*
             mkInteractionRow("Agonists", otherAgonists) +*
