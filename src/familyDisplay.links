@@ -5,8 +5,7 @@ open MvuAttrs;
 open MvuEvents;
 open Tables;
 open Template;
-open RenderMarkup;
-open Parser;
+open RenderMarkup; open Parser;
 open Utility;
 
 typename ReferenceId = Int;
@@ -42,6 +41,8 @@ typename Interaction = (
 
 fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, speciesId, references, affinity) {
   (interactionLigandId=id, interactionLigandName=name, interactionType=type, interactionAction=action,
+   # TODO: Need to generalise -- "Family selective" is also a valid option
+   # which results in a different category
    interactionSelective=(selectivity == "Selective"),
    interactionLabelled=labelled,
    interactionEndogenous=endogenous,
@@ -57,21 +58,21 @@ var emptyER = (refId="", refSpeciesName="", refUrl="");
 
 typename GeneRef = (geneName: String, geneSpeciesId: Int); # TODO: URL
 
-typename ReceptorSummary = (
-   receptorId: Int,
-   receptorNomenclature: Markup,
-   receptorSynonyms: [Synonym],
-   receptorGenes: [GeneRef],
-   receptorEnsemblRefs: [ExternalRef],
-   receptorUniprotRefs: [ExternalRef],
-   receptorPrincipalTransductions: [Markup],
-   receptorInteractions: [Interaction],
+typename ObjectSummary = (
+   objectId: Int,
+   objectNomenclature: Markup,
+   objectSynonyms: [Synonym],
+   objectGenes: [GeneRef],
+   objectEnsemblRefs: [ExternalRef],
+   objectUniprotRefs: [ExternalRef],
+   objectPrincipalTransductions: [Markup],
+   objectInteractions: [Interaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
-   receptorDisplayOrder: Int
+   objectDisplayOrder: Int
   );
 
-typename ReceptorBox =
-  (receptorSummary: ReceptorSummary, receptorBoxVisible: Bool);
+typename ObjectBox =
+  (objectSummary: ObjectSummary, objectBoxVisible: Bool);
 
 typename ContentBox(a) =
   (boxName: String,  boxVisible: Bool, contents: a);
@@ -91,7 +92,7 @@ typename Model =
   Maybe((familyId: Int,
          familyName: String,
          overview: ContentBox(Markup),
-         receptors: ContentBox([ReceptorSummary]),
+         objects: ContentBox([ObjectSummary]),
          comments: ContentBox(Markup),
          furtherReading: ContentBox([Reference]),
          references: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
@@ -101,10 +102,10 @@ typename Model =
         ));
 
 typename Message = [|
-    ToggleOverview | ToggleReceptors | ToggleComments
+    ToggleOverview | ToggleObjects | ToggleComments
   | ToggleFurtherReading | ToggleReferences | ToggleContributors
   | SetAllVisibilities:Bool
-  | ToggleReceptorSummary:Int
+  | ToggleObjectSummary:Int
 |];
 
 fun toggleBox(box) {
@@ -127,25 +128,25 @@ fun setBoxVisibilities(visible, model) {
 
   (model with
     overview=sbv(model.overview),
-    receptors=sbv(model.receptors),
+    objects=sbv(model.objects),
     comments=sbv(model.comments),
     furtherReading=sbv(model.furtherReading),
     references=sbv(model.references),
     contributors=sbv(model.contributors))
 }
 
-fun toggleReceptor(receptorBox, id) {
-  var contents = receptorBox.contents;
+fun toggleObject(objectBox, id) {
+  var contents = objectBox.contents;
 
   var newContents =
-    map(fun(receptorBox) {
-      if (receptorBox.receptorSummary.receptorId == id) {
-        (receptorBox with receptorBoxVisible = not(receptorBox.receptorBoxVisible))
+    map(fun(objectBox) {
+      if (objectBox.objectSummary.objectId == id) {
+        (objectBox with objectBoxVisible = not(objectBox.objectBoxVisible))
       } else {
-        receptorBox
+        objectBox
       }
     }, contents);
-  (receptorBox with contents = newContents)
+  (objectBox with contents = newContents)
 }
 
 fun updt(msg, model) {
@@ -153,8 +154,8 @@ fun updt(msg, model) {
       switch(msg) {
         case ToggleOverview ->
           (model with overview=toggleBox(model.overview))
-        case ToggleReceptors ->
-          (model with receptors=toggleBox(model.receptors))
+        case ToggleObjects ->
+          (model with objects=toggleBox(model.objects))
         case ToggleComments ->
           (model with comments=toggleBox(model.comments))
         case ToggleFurtherReading ->
@@ -164,8 +165,8 @@ fun updt(msg, model) {
         case ToggleContributors ->
           (model with contributors=toggleBox(model.contributors))
         case SetAllVisibilities(vis) -> setBoxVisibilities(vis, model)
-        case ToggleReceptorSummary(id) ->
-          (model with receptors=toggleReceptor(model.receptors, id))
+        case ToggleObjectSummary(id) ->
+          (model with objects=toggleObject(model.objects, id))
       }
   })
 }
@@ -271,13 +272,13 @@ fun view(model) {
       p(class("grac_text"), renderM(overviewMarkup))
     }
 
-    fun displayReceptors(boxes) {
+    fun displayObjects(boxes) {
 
-      fun displayReceptorBox(box) {
-        var summary = box.receptorSummary;
-        var toggleMsg = ToggleReceptorSummary(summary.receptorId);
+      fun displayObjectBox(box) {
+        var summary = box.objectSummary;
+        var toggleMsg = ToggleObjectSummary(summary.objectId);
         var showHideLink =
-          if(box.receptorBoxVisible) {
+          if(box.objectBoxVisible) {
             a(onClick(fun() { toggleMsg }),
               span(class("object_summary_link"), textNode("  Hide summary")))
           } else {
@@ -332,11 +333,11 @@ fun view(model) {
         }
 
         var allAgonists =
-          filter(fun(i) { i.interactionType == "Agonist" }, summary.receptorInteractions);
+          filter(fun(i) { i.interactionType == "Agonist" }, summary.objectInteractions);
         var allAntagonists =
-          filter(fun(i) { i.interactionType == "Antagonist" }, summary.receptorInteractions);
+          filter(fun(i) { i.interactionType == "Antagonist" }, summary.objectInteractions);
         var allostericModulators =
-          filter(fun(i) { i.interactionType == "Allosteric modulator" }, summary.receptorInteractions);
+          filter(fun(i) { i.interactionType == "Allosteric modulator" }, summary.objectInteractions);
 
         var (labelledAgonists, endogenousAgonists,
             selectiveAgonists, otherAgonists) = splitInteractions(allAgonists);
@@ -408,10 +409,10 @@ fun view(model) {
         }
 
         var ptRow =
-          if (length(summary.receptorPrincipalTransductions) > 0) {
+          if (length(summary.objectPrincipalTransductions) > 0) {
               mkRow("Principal transduction",
                 MvuHTML.concat(map(fun(x) { renderM(x) },
-                  summary.receptorPrincipalTransductions)))
+                  summary.objectPrincipalTransductions)))
           } else {
             MvuHTML.empty
           };
@@ -419,8 +420,8 @@ fun view(model) {
 
 
         fun showSummary() {
-          if (box.receptorBoxVisible) {
-            var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.receptorSynonyms);
+          if (box.objectBoxVisible) {
+            var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.objectSynonyms);
             var synonyms = map(fun(x) {
                 var citationNode =
                   if (length(x.synonymReferences) > 0) {
@@ -432,12 +433,12 @@ fun view(model) {
             var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
             var genes = map(fun((name, id)) {
               [renderM(name) +* textNode("(" ^^ resolveSpeciesShortName(id) ^^ ")")]
-              }, summary.receptorGenes);
+              }, summary.objectGenes);
             var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
             hr(class("divider_dashed"), MvuHTML.empty) +*
-            mkRow("Target Id", textNode(intToString(summary.receptorId))) +*
-            mkRow("Nomenclature", renderM(summary.receptorNomenclature)) +*
+            mkRow("Target Id", textNode(intToString(summary.objectId))) +*
+            mkRow("Nomenclature", renderM(summary.objectNomenclature)) +*
             mkRow("Previous and unofficial names", separatedSynonyms) +*
             mkRow("Genes", separatedGenes) +*
             ptRow +*
@@ -457,12 +458,11 @@ fun view(model) {
         tr(a0,
           td(class("grac_info"),
             p(class("grac_heading split_para"),
-              # TODO: This needs to be parsed and rendered as markup
-              renderM(box.receptorSummary.receptorNomenclature) +*
+              renderM(box.objectSummary.objectNomenclature) +*
               span(class("cgtp"), textNode(" C")) +*
               showHideLink +*
               span(class("split_para_right_text detailed_view_link"),
-                a(href("objectDisplay?objectId=" ^^ intToString(summary.receptorId)),
+                a(href("objectDisplay?objectId=" ^^ intToString(summary.objectId)),
                   textNode("More detailed page") +*
                   img(attr("src", "/images/go.jpg"), MvuHTML.empty)))) +*
               showSummary()
@@ -473,7 +473,7 @@ fun view(model) {
         table_(class("receptor_data_tables fullwidth"),
           tbody(a0,
             MvuHTML.concat(
-              map(fun(x) { displayReceptorBox(x) }, boxes)))))
+              map(fun(x) { displayObjectBox(x) }, boxes)))))
     }
 
     fun displayComments(commentMarkup) {
@@ -535,7 +535,7 @@ fun view(model) {
     # (boxName: String,  boxVisible: Bool, contents: a);
     headerBox +*
     showBox(model.overview, ToggleOverview, displayOverview) +*
-    showBox(model.receptors, ToggleReceptors, displayReceptors) +*
+    showBox(model.objects, ToggleObjects, displayObjects) +*
     showBox(model.comments, ToggleComments, displayComments) +*
     showBox(model.furtherReading, ToggleFurtherReading, displayFurtherReading) +*
     showBox(model.references, ToggleReferences, displayReferences) +*
@@ -626,8 +626,8 @@ fun getInitialModel() {
         var (contributors: Contributors) =
           (subcommittee=subcommitteeMembers, additional=additionalContributors);
 
-        # Receptors
-        var receptors =
+        # Object summaries
+        var objects =
          query {
             for (r2f <-- receptor2family)
               where (r2f.family_id == familyId)
@@ -686,8 +686,7 @@ fun getInitialModel() {
         # It's kind of a shame we need this boilerplate. I wonder whether
         # it would be possible to relax the LINQ query constraint s.t. "leaf"
         # queries needn't be tame, and we can do them in memory?
-        var receptors = map(fun(r) {
-
+        var objects = map(fun(r) {
             fun getInteractions() { 
               map(fun(i) {
                   var references = query {
@@ -706,32 +705,32 @@ fun getInitialModel() {
             }
 
             (
-                receptorId=r.id,
-                receptorNomenclature=parseOrError(r.nomenclature),
-                receptorSynonyms=
+                objectId=r.id,
+                objectNomenclature=parseOrError(r.nomenclature),
+                objectSynonyms=
                   map(fun (s) { (synonymName=parseOrError(s.name),
                         synonymOrder=s.order, synonymReferences=s.refs) }, r.synonyms),
-                receptorGenes=
+                objectGenes=
                   map(fun ((name, id)) { (parseOrError(name), id) }, r.genes),
-                receptorEnsemblRefs=r.ensemblRefs,
-                receptorUniprotRefs=r.uniprotRefs,
-                receptorPrincipalTransductions=
+                objectEnsemblRefs=r.ensemblRefs,
+                objectUniprotRefs=r.uniprotRefs,
+                objectPrincipalTransductions=
                   map(parseOrError, r.principalTransductions),
-                receptorInteractions=getInteractions(),
-                receptorDisplayOrder=r.displayOrder
+                objectInteractions=getInteractions(),
+                objectDisplayOrder=r.displayOrder
             )
-          }, receptors);
+          }, objects);
 
-        var receptorReferences = concatMap(fun (receptor) {
+        var objectReferences = concatMap(fun (object) {
             concatMap(fun (interaction) { interaction.interactionReferences },
-                receptor.receptorInteractions) ++
+                object.objectInteractions) ++
             concatMap(fun (synonym) { synonym.synonymReferences },
-                receptor.receptorSynonyms)
-        }, receptors);
+                object.objectSynonyms)
+        }, objects);
 
-        var receptorBoxes =
-          map(fun (r) { (receptorSummary=r, receptorBoxVisible=false) },
-            receptors);
+        var objectBoxes =
+          map(fun (r) { (objectSummary=r, objectBoxVisible=false) },
+            objects);
 
         # We need to parse the markup we get, and use it to
         # get the required information from the DB.
@@ -739,7 +738,7 @@ fun getInitialModel() {
         var commentsMarkup = parseOrError(comments);
         var (oRefs, oLigands) = collectIds(overviewMarkup);
         var (cRefs, cLigands) = collectIds(commentsMarkup);
-        var refs = uniquify(oRefs ++ cRefs ++ receptorReferences);
+        var refs = uniquify(oRefs ++ cRefs ++ objectReferences);
         var ligands = uniquify(oLigands ++ cLigands);
 
         # `contains` allows us to construct a (tame) predicate which checks
@@ -784,11 +783,12 @@ fun getInitialModel() {
           for (s <-- Tables.species)
             [(s.species_id, (s.short_name, s.name))]
         };
+        var objectName = "Receptors"; ## FIXME: This is family-dependent
 
 
         Just((familyId=familyId, familyName=name,
            overview=(boxName="Overview", boxVisible=true, contents=overviewMarkup),
-           receptors=(boxName="Receptors", boxVisible=true, contents=receptorBoxes),
+           objects=(boxName=objectName, boxVisible=true, contents=objectBoxes),
            comments=(boxName="Comments", boxVisible=true, contents=commentsMarkup),
            furtherReading=(boxName="Further Reading", boxVisible=true,
              contents=furtherReading),
