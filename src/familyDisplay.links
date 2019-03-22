@@ -91,6 +91,7 @@ typename Contributors =
 typename Model =
   Maybe((familyId: Int,
          familyName: String,
+         familyType: String,
          overview: ContentBox(Markup),
          objects: ContentBox([ObjectSummary]),
          comments: ContentBox(Markup),
@@ -548,6 +549,24 @@ fun view(model) {
   }
 }
 
+fun formatObjectName(dbName) {
+  switch (dbName) {
+    case "gpcr" -> "Receptors"
+    case "nhr" -> "Receptors"
+    case "other_protein" -> "Targets"
+    case "grouping" -> "Targets" # I think we need to handle this differently
+    case "ligand" -> "Ligands"
+    case "other_ic" -> "Channels and Subunits"
+    case "enzyme" -> "Enzymes"
+    case "transporter" -> "Transporters"
+    case "vgic" -> "Channels and Subunits"
+    case "lgic" -> "Channels and Subunits"
+    case "catalytic_receptor" -> "Receptors"
+    case _ -> "Targets"
+  }
+}
+
+
 # sig getInitialModel : () ~> Model
 fun getInitialModel() {
   fun getFamilyInfo(familyId) {
@@ -557,11 +576,11 @@ fun getInitialModel() {
         where (f.family_id == familyId)
         for (g <-- Tables.grac_family_text)
           where (g.family_id == familyId)
-          [ (f.name, g.overview, g.comments) ];
+          [ (f.name, f.type, g.overview, g.comments) ];
 
     switch(basicInfo) {
       case [] -> Nothing
-      case (name, overview, comments)::_ ->
+      case (name, type, overview, comments)::_ ->
         # At this point, we need to populate the rest of the data
         # (further reading, contributors, and interaction data).
         ### Further reading
@@ -783,10 +802,10 @@ fun getInitialModel() {
           for (s <-- Tables.species)
             [(s.species_id, (s.short_name, s.name))]
         };
-        var objectName = "Receptors"; ## FIXME: This is family-dependent
 
+        var objectName = formatObjectName(type);
 
-        Just((familyId=familyId, familyName=name,
+        Just((familyId=familyId, familyName=name, familyType=type,
            overview=(boxName="Overview", boxVisible=true, contents=overviewMarkup),
            objects=(boxName=objectName, boxVisible=true, contents=objectBoxes),
            comments=(boxName="Comments", boxVisible=true, contents=commentsMarkup),
