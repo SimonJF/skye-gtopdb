@@ -1,82 +1,188 @@
 fun template(title) {
   page
     <html>
-      <head>
+
+    <head>
         <title>{ stringToXml(title) } | IUPHAR/BPS Guide to PHARMACOLOGY</title>
         <meta name="description" content="The IUPHAR/BPS Guide to Pharmacology. GPCR families. Detailed annotation on the structure, function, physiology, pharmacology and clinical relevance of drug targets."></meta>
-        <link rel="stylesheet" type="text/css" href="css/iuphar.css"></link>
-        <link rel="stylesheet" type="text/css" href="css/grac.css"></link>
+        <link rel="stylesheet" type="text/css" href="/css/iuphar.css"></link>
+        <link rel="stylesheet" type="text/css" href="/css/grac.css"></link>
+        <link rel="stylesheet" media="screen" href="/css/superfish.css"></link>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"></link>
-        <link rel="stylesheet" href="css/text.css"></link>
-        <link rel="stylesheet" href="css/960.css"></link>
-        <link rel="stylesheet" href="css/graceq.css"></link>
-        <link rel="stylesheet" href="css/mktree.css" type="text/css"></link>
+        <link rel="stylesheet" href="/css/text.css"></link>
+        <link rel="stylesheet" href="/css/960.css"></link>
+        <link rel="stylesheet" href="/css/graceq.css"></link>
+        <link rel="stylesheet" href="/css/mktree.css" type="text/css"></link>
+        <link rel="stylesheet" href="/css/jquery-ui.min.css"/>
         <link rel="shortcut icon" href="/images/GTP_favicon_lg.ico"></link>
-      </head>
-      <body>
+        <!-- It would be lovely to do the navbar in Links, but that can wait. -->
+        <script src="/js/jquery.min.js"></script>
+        <script src="/js/jquery-ui.min.js"></script>
+        <script src="/js/autocomplete.categories.js"></script>
+        <script src="/js/hoverIntent.js"></script>
+        <script src="/js/superfish.js"></script>
+        <script src="/js/supersubs.js"></script>
+        <script src="/js/toggleLayer.js" type="text/javascript"></script>
+        <!-- <script src="/js/start.js"></script> -->
+    </head>
+
+    <body>
+        <div class="container_16">
         <div class="header">
-          <div id="header">
-            <div class="brandandsearch">
-              <div class="searchright">
-                <div style="text-align:right">
-                  <form method="get" action="/GRAC/DatabaseSearchForward">
-                     <fieldset class="search_box_home">
-                         <input type="text" id="quick_search" size="14" maxlength="200" name="searchString"></input>
-                         <input type="hidden" name="searchCategories" value="all"></input>
-                         <input type="hidden" name="species" value="none"></input>
-                         <input type="hidden" name="type" value="all"></input>
-                         <input type="hidden" name="comments" value="includeComments"></input>
-                         <input type="hidden" name="order" value="rank"></input>
-                         <input type="submit" name="submit" value="Search Database"></input>
-                     </fieldset>
-                  </form>
+            <div id="header">
+                <div class="brandandsearch">
+                    <div class="searchright">
+                        <form method="get" action="/GRAC/DatabaseSearchForward">
+                            <fieldset class="search_box_home">
+                                <input type="text" id="quick_search" size="14" maxlength="200" name="searchString"></input>
+                                <input type="hidden" name="searchCategories" value="all"></input>
+                                <div style="text-align:right">
+                                    <input type="hidden" name="species" value="none"></input>
+                                    <input type="hidden" name="type" value="all"></input>
+                                    <input type="hidden" name="comments" value="includeComments"></input>
+                                    <input type="hidden" name="order" value="rank"></input>
+                                    <input type="submit" name="submit" value="Search Database"></input>
+                                </div>
+                            </fieldset>
+                        </form>
+                    </div>
                 </div>
-              </div>
             </div>
-          </div>
+        </div>
+
+        <div class="mainnavcont">
+            <div class="mainnavtext">
+                <ul id="sample-menu-1" class="sf-menu sf-arrows">
+                    <li class="current">
+                        <a href="/">Home</a>
+                    </li>
+                    <li>
+                        <a href="/about.jsp">About</a>
+                        <ul>
+                            <!-- <li><a href="/about.jsp">About The Guide to PHARMACOLOGY</a></li> -->
+                            <!-- <li><a href="/nciuphar.jsp">About NC-IUPHAR</a></li> -->
+                            <li><a href="/contributorList">Contributors</a></li>
+                            <!-- <li><a href="/sponsors.jsp">Sponsors</a></li> -->
+                            <!-- <li><a href="/citing.jsp">Citing</a></li> -->
+                            <!--
+                            <li><a href="/linking.jsp">Linking to us</a></li>
+                            <li><a href="/faq.jsp">FAQ</a></li>
+                            <li><a href="/disclaimer.jsp">Disclaimer</a></li>
+                            <li><a href="/privacyPolicy.jsp">Privacy and Cookie Policy</a></li>
+                          -->
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="/targetsDisplay">Targets </a>
+                        <ul>
+                            <li>
+                                <a href="/receptorFamilies?type=GPCR">GPCRs</a>
+                            </li>
+                            <li>
+                                <a href="/receptorFamilies?type=IC">Ion channels</a>
+                                <ul>
+                                    <li><a href="/receptorFamilies?type=IC">LGICs</a></li>
+                                    <li><a href="/receptorFamilies?type=IC">VGICs</a></li>
+                                    <li><a href="/receptorFamilies?type=IC">Other channels</a></li>
+                                </ul>
+                            </li>
+                            <li>
+                                <a href="/receptorFamilies?type=NHR">Nuclear receptors</a>
+                            </li>
+                            <li>
+                                <a href="/familyDisplay?familyId=698&familyType=ENZYME">Kinases</a>
+                            </li>
+                            <li>
+                                <a href="/receptorFamilies?type=CATALYTICRECEPTOR">Catalytic receptors</a>
+                            </li>
+                            <li>
+                                <a href="/receptorFamilies?type=TRANSPORTER">Transporters</a>
+                            </li>
+                            <li>
+                                <a href="/receptorFamilies?type=ENZYME">Enzymes</a>
+                            </li>
+                            <li>
+                                <a href="/receptorFamilies?type=OTHER">Other protein targets</a>
+                            </li>
+                            <li><a href="/search">Target search</a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="/ligandList">Ligands</a>
+                        <ul>
+                            <li><a href="/ligandList">Ligand list</a></li>
+                            <li><a href="/ligandFamilies">Ligand families</a></li>
+                            <li><a href="/ligandSearch">Ligand search</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="/diseaseList">Diseases</a>
+                    </li>
+                    <!--
+                  <li>
+                      <a  href="/GRAC/searchPage.jsp">Advanced search</a>
+                      <ul>
+                          <li><a href="/GRAC/searchPage.jsp">Target search</a>
+                              <ul>
+                                  <li><a href="/GRAC/searchPage.jsp">Target search tools</a></li>
+                                  <li><a href="/blast">BLAST</a></li>
+                              </ul>
+                          </li>
+                          <li><a href="/GRAC/chemSearch.jsp">Ligand search</a></li>
+                          <li><a href="/GRAC/pharmacologySearch.jsp">Pharmacology search</a></li>
+                      </ul>
+                  </li>
+                  <li class="immuno_portal">
+                      <a href="/immuno/index.jsp">Guide to IMMUNOPHARMACOLOGY Portal</a>
+                  </li>
+                  -->
+                </ul>
+            </div>
         </div>
         <div class="container_16">
-          <div class="grid_12">
-            <div class ="grid_16 alpha">
-              <div class="contentboxfull">
-                <h3>Unofficial Links implementation</h3>
-                <p>The definitive guide can be found at <a href="http://www.guidetopharmacology.org">
-                  http://www.guidetopharmacology.org</a>.</p>
-              </div>
+            <div class="grid_12">
+                <div class="grid_16 alpha">
+                    <div class="contentboxfull">
+                        <h3>Unofficial Links implementation</h3>
+                        <p>The definitive guide can be found at <a href="http://www.guidetopharmacology.org">
+                      http://www.guidetopharmacology.org</a>.</p>
+                    </div>
+                </div>
+                <div id="vdom_placeholder"></div>
             </div>
-            <div id="vdom_placeholder"></div>
-          </div>
         </div>
         <div class="clear"></div>
         <div id="footer">
-          <div>
-            <div style="display:table-cell; vertical-align:middle; max-width:200px;  float:left; display:inline;">
-              <p style="text-align:left;margin: 5px 0px 5px 10px;">
-                <span class="invisible_link">
-                  <a href="https://twitter.com/#!/GuidetoPHARM" target="_blank" title="Follow us on Twitter">
-                    <img class="logo" style="vertical-align:middle;" src="/images/twitter.png"></img>
-                  </a>
-                  <a href="https://www.facebook.com/pages/Guide-to-PHARMACOLOGY/231393780304076" target="_blank" title="Like us on Facebook">
-                    <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/facebook.png"></img>
-                  </a>
-                  <a href="http://www.linkedin.com/company/guide-to-pharmacology" target="_blank" title="Follow us on LinkedIn">
-                    <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/LinkedIn.png"></img>
-                  </a>
-                  <a href="http://blog.guidetopharmacology.org/" target="_blank" title="Visit our blog">
-                    <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/wpmini-blue.png"/>
-                  </a>
-                    <a href="http://www.slideshare.net/GuidetoPHARM" target="_blank" title="View slide sets and posters on SlideShare">
-                      <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/slideshare_no_name.png"></img>
-                    </a>
-                </span>
-              </p>
-              <p style="text-align:left;margin: 5px 0px 0px 10px;"><small><a href="/privacyPolicy.jsp">Privacy and Cookie Policy</a></small></p>
+            <div>
+                <div style="display:table-cell; vertical-align:middle; max-width:200px;  float:left; display:inline;">
+                    <p style="text-align:left;margin: 5px 0px 5px 10px;">
+                        <span class="invisible_link">
+                      <a href="https://twitter.com/#!/GuidetoPHARM" target="_blank" title="Follow us on Twitter">
+                        <img class="logo" style="vertical-align:middle;" src="/images/twitter.png"></img>
+                      </a>
+                      <a href="https://www.facebook.com/pages/Guide-to-PHARMACOLOGY/231393780304076" target="_blank" title="Like us on Facebook">
+                        <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/facebook.png"></img>
+                      </a>
+                      <a href="http://www.linkedin.com/company/guide-to-pharmacology" target="_blank" title="Follow us on LinkedIn">
+                        <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/LinkedIn.png"></img>
+                      </a>
+                      <a href="http://blog.guidetopharmacology.org/" target="_blank" title="Visit our blog">
+                        <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/wpmini-blue.png"/>
+                      </a>
+                        <a href="http://www.slideshare.net/GuidetoPHARM" target="_blank" title="View slide sets and posters on SlideShare">
+                          <img class="logo" style="vertical-align:middle;margin-left:5px;" src="/images/slideshare_no_name.png"></img>
+                        </a>
+                    </span>
+                    </p>
+                    <p style="text-align:left;margin: 5px 0px 0px 10px;"><small><a href="/privacyPolicy.jsp">Privacy and Cookie Policy</a></small></p>
+                </div>
+                <div style="vertical-align:middle; display:table-cell; float:right; display:inline;">
+                    <p style="text-align:right; margin: 5px 10px 0px 0px; font-weight:bold; font-size:12pt;"><a href="/sponsors.jsp">Sponsors list</a></p>
+                </div>
             </div>
-            <div style="vertical-align:middle; display:table-cell; float:right; display:inline;">
-              <p style="text-align:right; margin: 5px 10px 0px 0px; font-weight:bold; font-size:12pt;"><a href="/sponsors.jsp">Sponsors list</a></p>
-            </div>
-          </div>
         </div>
-      </body>
+      </div>
+    </body>
     </html>
 }
