@@ -1,0 +1,74 @@
+open MvuAttrs;
+open MvuHTML;
+open Mvu;
+open Template;
+
+typename Name = String;
+typename URL = String;
+typename SubpageLink = (Name, String);
+typename Content = HTML(());
+
+typename Page = (Name, [SubpageLink]);
+
+# About
+var aboutContent =
+  textNode("This is a ") +*
+  a(href("http://www.links-lang.org"), textNode("Links")) +*
+  textNode(" clone of the ") +*
+  a(href("http://www.guidetopharmacology.org"), textNode("IUPHAR Guide to Pharmacology") ) +*
+  textNode(" database. Please navigate using the links above.");
+
+var aboutPage =
+  ("About", aboutContent, []);
+
+# Ligands
+var ligandSubpages = [
+  ("Ligand list", "/ligandList"),
+  ("Ligand families", "/ligandFamilies"),
+  ("Ligand search", "/ligandSearch")
+];
+
+var ligandPage =
+  ("Ligands", textNode("Please select from one of the links below."), ligandSubpages);
+
+# Unknown
+var unknownPage =
+  ("Error", textNode("Unknown page."), []);
+
+var pages =
+  [("about", aboutPage), ("ligands", ligandPage)];
+
+# Rendering
+
+fun render((name, content, links)) {
+  fun renderLink((name, url)) {
+    li(MvuAttrs.empty,
+      a(href(url), textNode(name)))
+  }
+
+  var links = MvuHTML.concat(map(renderLink, links));
+
+  div(class("grid_16 alpha"),
+  h4(MvuAttrs.empty, textNode(name)) +*
+  div(class("contentboxfullhelp"),
+    content +*
+    ul(MvuAttrs.empty, links)
+  ))
+}
+
+
+fun mainPage() {
+  var model =
+    switch(lookup("page", environment())) {
+      case Just(pgname) ->
+        switch(lookup(pgname, pages)) {
+          case Just(pg) -> pg
+          case Nothing -> unknownPage
+        }
+      case Nothing -> unknownPage
+    };
+  runStatic("vdom_placeholder", model, render);
+  var (title, _, _) = model;
+  template(title)
+}
+

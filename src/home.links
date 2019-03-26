@@ -1,0 +1,23 @@
+open MvuHTML;
+open MvuAttrs;
+open Mvu;
+open Template;
+
+fun view(_) {
+  var hempty = MvuHTML.empty;
+
+  var pageBody =
+    div(class("contentboxfullhelp"),
+      div(class("textright"),
+        textNode("This is a Links clone of the IUPHAR Guide to Pharmacology database. Please navigate using the links above.")));
+
+    div(class("grid_16 alpha"),
+      a(name("top"), hempty) +*
+      pageBody)
+  }
+
+
+fun mainPage() {
+  runSimple("vdom_placeholder", (), view, fun (_, _) { () } );
+  template("Home")
+}

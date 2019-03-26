@@ -1,0 +1,23 @@
+open MvuHTML;
+open MvuAttrs;
+open Mvu;
+open Template;
+
+fun view(_) {
+  var hempty = MvuHTML.empty;
+
+  var pageBody =
+    div(class("contentboxfullhelp"),
+      div(class("textright"),
+        textNode("This functionality has not yet been implemented, sorry. Stay tuned!")));
+
+    div(class("grid_16 alpha"),
+      a(name("top"), hempty) +*
+      pageBody)
+  }
+
+
+fun mainPage() {
+  runStatic("vdom_placeholder", (), view);
+  template("Not implemented")
+}

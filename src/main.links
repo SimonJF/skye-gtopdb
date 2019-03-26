@@ -1,12 +1,22 @@
 open FamilyDisplay;
 open ReceptorFamilies;
 open LigandFamilies;
+open Home;
+open NotImplemented;
+open Navigate;
+open TargetsDisplay;
 
 # Main routing table.
 fun main() {
   addRoute("/receptorFamilies", fun(_) { ReceptorFamilies.mainPage() });
   addRoute("/ligandFamilies", fun(_) { LigandFamilies.mainPage() });
   addRoute("/familyDisplay", fun(_) { FamilyDisplay.mainPage() });
+  addRoute("/ligandList", fun(_) { NotImplemented.mainPage() });
+  addRoute("/ligandSearch", fun(_) { NotImplemented.mainPage() });
+  addRoute("/navigate", fun(_) { Navigate.mainPage() });
+  addRoute("/targetsDisplay", fun(_) { TargetsDisplay.mainPage() });
+  addRoute("/diseaseList", fun(_) { NotImplemented.mainPage() });
+  addRoute("/", fun(_) { Home.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);
   addStaticRoute("/images", "images", [("css", "image/png")]);

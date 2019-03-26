@@ -1,0 +1,152 @@
+open Template;
+
+var content =
+  <#>
+    <div class="grid_6 alpha">
+      <div class="backandborder row1" style="height: 359px; overflow: hidden;">
+        <h4> G protein-coupled receptors (GPCRs)</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/GPCR_small.jpg" width="78" height="67" alt=" "></img></div>
+          <div class="textright">
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse GPCR families and access overviews, key references and selective ligands </li>
+              <li style="margin-bottom: 5px;"> Follow the links for longer introductions and for detailed annotation on pharmacology, function, structure, physiology and clinical relevance of each receptor </li>
+
+              <li><a href="/receptorFamilies?type=GPCR"> View the list of GPCR families <img border="none" src="/images/go.jpg"></img> </a></li>
+            </ul>
+          </div>
+        </div>
+        <div> </div>
+      </div>
+    </div>
+    <!-- end .grid_6 -->
+    <div class="grid_6 omega">
+      <div class="backandborder row1" style="height: 359px; overflow: hidden;">
+        <h4>Ion channels</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/LGIC_small.jpg" width="78" height="67" alt=" "></img> </div>
+          <p style="margin-left:85px;margin-bottom: 5px;">Including:</p>
+          <div class="textright">
+            <ul style="margin-bottom: 2px;margin-top: 0px;">
+              <li>Ligand-gated ion channels (LGICs)</li>
+              <li>Voltage-gated ion channels (VGICs)</li>
+              <li>Other ion channels</li>
+            </ul>
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse ion channel families and access overviews, key references and selective ligands </li>
+              <li style="margin-bottom: 5px;"> Follow the links for longer introductions and for detailed annotation on pharmacology, function, structure, physiology and clinical relevance of each channel or subunit </li>
+              <li><a href="/receptorFamilies?type=IC"> View the list of ion channel families <img border="none" src="/images/go.jpg"></img></a></li>
+
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- end .grid_6 -->
+    <div class="grid_6 alpha">
+      <div class="backandborder row2" style="height: 359px; overflow: hidden;">
+        <h4>Nuclear hormone receptors (NHRs)</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/NHR_small.jpg" width="78" height="67" alt=" "></img> </div>
+          <div class="textright">
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse NHR families and access overviews, key references and selective ligands </li>
+              <li style="margin-bottom: 5px;"> Follow the links for detailed annotation on pharmacology, function, structure, physiology and clinical relevance of each receptor </li>
+              <li><a href="/receptorFamilies?type=NHR"> View the list of NHR families <img border="none" src="/images/go.jpg"></img></a></li>
+
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- end .grid_6 -->
+    <div class="grid_6 omega">
+      <div class="backandborder row2" style="height: 359px; overflow: hidden;">
+        <h4>Kinases</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/kinase_small.png" width="78" height="67" alt=" "></img> </div>
+          <div class="textright">
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse kinase subfamilies and access large-scale inhibitor screening data.</li>
+              <li style="margin-bottom: 5px;"> Access detailed clinical information for approved drug kinase inhibitors.</li>
+              <li><a href="/FamilyDisplayForward?familyId=698&familyType=ENZYME"> View the list of kinase families <img border="none" src="/images/go.jpg"></img></a></li>
+
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- end .grid_6 -->
+    <div class="grid_6 alpha">
+      <div class="backandborder row3" style="height: 359px; overflow: hidden;">
+        <h4>Catalytic receptors</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/catalytic_receptor_small.png" width="78" height="67"
+          alt=" "></img> </div>
+          <div class="textright">
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse catalytic receptor families and access overviews, key references and selective ligands </li>
+              <li style="margin-bottom: 5px;"> Additional data are provided for selected receptor kinases</li>
+              <li><a href="/receptorFamilies?type=CATALYTICRECEPTOR"> View the list of catalytic receptor families <img border="none" src="/images/go.jpg"></img></a></li>
+
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- end .grid_6 -->
+    <div class="grid_6 omega">
+      <div class="backandborder row3" style="height: 359px; overflow: hidden;">
+        <h4>Transporters</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/transporter_small.png" width="78" height="67" alt=" "></img> </div>
+          <div class="textright">
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse transporter families and access overviews, key references and selective ligands </li>
+              <li><a href="/receptorFamilies?type=TRANSPORTER"> View the list of transporter families <img border="none" src="/images/go.jpg"></img></a></li>
+
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="grid_6 alpha">
+      <div class="backandborder row4" style="height: 359px; overflow: hidden;">
+        <h4>Enzymes</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/enzyme_small.png" width="78" height="67" alt=" "></img> </div>
+          <div class="textright">
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse a subset of enzymes with pharmacological relevance and access overviews, key references and selective ligands </li>
+              <li style="margin-bottom: 5px;"> Additional data are provided for protein kinases</li>
+              <li><a href="/receptorFamilies?type=ENZYME"> View the list of enzyme families <img border="none" src="/images/go.jpg"></img></a></li>
+
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- end .grid_6 -->
+    <div class="grid_6 omega">
+      <div class="backandborder row4" style="height: 359px; overflow: hidden;">
+        <h4>Other protein targets</h4>
+        <div class="contentbox">
+          <div class="imageleft"> <img src="/images/other_protein_small.png" width="78" height="67" alt=" "></img> </div>
+          <div class="textright">
+            <ul class="arrowlist">
+              <li style="margin-bottom: 5px;"> Browse other types of protein targets with pharmacological relevance and access overviews, key references and selective ligands </li>
+              <li><a href="/receptorFamilies?type=OTHER"> View the list of other protein target families <img border="none" src="/images/go.jpg"></img></a></li>
+
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- end .grid_6 -->
+  </#>;
+
+fun mainPage() {
+  # Bit of a hack -- really we'd want to have the page content in VDom form
+  ignore(spawnClient { replaceNode(content, getNodeById("vdom_placeholder"))});
+  template("Targets")
+}

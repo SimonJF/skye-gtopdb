@@ -15,15 +15,6 @@ fun template(title) {
         <link rel="stylesheet" href="/css/mktree.css" type="text/css"></link>
         <link rel="stylesheet" href="/css/jquery-ui.min.css"/>
         <link rel="shortcut icon" href="/images/GTP_favicon_lg.ico"></link>
-        <!-- It would be lovely to do the navbar in Links, but that can wait. -->
-        <script src="/js/jquery.min.js"></script>
-        <script src="/js/jquery-ui.min.js"></script>
-        <script src="/js/autocomplete.categories.js"></script>
-        <script src="/js/hoverIntent.js"></script>
-        <script src="/js/superfish.js"></script>
-        <script src="/js/supersubs.js"></script>
-        <script src="/js/toggleLayer.js" type="text/javascript"></script>
-        <!-- <script src="/js/start.js"></script> -->
     </head>
 
     <body>
@@ -31,6 +22,7 @@ fun template(title) {
         <div class="header">
             <div id="header">
                 <div class="brandandsearch">
+            <!--
                     <div class="searchright">
                         <form method="get" action="/GRAC/DatabaseSearchForward">
                             <fieldset class="search_box_home">
@@ -46,6 +38,7 @@ fun template(title) {
                             </fieldset>
                         </form>
                     </div>
+            -->
                 </div>
             </div>
         </div>
@@ -57,98 +50,29 @@ fun template(title) {
                         <a href="/">Home</a>
                     </li>
                     <li>
-                        <a href="/about.jsp">About</a>
-                        <ul>
-                            <!-- <li><a href="/about.jsp">About The Guide to PHARMACOLOGY</a></li> -->
-                            <!-- <li><a href="/nciuphar.jsp">About NC-IUPHAR</a></li> -->
-                            <li><a href="/contributorList">Contributors</a></li>
-                            <!-- <li><a href="/sponsors.jsp">Sponsors</a></li> -->
-                            <!-- <li><a href="/citing.jsp">Citing</a></li> -->
-                            <!--
-                            <li><a href="/linking.jsp">Linking to us</a></li>
-                            <li><a href="/faq.jsp">FAQ</a></li>
-                            <li><a href="/disclaimer.jsp">Disclaimer</a></li>
-                            <li><a href="/privacyPolicy.jsp">Privacy and Cookie Policy</a></li>
-                          -->
-                        </ul>
+                        <a href="/navigate?page=about">About</a>
                     </li>
                     <li>
                         <a href="/targetsDisplay">Targets </a>
-                        <ul>
-                            <li>
-                                <a href="/receptorFamilies?type=GPCR">GPCRs</a>
-                            </li>
-                            <li>
-                                <a href="/receptorFamilies?type=IC">Ion channels</a>
-                                <ul>
-                                    <li><a href="/receptorFamilies?type=IC">LGICs</a></li>
-                                    <li><a href="/receptorFamilies?type=IC">VGICs</a></li>
-                                    <li><a href="/receptorFamilies?type=IC">Other channels</a></li>
-                                </ul>
-                            </li>
-                            <li>
-                                <a href="/receptorFamilies?type=NHR">Nuclear receptors</a>
-                            </li>
-                            <li>
-                                <a href="/familyDisplay?familyId=698&familyType=ENZYME">Kinases</a>
-                            </li>
-                            <li>
-                                <a href="/receptorFamilies?type=CATALYTICRECEPTOR">Catalytic receptors</a>
-                            </li>
-                            <li>
-                                <a href="/receptorFamilies?type=TRANSPORTER">Transporters</a>
-                            </li>
-                            <li>
-                                <a href="/receptorFamilies?type=ENZYME">Enzymes</a>
-                            </li>
-                            <li>
-                                <a href="/receptorFamilies?type=OTHER">Other protein targets</a>
-                            </li>
-                            <li><a href="/search">Target search</a>
-                            </li>
-                        </ul>
                     </li>
                     <li>
-                        <a href="/ligandList">Ligands</a>
-                        <ul>
-                            <li><a href="/ligandList">Ligand list</a></li>
-                            <li><a href="/ligandFamilies">Ligand families</a></li>
-                            <li><a href="/ligandSearch">Ligand search</a></li>
-                        </ul>
+                        <a href="/navigate?page=ligands">Ligands</a>
                     </li>
                     <li>
                         <a href="/diseaseList">Diseases</a>
                     </li>
-                    <!--
-                  <li>
-                      <a  href="/GRAC/searchPage.jsp">Advanced search</a>
-                      <ul>
-                          <li><a href="/GRAC/searchPage.jsp">Target search</a>
-                              <ul>
-                                  <li><a href="/GRAC/searchPage.jsp">Target search tools</a></li>
-                                  <li><a href="/blast">BLAST</a></li>
-                              </ul>
-                          </li>
-                          <li><a href="/GRAC/chemSearch.jsp">Ligand search</a></li>
-                          <li><a href="/GRAC/pharmacologySearch.jsp">Pharmacology search</a></li>
-                      </ul>
-                  </li>
-                  <li class="immuno_portal">
-                      <a href="/immuno/index.jsp">Guide to IMMUNOPHARMACOLOGY Portal</a>
-                  </li>
-                  -->
                 </ul>
             </div>
         </div>
         <div class="container_16">
-            <div class="grid_12">
-                <div class="grid_16 alpha">
-                    <div class="contentboxfull">
-                        <h3>Unofficial Links implementation</h3>
-                        <p>The definitive guide can be found at <a href="http://www.guidetopharmacology.org">
-                      http://www.guidetopharmacology.org</a>.</p>
-                    </div>
+            <div class="grid_16 alpha">
+                <div class="contentboxfull">
+                    <h3>Unofficial Links implementation</h3>
+                    <p>The definitive guide can be found at <a href="http://www.guidetopharmacology.org">
+                  http://www.guidetopharmacology.org</a>.</p>
                 </div>
+            </div>
+            <div class="grid_12">
                 <div id="vdom_placeholder"></div>
             </div>
         </div>
