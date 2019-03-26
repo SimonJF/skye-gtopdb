@@ -30,8 +30,7 @@ fun showFamily(tf) {
 }
 
 ### MVU Functions
-typename ItemTree(a) = ItemTree(a); # Hack due to broken type resolution
-typename Model = Maybe((targetFamily: TargetFamily, itemTree: ItemTree(FamilyNode)));
+typename Model = Maybe((targetFamily: TargetFamily, itemTree: Tree(FamilyNode)));
 
 fun updt(msg, model) {
   switch(model) {

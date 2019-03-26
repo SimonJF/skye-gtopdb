@@ -5,8 +5,7 @@ open Tables;
 typename ItemTreeNode(a) =
   [| ItemNode:a | ItemSubtree:(String, Bool, [ItemTreeNode(a)]) |];
 
-typename ItemTree(a) = (treeRoots: [ItemTreeNode(a)]);
-
+typename Tree(a) = (treeRoots: [ItemTreeNode(a)]);
 
 typename Message = [| ToggleSubtree:String | SetTreeVisibility:Bool |];
 

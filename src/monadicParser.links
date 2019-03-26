@@ -1,7 +1,6 @@
 # A Links implementation of Hutton & Meijer's monadic parser combinators.
 
 typename Chars = [Char]; # Shadow Chars here.
-
 typename Parser(a) = ((Chars) {}~> [(a, Chars)]);
 
 sig return : (a) {}~> Parser(a)
@@ -20,41 +19,6 @@ var item = fun(inp) {
   }
 };
 
-fun first(p) {
-  fun(inp) {
-    switch(p(inp)) {
-      case [] -> []
-      case x :: _ -> [x]
-    }
-  }
-}
-
-fun plus(m, n) {
-  fun(inp) {
-    (m(inp) ++ n(inp))
-  }
-}
-
-op m +++ n { plus(m, n) }
-
-fun lazyChoice(m, n) {
-  fun(inp) {
-    switch(m(inp)) {
-      case [] ->
-        switch(n(inp)) {
-          case [] -> []
-          case x :: _ -> [x]
-        }
-      case x :: _ -> [x]
-    }
-  }
-}
-
-# D'oh! We're not in a lazy language, so this will enumerate all of
-# the results and then pick the first!
-# op m ++! n { first(m +++ n) }
-op m ++! n { lazyChoice(m, n) }
-
 
 sig bind : (Parser(a), (a) {}~> Parser(b)) {}~> Parser(b)
 fun bind(m, f) {
@@ -68,16 +32,7 @@ fun bind(m, f) {
 }
 
 op m >>= f { bind(m, f) }
-
 op m >> f { bind(m, fun(_) { f }) }
-
-fun seq(m, n) {
-  m >>= fun(x) {
-    n >>= fun(y) {
-      return((x, y))
-    }
-  }
-}
 
 sig sat : ((Char) {}~> Bool) {}~> Parser(Char)
 fun sat(p) {
@@ -90,16 +45,10 @@ fun sat(p) {
   }
 }
 
-fun char(x) {
-  sat(fun(y) {
-    x == y
-  })
-}
-
 var digit =
-  sat(fun(x) {
-    ('0' <= x) && (x <= '9')
-  });
+    sat(fun(x) {
+      ('0' <= x) && (x <= '9')
+    });
 
 var lower =
   sat(fun(x) {
@@ -111,33 +60,32 @@ var upper =
     'A' <= x && x <= 'Z'
   });
 
-var letter = lower ++! upper;
-
-fun nonEmptyWord() {
-  letter >>= fun(x) {
-  word() >>= fun(xs) {
-    return (x :: xs)
-  }}
-}
-
-fun word() { nonEmptyWord() ++! return([]) }
-
-# Must match given string
-sig string : (Chars) {}~> Parser(Chars)
-fun string(str) {
-  switch(str) {
-    case [] -> return([])
-    case x :: xs ->
-      char(x) >>
-      string(xs) >>
-      return(x :: xs)
+# D'oh! We're not in a lazy language, so this will enumerate all of
+# the results and then pick the first!
+# op m ++! n { first(m +++ n) }
+fun lazyChoice(m, n) {
+  fun(inp) {
+    switch(m(inp)) {
+      case [] ->
+        switch(n(inp)) {
+          case [] -> []
+          case x :: _ -> [x]
+        }
+      case x :: _ -> [x]
+    }
   }
 }
 
-fun stringE(str) {
-  string(explode(str))
+op m ++! n { lazyChoice(m, n) }
+fun seq(m, n) {
+  m >>= fun(x) {
+    n >>= fun(y) {
+      return((x, y))
+    }
+  }
 }
 
+var letter = lower ++! upper;
 
 fun many(p) {
   p >>= fun(x) {
@@ -153,24 +101,76 @@ fun many1(p) {
   }}
 }
 
-sig eval : ([Int]) {}~> Int
-fun eval(digits) {
-  fold_left(fun(acc, x) { (acc * 10) + x}, 0, digits)
-}
+mutual {
 
-var nat =
-  many1(digit) >>= fun(xs) {
-    return(eval(map(fun(x) { ord(x) - ord('0') }, xs)))
-  };
-
-fun space() {
-  fun isSpace(x) {
-    x == ' ' || x == '\t' || x == '\r' || x == '\n'
+  fun first(p) {
+    fun(inp) {
+      switch(p(inp)) {
+        case [] -> []
+        case x :: _ -> [x]
+      }
+    }
   }
-  sat(isSpace)
-}
 
-fun spaces() {
-  many1(space()) >> return(())
-}
+  fun plus(m, n) {
+    fun(inp) {
+      (m(inp) ++ n(inp))
+    }
+  }
 
+  op m +++ n { plus(m, n) }
+
+  fun char(x) {
+    sat(fun(y) {
+      x == y
+    })
+  }
+
+  fun nonEmptyWord() {
+    letter >>= fun(x) {
+    word() >>= fun(xs) {
+      return (x :: xs)
+    }}
+  }
+
+  fun word() { nonEmptyWord() ++! return([]) }
+
+  # Must match given string
+  sig string : (Chars) {}~> Parser(Chars)
+  fun string(str) {
+    switch(str) {
+      case [] -> return([])
+      case x :: xs ->
+        char(x) >>
+        string(xs) >>
+        return(x :: xs)
+    }
+  }
+
+  fun stringE(str) {
+    string(explode(str))
+  }
+
+
+  sig eval : ([Int]) {}~> Int
+  fun eval(digits) {
+    fold_left(fun(acc, x) { (acc * 10) + x}, 0, digits)
+  }
+
+  fun nat() {
+    many1(digit) >>= fun(xs) {
+      return(eval(map(fun(x) { ord(x) - ord('0') }, xs)))
+    }
+  }
+
+  fun space() {
+    fun isSpace(x) {
+      x == ' ' || x == '\t' || x == '\r' || x == '\n'
+    }
+    sat(isSpace)
+  }
+
+  fun spaces() {
+    many1(space()) >> return(())
+  }
+}

@@ -40,77 +40,79 @@ fun maybeSpaces() {
   many(space())
 }
 
-fun attribute() {
-  spaces() >>
-  nonEmptyWord() >>= fun (attrName) {
-  maybeSpaces() >>
-  char('=') >>
-  maybeSpaces() >>
-  (char(''') ++! char('\"')) >>= fun(quote) {
-  noQuotes >>= fun (val) {
-  char(quote) >>
-  return((implode(attrName), val))
-  }}}
-}
-
-fun htmlTag() {
-  nonEmptyWord() >>= fun (tagName) {
-  many(attribute()) >>= fun(attrs) {
-  char('>') >>
-  markup() >>= fun (contents) {
-  stringE("</") >>
-  string(tagName) >>
-  char('>') >>
-  return(mkHtmlTag(implode(tagName), attrs, contents))
-  }}}
-}
-
-fun brTag() {
-  (stringE("br>") ++!
-   stringE("br/>") ++!
-   stringE("br />")) >>
-  return(mkHtmlTag("br", [], MarkupEmpty))
-}
-
-fun referenceTag() {
-  stringE("Reference") >>
-  spaces() >>
-  stringE("id") >>
-  char('=') >>
-  nat >>= fun(id) {
-  stringE("/>") >>
-  return(MarkupReferenceTag(id))
-  }
-}
-
-fun ligandTag() {
-  stringE("Ligand") >>
-  spaces() >>
-  stringE("id") >>
-  char('=') >>
-  nat >>= fun(id) {
-  stringE("/>") >>
-  return(MarkupLigandTag(id))
-  }
-}
-
-fun tag() {
-  char('<') >>
-  brTag() ++! referenceTag() ++! ligandTag() ++! htmlTag()
-}
-
-sig markup : () {}~> Parser(Markup)
-fun markup() {
-
-  fun markupInner() {
-    textStream ++!
-    tag()
-    #(char('<') >> return(MarkupText("<"))) ++!
-    #(char('>') >> return(MarkupText(">")))
+mutual {
+  fun attribute() {
+    spaces() >>
+    nonEmptyWord() >>= fun (attrName) {
+    maybeSpaces() >>
+    char('=') >>
+    maybeSpaces() >>
+    (char(''') ++! char('\"')) >>= fun(quote) {
+    noQuotes >>= fun (val) {
+    char(quote) >>
+    return((implode(attrName), val))
+    }}}
   }
 
-  many(markupInner()) >>= fun(xs) {
-    return(fold_right(fun(x, acc) { MarkupAppend(x, acc) }, MarkupEmpty, xs))
+  fun htmlTag() {
+    nonEmptyWord() >>= fun (tagName) {
+    many(attribute()) >>= fun(attrs) {
+    char('>') >>
+    markup() >>= fun (contents) {
+    stringE("</") >>
+    string(tagName) >>
+    char('>') >>
+    return(mkHtmlTag(implode(tagName), attrs, contents))
+    }}}
+  }
+
+  fun brTag() {
+    (stringE("br>") ++!
+     stringE("br/>") ++!
+     stringE("br />")) >>
+    return(mkHtmlTag("br", [], MarkupEmpty))
+  }
+
+  fun referenceTag() {
+    stringE("Reference") >>
+    spaces() >>
+    stringE("id") >>
+    char('=') >>
+    nat() >>= fun(id) {
+    stringE("/>") >>
+    return(MarkupReferenceTag(id))
+    }
+  }
+
+  fun ligandTag() {
+    stringE("Ligand") >>
+    spaces() >>
+    stringE("id") >>
+    char('=') >>
+    nat() >>= fun(id) {
+    stringE("/>") >>
+    return(MarkupLigandTag(id))
+    }
+  }
+
+  fun tag() {
+    char('<') >>
+    brTag() ++! referenceTag() ++! ligandTag() ++! htmlTag()
+  }
+
+  sig markup : () {}~> Parser(Markup)
+  fun markup() {
+
+    fun markupInner() {
+      textStream ++!
+      tag()
+      #(char('<') >> return(MarkupText("<"))) ++!
+      #(char('>') >> return(MarkupText(">")))
+    }
+
+    many(markupInner()) >>= fun(xs) {
+      return(fold_right(fun(x, acc) { MarkupAppend(x, acc) }, MarkupEmpty, xs))
+    }
   }
 }
 

@@ -8,8 +8,7 @@ open Utility;
 open ItemTree;
 
 ### MVU Functions
-typename ItemTree(a) = ItemTree(a); # Hack due to broken type resolution
-typename Model = ItemTree(FamilyNode);
+typename Model = Tree(FamilyNode);
 
 fun updt(msg, model) {
   switch(msg) {
