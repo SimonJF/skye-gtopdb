@@ -5,6 +5,7 @@ open MvuAttrs;
 open MvuEvents;
 open Template;
 open Utility;
+open ItemTree;
 
 # ADT describing the different types of target family.
 typename TargetFamily =
@@ -28,53 +29,9 @@ fun showFamily(tf) {
   }
 }
 
-typename FamilyID = Int;
-
-typename FamilyNode = (name: String, familyId: FamilyID);
-
-fun mkFamilyNode(name, id) {
-  (name=name, familyId=id)
-}
-
-typename HierarchicalQueryResult = (isGroup:Bool, displayOrder:Int, name: String, familyId:FamilyID);
-fun mkHqr(isGroup, order, name, id) {
-  (isGroup=isGroup, displayOrder=order, name=name, familyId=id)
-}
-
 ### MVU Functions
-
+typename ItemTree(a) = ItemTree(a); # Hack due to broken type resolution
 typename Model = Maybe((targetFamily: TargetFamily, itemTree: ItemTree(FamilyNode)));
-
-typename Message = [| ToggleSubtree:String | SetTreeVisibility:Bool |];
-
-fun toggleSubtree(str, tree) {
-  switch(tree) {
-    case ItemNode(x) -> ItemNode(x)
-    case ItemSubtree(name, shown, children) ->
-      if (name == str) {
-        ItemSubtree(name, not(shown), children)
-      } else {
-        ItemSubtree(name, shown, map(fun(x) { toggleSubtree(str, x) }, children))
-      }
-  }
-}
-
-fun toggleTree(str, tree) {
-  (treeRoots=map(fun(x) { toggleSubtree(str, x) }, tree.treeRoots))
-}
-
-fun setSubtreeVisibility(isVisible, tree) {
-  switch(tree) {
-    case ItemNode(x) -> ItemNode(x)
-    case ItemSubtree(name, _, children) ->
-        ItemSubtree(name, isVisible,
-          map(fun(x) { setSubtreeVisibility(isVisible, x) }, children))
-  }
-}
-
-fun setTreeVisibility(isVisible, tree) {
-  (treeRoots=map(fun(x) { setSubtreeVisibility(isVisible, x) }, tree.treeRoots))
-}
 
 fun updt(msg, model) {
   switch(model) {
@@ -92,44 +49,13 @@ fun updt(msg, model) {
 }
 
 fun view(model) {
-  var a0 = MvuAttrs.empty;
   var hempty = MvuHTML.empty;
-
-  fun renderTreeNode(tree) {
-    switch(tree) {
-      case ItemNode(x) ->
-        li(class("liBullet"),
-          span(class("bullet"), textNode(" ")) +*
-          a(href("/familyDisplay?familyId=" ^^ intToString(x.familyId)),
-            textNode(x.name))
-        )
-      case ItemSubtree(name, shown, children) ->
-        var bulletClass = class(if (shown) { "liOpen" } else { "liClosed" });
-        var renderedChildren = MvuHTML.concat(map(renderTreeNode, children));
-        li(bulletClass,
-          span(class("bullet") +@ onClick(fun() { ToggleSubtree(name) }), textNode(" " ^^ name)) +*
-          ul(a0, renderedChildren))
-    }
-  }
-
-  fun renderTree(tree) {
-    MvuHTML.concat(map(renderTreeNode, tree.treeRoots))
-  }
-
 
   var pageBody =
     switch(model) {
       case Just(model) ->
-        h4(a0, textNode(showFamily(model.targetFamily))) +*
-        div(class("contentboxfullhelp"),
-          div(class("textright"),
-            p(a0, hempty) +*
-            div(style("text-align:right;"),
-              button(onClick(fun() { SetTreeVisibility(true) }),
-                textNode("Expand all nodes")) +*
-              button(onClick(fun() { SetTreeVisibility(false) }),
-                textNode("Collapse all nodes"))) +*
-              ul(class("mktree"), renderTree(model.itemTree))))
+       ItemTree.renderPage(model.itemTree,
+           showFamily(model.targetFamily), "/familyDisplay?familyId=")
       case Nothing ->
         div(class("contentboxfullhelp"),
           div(class("textright"),
@@ -142,63 +68,6 @@ fun view(model) {
       pageBody)
 
   }
-
-### DB Accessors
-
-## PROBLEM: Recursive queries are alas not expressible.
-## I wonder whether we can generalise the LINQ to allow
-## hierarchical data access, through the use of the `CONNECT BY`
-## statement...
-
-# TODO: Tradeoff performance vs. beauty here.
-# TODO: How much faster is this in Postgres?
-# TODO: Staged way of doing this?
-# fun populateTree(groupId) {
-#   for (g <-- Tables.grouping)
-#     where (g.group_id == groupId)
-#     orderby (g.display_order)
-#     for (f <-- family)
-#       where (f.family_id == g.family_id)
-#       if (f.type == "grouping") {
-#         var children = populateTree(f.family_id);
-#         [ItemSubtree(f.name, true, children)]
-#       } else {
-#         [mkFamilyNode(f.name, f.family_id)]
-#       }
-# }
-
-
-fun getFamilyInfo(familyId) {
-  for (f <-- Tables.family)
-    where (f.family_id == familyId)
-    [mkFamilyNode(f.name, f.family_id)]
-}
-
-fun getGroupChildren(groupId) {
-  for (g <-- Tables.grouping)
-    where (g.group_id == groupId)
-    for (f <-- family)
-      where (f.family_id == g.family_id)
-      [mkHqr(f.type == "grouping", g.display_order, f.name, f.family_id)]
-}
-
-sig resolveHierarchy : (HierarchicalQueryResult) ~> ItemTreeNode(FamilyNode)
-fun resolveHierarchy(hqr) {
-  if (hqr.isGroup) {
-    var sortedChildren = sortBy(fun(x) { x.displayOrder }, getGroupChildren(hqr.familyId));
-    var resolvedHqrs = map(resolveHierarchy, sortedChildren);
-    ItemSubtree(hqr.name, true, resolvedHqrs)
-  } else {
-    ItemNode(mkFamilyNode(hqr.name, hqr.familyId))
-  }
-}
-
-fun getToplevelGroup(groupId) {
-  var familyInfo = getFamilyInfo(groupId);
-  var sortedChildren = sortBy(fun(x) { x.displayOrder }, getGroupChildren(groupId));
-  var roots = map(resolveHierarchy, sortedChildren);
-  (treeRoots = roots)
-}
 
 fun getTree(targetFamily) {
   var groupId =

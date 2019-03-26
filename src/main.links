@@ -1,9 +1,11 @@
 open FamilyDisplay;
 open ReceptorFamilies;
+open LigandFamilies;
 
 # Main routing table.
 fun main() {
   addRoute("/receptorFamilies", fun(_) { ReceptorFamilies.mainPage() });
+  addRoute("/ligandFamilies", fun(_) { LigandFamilies.mainPage() });
   addRoute("/familyDisplay", fun(_) { FamilyDisplay.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);
