@@ -124,7 +124,7 @@ fun view(model) {
     fun src(val) { MvuAttrs.attr("src", val) }
     fun alt(val) { MvuAttrs.attr("alt", val) }
     fun valign(val) { MvuAttrs.attr("valign", val) }
-    fun colspan(val) { MvuAttrs.attr("colspan", val) }
+    fun colspan(val) { MvuAttrs.attr("colSpan", val) }
     fun width(val) { MvuAttrs.attr("width", val) }
     fun height(val) { MvuAttrs.attr("height", val) }
 
