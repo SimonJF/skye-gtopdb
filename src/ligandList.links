@@ -1,0 +1,236 @@
+open MvuHTML;
+open MvuAttrs;
+open Mvu;
+open Tables;
+open Template;
+
+# Data model
+typename Filter = [|
+    Approved
+  | SyntheticOrganic
+  | Metabolite
+  | NaturalProduct
+  | EndogenousPeptide
+  | OtherPeptide
+  | Inorganic
+  | Antibody
+  | Labelled
+|];
+
+var filterNames = [
+    ("Approved", (Approved, "Approved")),
+    ("SyntheticOrganic", (SyntheticOrganic, "Synthetic organic")),
+    ("Metabolite", (Metabolite, "Metabolite")),
+    ("NaturalProduct", (NaturalProduct, "Natural product")),
+    ("EndogenousPeptide", (EndogenousPeptide, "Endogenous peptide")),
+    ("OtherPeptide", (OtherPeptide, "Other peptide")),
+    ("Inorganic", (Inorganic, "Inorganic")),
+    ("Antibody", (Antibody, "Antibody")),
+    ("Labelled", (Labelled, "Labelled"))
+];
+
+fun tyStringToFilter(tyString) {
+  switch (lookup(tyString, filterNames)) {
+    case Just((filter, _)) -> filter
+    case Nothing -> Approved
+  }
+}
+
+typename LigandResult =
+  (lrId: Int,
+   lrName: String,
+   lrApproved:Bool,
+   lrRadioactive: Bool,
+   # lrType=String,
+   lrHasPDB: Bool,
+   lrLabelled: Bool,
+   lrImmuno: Bool,
+   lrMalaria: Bool,
+   lrSynonyms: [String]);
+
+fun predicate(ligand, filterType) {
+  switch (filterType) {
+    case Approved -> ligand.approved
+    case SyntheticOrganic -> ligand.type == "Synthetic organic"
+    case Metabolite -> ligand.type == "Metabolite"
+    case NaturalProduct -> ligand.type == "Natural product"
+    case EndogenousPeptide -> false # FIXME: Complex query
+    case OtherPeptide -> false # FIXME: Complex query
+    case Inorganic -> ligand.type == "Inorganic"
+    case Antibody -> ligand.type == "Antibody"
+    case Labelled -> ligand.labelled
+  }
+}
+
+fun getLigands(filterType) {
+  var res =
+    query {
+      for (l <-- Tables.ligand)
+        where (predicate(l, filterType))
+          [
+            (lrId = l.ligand_id,
+             lrName = l.name,
+             lrApproved = l.approved,
+             lrRadioactive = l.radioactive,
+             lrLabelled = l.labelled,
+             lrImmuno = l.in_gtip,
+             lrMalaria = l.in_gtmp,
+             lrHasPDB =
+               length(
+                 for (p <-- pdb_structure)
+                  where (p.ligand_id == l.ligand_id)
+                  [ p ]) > 0,
+             lrSynonyms =
+              for (l2s <-- Tables.ligand2synonym)
+                where (l2s.ligand_id == l.ligand_id && l2s.display)
+                  [l2s.synonym]
+            )
+          ]
+    };
+
+  sortBy(fun(lr) { lr.lrName }, res)
+}
+
+typename Model = (filterType: Filter, results: [LigandResult]);
+
+fun view(model) {
+  var menu = {
+    fun makeMenuItem((requestName, (filterType, renderName))) {
+      var liAttrs = if (filterType == model.filterType) {
+        class("active")
+      } else {
+        MvuAttrs.empty
+      };
+
+      li(liAttrs,
+        a(href("/ligandList?type=" ^^ requestName), textNode(renderName))
+      )
+    }
+    var menuItems = MvuHTML.concat(map(makeMenuItem, filterNames));
+    div(id("cssmenu"),
+      ul(MvuAttrs.empty, menuItems))
+  };
+  var aToZ = {
+    var alphabet = map(fun(c) { implode([chr(c)]) }, [65..90]);
+    fun link(char) {
+      a(style("font-weight:bold;font-size:110%") +@ href("#" ^^ char), textNode(char ^^ " "))
+    }
+    p(style("text-align:center;"), MvuHTML.concat(map(link, alphabet)))
+  };
+  var topLink = a(name("top"), MvuHTML.empty);
+
+  var dataTable = {
+    # TODO: These should be in the standard library
+    fun src(val) { MvuAttrs.attr("src", val) }
+    fun alt(val) { MvuAttrs.attr("alt", val) }
+    fun valign(val) { MvuAttrs.attr("valign", val) }
+    fun colspan(val) { MvuAttrs.attr("colspan", val) }
+    fun width(val) { MvuAttrs.attr("width", val) }
+    fun height(val) { MvuAttrs.attr("height", val) }
+
+    fun makeRow(lr) {
+      fun boolImage((imgSrc, enabled, altText)) {
+        if (enabled) {
+          td(class("info") +@
+             style("style=border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
+            a(style("color:white") +@ title(altText),
+              img(src(imgSrc) +@ width("16") +@ height("16") +@ alt(altText), MvuHTML.empty)))
+        } else {
+          td(class("info") +@
+             style("style=border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
+             MvuHTML.empty
+          )
+        }
+      }
+
+      var name =
+        td(class("info") +@
+           style("border-style: solid dotted solid solid; font-size:97%; text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
+           valign("baseline"),
+           a(href("/ligandDisplay?ligandId=" ^^ intToString(lr.lrId)), textNode(lr.lrName)));
+
+      var images =
+        MvuHTML.concat(map(boolImage,
+          [("/images/approved.png", lr.lrApproved, "Approved drug"),
+           ("/images/probe.png", lr.lrLabelled, "Ligand is labelled"),
+           ("/images/rad.gif", lr.lrRadioactive, "Ligand is radioactive"),
+           ("/images/protein_structure_icon.png", lr.lrHasPDB, "Ligand has a PDB structure"),
+           ("/images/immuno_ligand.png", lr.lrImmuno, "Immunopharmacology ligand"),
+           ("/images/mosquito.jpg", lr.lrMalaria, "Antimalarial ligand")]));
+
+      var id =
+        td(class("info"), textNode(intToString(lr.lrId)));
+
+      var synonyms =
+        td(class("info") +@
+           style(" font-size:97%;  text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
+           valign("baseline"),
+          MvuHTML.concat(join([textNode(", ")], map(fun(x) { [textNode(x)] }, lr.lrSynonyms))));
+      tr(MvuAttrs.empty, name +* images +* id +* synonyms)
+    }
+    var rows = MvuHTML.concat(map(makeRow, model.results));
+
+    table_(class("receptor_data_tables") +@ style("table-layout: fixed; width:100%; margin:0px; padding:0px;"),
+      colgroup(MvuAttrs.empty,
+        col(style("min-width:200px;width:300px;"), MvuHTML.empty) +*
+        col(style("min-width:17px;width:17px;"), MvuHTML.empty) +*
+        col(style("min-width:15px;width:15px;"), MvuHTML.empty) +*
+        col(style("min-width:19px;width:19px;"), MvuHTML.empty) +*
+        col(style("min-width:19px;width:19px;"), MvuHTML.empty) +* 
+        col(style("min-width:18px;width:18px;"), MvuHTML.empty) +*
+        col(style("min-width:23px;width:23px;"), MvuHTML.empty) +*
+        col(style("min-width:50px;width:50px;"), MvuHTML.empty) +*
+        col(style("min-width:450px;"), MvuHTML.empty)
+      ) +*
+    thead(MvuAttrs.empty,
+      tr(MvuAttrs.empty,
+        td(class("heading") +@ colspan("7"), textNode("Ligand name")) +*
+        td(class("heading"), textNode("ID")) +*
+        td(class("heading"), textNode("Synonyms"))
+      )
+    ) +*
+    tbody(MvuAttrs.empty,
+      # TODO: Separate this out for all letters
+     #tr(MvuAttrs.empty,
+     #  td(class("info") +@ style("border-right:none;") +@ colspan("8"),
+     #    a(style("font-size:110%;font-weight:bold;color:red;") +@ name("A"), textNode("A"))
+     #  ) +*
+     #  td(class("info") +@ style("text-align:right; border-left:none;"),
+     #    a(style("font-weight:normal;font-size:95%;") +@ href("#top"), textNode("Back to top"))
+     #  )
+     #) +*
+      rows)
+    ) 
+  };
+
+
+  div(class("grid_16 alpha"),
+      topLink +*
+      h4(MvuAttrs.empty, textNode("The IUPHAR/BPS Guide to PHARMACOLOGY complete ligand list")) +*
+      div(class("contentboxfullhelp"),
+        menu +*
+        div(class("data_tables_container") +@ style("padding-top:20px;"),
+          div(class("ligcontainer"),
+            div(class("ligcentre"),
+              # TODO: This only makes sense for "Approved" at the moment -- where is this defined?
+              textNode("All ligands in the database which are currently, or have been in the past, approved for human clinical use by a regulatory agency."))) +*
+            aToZ +*
+            dataTable
+    )))
+}
+
+fun getInitialModel() {
+  var filterType = switch(lookup("type", environment())) {
+    case Just(tyString) -> tyStringToFilter(tyString)
+    case Nothing -> Approved
+  };
+  var results = getLigands(filterType);
+  (filterType=filterType, results=results)
+}
+
+
+fun mainPage() {
+  runStatic("vdom_placeholder", getInitialModel(), view);
+  template("Ligand list")
+}
+

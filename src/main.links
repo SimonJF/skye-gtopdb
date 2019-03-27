@@ -5,13 +5,14 @@ open Home;
 open NotImplemented;
 open Navigate;
 open TargetsDisplay;
+open LigandList;
 
 # Main routing table.
 fun main() {
   addRoute("/receptorFamilies", fun(_) { ReceptorFamilies.mainPage() });
   addRoute("/ligandFamilies", fun(_) { LigandFamilies.mainPage() });
   addRoute("/familyDisplay", fun(_) { FamilyDisplay.mainPage() });
-  addRoute("/ligandList", fun(_) { NotImplemented.mainPage() });
+  addRoute("/ligandList", fun(_) { LigandList.mainPage() });
   addRoute("/ligandSearch", fun(_) { NotImplemented.mainPage() });
   addRoute("/navigate", fun(_) { Navigate.mainPage() });
   addRoute("/targetsDisplay", fun(_) { TargetsDisplay.mainPage() });
