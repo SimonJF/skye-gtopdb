@@ -54,3 +54,7 @@ fun renderMarkup(m, refs, ligands) {
   }
   go(m)
 }
+
+fun renderSimple(markup) {
+  renderMarkup(markup, [], [])
+}
