@@ -18,24 +18,36 @@ typename Filter = [|
   | Inorganic
   | Antibody
   | Labelled
+  | Immuno
+  | AntiMalarial
 |];
 
 var filterNames = [
-    ("Approved", (Approved, "Approved")),
-    ("SyntheticOrganic", (SyntheticOrganic, "Synthetic organic")),
-    ("Metabolite", (Metabolite, "Metabolite")),
-    ("NaturalProduct", (NaturalProduct, "Natural product")),
-    ("EndogenousPeptide", (EndogenousPeptide, "Endogenous peptide")),
-    ("OtherPeptide", (OtherPeptide, "Other peptide")),
-    ("Inorganic", (Inorganic, "Inorganic")),
-    ("Antibody", (Antibody, "Antibody")),
-    ("Labelled", (Labelled, "Labelled"))
+    ("Approved", (Approved, "Approved", "All ligands in the database which are currently, or have been in the past, approved for human clinical use by a regulatory agency.")),
+    ("SyntheticOrganic", (SyntheticOrganic, "Synthetic organic", "Low molecular weight, non-polymeric compounds produced via either total synthesis or semi-synthetic processes.")),
+    ("Metabolite", (Metabolite, "Metabolite", "Low molecular weight, non-peptidic, biogenic compounds produced by life processes (normally endogenous and of animal origin, including hormones and neurotransmitters) and their close analogues.")),
+    ("NaturalProduct", (NaturalProduct, "Natural product", "Non-peptidic, biogenic compounds derived from living organisms and their close synthetic derivatives.")),
+    ("EndogenousPeptide", (EndogenousPeptide, "Endogenous peptide", "Peptides encoded in the human, rat and mouse genomes.")),
+    ("OtherPeptide", (OtherPeptide, "Other peptide", "Synthetic, semi-synthetic and natural peptides encoded in genomes other than human, rat and mouse (including oligopeptides and cyclic peptides).")),
+    ("Inorganic", (Inorganic, "Inorganic", "Ions and other inorganic compounds.")),
+    ("Antibody", (Antibody, "Antibody", "Includes therapeutic monoclonal antibodies.")),
+    ("Labelled", (Labelled, "Labelled", "Ligands labelled with unstable isotopes, fluorescent tags or small chemical entities.")),
+    ("Immuno", (Immuno, "Immuno", "Ligands specifically tagged as being of relevance to immunopharmacology &amp; the Guide to IMMUNOPHARMACOLOGY.")),
+    ("AntiMal", (AntiMalarial, "Antimalarial ligands", "Antimalarial ligands"))
 ];
 
-fun tyStringToFilter(tyString) {
+
+var approved = {
+  var (filter, _, desc) = fromJust(lookup("Approved", filterNames));
+  (filter, desc)
+};
+
+fun tyStringToFilterData(tyString) {
   switch (lookup(tyString, filterNames)) {
-    case Just((filter, _)) -> filter
-    case Nothing -> Approved
+    case Just((filter, _, desc)) -> (filter, desc)
+    case Nothing ->
+      # Default to approved if nonexistent
+      approved
   }
 }
 
@@ -76,6 +88,8 @@ fun predicate(ligand, filterType) {
     case Inorganic -> ligand.type == "Inorganic"
     case Antibody -> ligand.type == "Antibody"
     case Labelled -> ligand.labelled
+    case AntiMalarial -> ligand.in_gtmp
+    case Immuno -> ligand.in_gtip
   }
 }
 
@@ -128,6 +142,8 @@ fun getLigands(filterType) {
     sortBy(fun((cmpName, _)) { cmpName }, withCmp);
 
   # Now, perform the necessary parsing and such
+  # NOTE: Currently, due to the inefficiency of the parser and the large result sets,
+  # it's not feasible to parse these names properly.
   var withCmp =
     map(fun((cmp, l)) {
       (cmp,
@@ -163,7 +179,7 @@ typename Model = (filterType: Filter, results: [(Char, [LigandResult])]);
 
 fun view(model) {
   var menu = {
-    fun makeMenuItem((requestName, (filterType, renderName))) {
+    fun makeMenuItem((requestName, (filterType, renderName, _))) {
       var liAttrs = if (filterType == model.filterType) {
         class("active")
       } else {
@@ -285,19 +301,19 @@ fun view(model) {
           div(class("ligcontainer"),
             div(class("ligcentre"),
               # TODO: This only makes sense for "Approved" at the moment -- where is this defined?
-              textNode("All ligands in the database which are currently, or have been in the past, approved for human clinical use by a regulatory agency."))) +*
+              textNode(model.filterDesc))) +*
             aToZ +*
             dataTable
     )))
 }
 
 fun getInitialModel() {
-  var filterType = switch(lookup("type", environment())) {
-    case Just(tyString) -> tyStringToFilter(tyString)
-    case Nothing -> Approved
+  var (filterType, desc) = switch(lookup("type", environment())) {
+    case Just(tyString) -> tyStringToFilterData(tyString)
+    case Nothing -> approved
   };
   var results = getLigands(filterType);
-  (filterType=filterType, results=results)
+  (filterType=filterType, filterDesc=desc, results=results)
 }
 
 
