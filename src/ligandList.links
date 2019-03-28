@@ -51,14 +51,28 @@ typename LigandResult =
    lrMalaria: Bool,
    lrSynonyms: [Markup]);
 
+fun isEndogenous(ligand) {
+  query {
+    length(
+      for (p <-- Tables.precursor)
+        for (p2p <-- Tables.precursor2peptide)
+          for (l2s <-- Tables.ligand2subunit)
+            where (p2p.ligand_id == ligand.ligand_id &&
+                (p2p.precursor_id == p.precursor_id || p2p.ligand_id == l2s.subunit_id))
+                [p]) > 0
+  }
+}
+
 fun predicate(ligand, filterType) {
   switch (filterType) {
     case Approved -> ligand.approved
     case SyntheticOrganic -> ligand.type == "Synthetic organic"
     case Metabolite -> ligand.type == "Metabolite"
     case NaturalProduct -> ligand.type == "Natural product"
-    case EndogenousPeptide -> false # FIXME: Complex query
-    case OtherPeptide -> false # FIXME: Complex query
+    case EndogenousPeptide ->
+      ligand.type == "Peptide" && isEndogenous(ligand)
+    case OtherPeptide ->
+      ligand.type == "Peptide" && not(isEndogenous(ligand))
     case Inorganic -> ligand.type == "Inorganic"
     case Antibody -> ligand.type == "Antibody"
     case Labelled -> ligand.labelled
