@@ -384,7 +384,7 @@ fun view(model) {
             textNode(" ") +*
             renderCitationList(i.interactionReferences,
                 model.references.contents);
-            
+
 
           a(href("ligandDisplay?ligandId=" ^^
               intToString(i.interactionLigandId)),
@@ -706,7 +706,7 @@ fun getInitialModel() {
         # it would be possible to relax the LINQ query constraint s.t. "leaf"
         # queries needn't be tame, and we can do them in memory?
         var objects = map(fun(r) {
-            fun getInteractions() { 
+            fun getInteractions() {
               map(fun(i) {
                   var references = query {
                     for (ar <-- Tables.interaction_affinity_refs)
@@ -767,18 +767,8 @@ fun getInitialModel() {
         var containsReference = contains(refs);
         var containsLigand = contains(ligands);
 
-        var references =
-          query {
-          for (ref <-- reference)
-            where (containsReference(ref.reference_id))
-              [
-                (makeReference(ref.reference_id,
-                     ref.type, ref.title, ref.article_title, ref.year,
-                     ref.volume, ref.issue, ref.pages, ref.publisher,
-                     ref.publisher_address, ref.editors, ref.pubmed_id,
-                     ref.isbn, ref.authors, false))
-              ]
-            };
+        var references = queryReferences(refs);
+
 
         # References need to be numbered based on ordering.
         # This constructs a map from reference IDs to pairs of reference

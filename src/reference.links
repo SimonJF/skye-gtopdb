@@ -2,6 +2,8 @@
 # just use the generated DB records directly?
 open MvuHTML;
 open MvuAttrs;
+open Utility;
+open Tables;
 
 typename ReferenceType = [| Journal | Other |];
 
@@ -20,7 +22,7 @@ typename Reference = (
   pubmedId: Int,
   isbn: String,
   authors: String,
-  isKey: Bool
+  isKey: Bool # FIXME: This is a horrible hack and should be changed
 );
 
 fun stringToRefTy(str) {
@@ -87,10 +89,25 @@ fun renderCitationList(ids, refs) {
 
   if (length(ids) > 0) {
     var links = map(fun(i) { [citationLink(i)] }, ids);
-    var separatedLinks = 
+    var separatedLinks =
       MvuHTML.concat(join([textNode(", ")], links));
     textNode("[") +* separatedLinks +* textNode("]")
   } else {
     MvuHTML.empty
   }
+}
+
+fun queryReferences(refIds) {
+  var containsReference = contains(refIds);
+  query {
+  for (ref <-- Tables.reference)
+    where (containsReference(ref.reference_id))
+      [
+        (makeReference(ref.reference_id,
+             ref.type, ref.title, ref.article_title, ref.year,
+             ref.volume, ref.issue, ref.pages, ref.publisher,
+             ref.publisher_address, ref.editors, ref.pubmed_id,
+             ref.isbn, ref.authors, false))
+      ]
+    }
 }

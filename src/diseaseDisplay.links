@@ -1,0 +1,121 @@
+open Reference;
+open Parser;
+open RenderMarkup;
+open Utility;
+
+typename Reference = Reference.Reference;
+
+typename Ligand = (
+    ligandId: Int,
+    ligandName: Markup,
+    ligandImmuno: Bool,
+    ligandApproved: Bool,
+    ligandImmunoComments: Markup,
+    ligandClinicalComments: Markup,
+    ligandBioactivityComments: Markup
+  );
+
+# FIXME: Need Ligand interactions here
+typename Target = (
+    targetId: Int,
+    targetName: Markup,
+    targetComments: Markup,
+    targetReferences: [ReferenceId]
+  );
+
+typename DiseaseInfo =
+  (diID: Int,
+   diName: Markup,
+   diSynonyms: [Markup],
+   diDescription: Markup,
+   diDatabaseLinks: (), # urgh
+   diTargets: [Target],
+   diLigands: [Ligand],
+   diReferences: [Reference]);
+
+
+typename Model = DiseaseInfo; # Temp.
+
+fun getModel(diseaseId) {
+  # First, get raw info from the DB
+  var rawInfo =
+    query {
+      for (d <-- Tables.disease)
+        where (d.disease_id == diseaseId)
+          [(id = d.disease_id,
+            name = d.name,
+            synonyms =
+              for (d2s <-- Tables.disease2synonym)
+                where (d2s.disease_id == diseaseId)
+                [d2s.synonym],
+            description = d.description,
+            dblinks = (), # FIXME
+            targets =
+              for (pp <-- Tables.pathophysiology)
+                where (pp.disease_id == diseaseId)
+                for (o <-- Tables.object)
+                  where (o.object_id == pp.object_id)
+                    [(id=o.object_id, name=o.name, comments=pp.comments,
+                      references =
+                        for (pp_ref <-- Tables.pathophysiology_refs)
+                          where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
+                          [pp_ref.reference_id]
+                     )],
+            ligands =
+              for (d2d <-- Tables.drug2disease)
+                where (d2d.disease_id == diseaseId)
+                  for (l <-- Tables.ligand)
+                    where (l.ligand_id == d2d.ligand_id)
+                    [l]
+          )]
+    };
+
+  # Next, run the parser to get ourselves the markup and reference information
+  fun parseRaw(rawResult) {
+    var name = parseOrError(rawResult.name);
+    var synonyms = map(parseOrError, rawResult.synonyms);
+    var description = parseOrError(rawResult.description);
+    var (targets, targetRefs) = fold_right(fun(x, (targets, refs)) {
+        var res =
+          (
+           targetId = x.id,
+           targetName = parseOrError(x.name),
+           targetComments = parseOrError(x.comments),
+           targetRefs = x.references
+          );
+        var (refIds, _) = RenderMarkup.collectIds(res.targetComments);
+        var refIds = refIds ++ x.references;
+        (res :: targets, refIds ++ refs)
+    }, ([], []), rawResult.targets);
+    var (ligands, ligandRefs) = fold_right(fun(l, (ligands, refs)) {
+        var res =
+          (ligandId = l.ligand_id,
+           ligandName = parseOrError(l.name),
+           ligandImmuno = l.in_gtip,
+           ligandApproved = l.approved,
+           ligandImmunoComments = parseOrError(l.immuno_comments),
+           ligandClinicalComments = parseOrError(l.clinical_use),
+           ligandBioactivityComments = parseOrError(l.bioactivity_comments));
+        var (iCommentRefs, _) = RenderMarkup.collectIds(res.ligandImmunoComments);
+        var (cCommentRefs, _) = RenderMarkup.collectIds(res.ligandClinicalComments);
+        var (bCommentRefs, _) = RenderMarkup.collectIds(res.ligandBioactivityComments);
+        var refs = iCommentRefs ++ cCommentRefs ++ bCommentRefs ++ refs;
+        (res :: ligands, refs)
+    }, ([], []), rawResult.ligands);
+
+    var referenceIds = uniquify(targetRefs ++ ligandRefs);
+    # Generate a predicate to filter references
+    (diID = rawResult.id,
+     diName = name,
+     diSynonyms = synonyms,
+     diDescription = description,
+     diTargets = targets,
+     diLigands = ligands,
+     diReferences = queryReferences(referenceIds))
+  }
+
+  switch (rawInfo) {
+    case [] -> Nothing
+    case rawResult :: _ -> Just(parseRaw(rawResult))
+  }
+}
