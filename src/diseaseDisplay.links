@@ -34,7 +34,7 @@ typename DiseaseInfo =
    diReferences: [Reference]);
 
 
-typename Model = DiseaseInfo; # Temp.
+typename Model = Maybe(DiseaseInfo); # Temp.
 
 fun getModel(diseaseId) {
   # First, get raw info from the DB

@@ -5,7 +5,8 @@ open MvuAttrs;
 open MvuEvents;
 open Tables;
 open Template;
-open RenderMarkup; open Parser;
+open RenderMarkup;
+open Parser;
 open Utility;
 
 typename ReferenceId = Int;
@@ -226,49 +227,6 @@ fun view(model) {
             )
           )));
 
-    # Core rendering function for references.
-    # TODO: Consider moving to reference.links, since this might be useful
-    # in different files.
-    fun renderReference(prefixNode, reference) {
-      fun tn(x) { textNode(x) }
-      var issueNode =
-        if(reference.issue == "") {
-          MvuHTML.empty
-        } else {
-          tn(" (" ^^ reference.issue ^^ ")")
-        };
-      var volumeNode =
-        if (reference.volume == "") {
-          MvuHTML.empty
-        } else {
-          b(a0, tn(reference.volume))
-        };
-
-      var pubMedHref =
-        "javascript:newWindow('http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=pubmed&dopt=AbstractPlus&list_uids="
-        ^^ intToString(reference.pubmedId) ^^ "', 800, 500)";
-
-      var pubMedNode =
-        tn("[PMID:") +*
-        a(href(pubMedHref), tn(intToString(reference.pubmedId))) +*
-        tn("]");
-
-      p(class("grac_text"),
-        prefixNode
-        +* tn(reference.authors)
-        +* tn(". ")
-        +* tn(reference.title)
-        +* tn(". ")
-        +* i(a0, tn(reference.journalName))
-        +* tn(", ")
-        +* volumeNode
-        +* issueNode
-        +* tn(": ")
-        +* tn(reference.pages)
-        +* tn(". ")
-        +* pubMedNode)
-    }
-
     fun displayOverview(overviewMarkup) {
       p(class("grac_text"), renderM(overviewMarkup))
     }
@@ -307,7 +265,6 @@ fun view(model) {
             case Nothing -> "?"
           }
         }
-
 
         # In the case that an interaction is with a labelled ligand, it is
         # only classed as labelled. Similarly, if the interaction is endogenous,
@@ -487,14 +444,6 @@ fun view(model) {
         var prefixNode = if(x.isKey) { textNode("* ") } else { MvuHTML.empty };
         renderReference(prefixNode, x)
       }, refs))
-    }
-
-    fun displayReferences(refs) {
-      MvuHTML.concat(map(fun((_, (i, ref))) {
-        var prefixNode =
-          a(id("ref" ^^ intToString(i)), MvuHTML.empty) +*
-          textNode(intToString(i + 1) ^^ ". ");
-        renderReference(prefixNode, ref)}, refs))
     }
 
     sig displayContributors : (Contributors) ~> HTML(Message)
