@@ -1,0 +1,196 @@
+open Tables;
+open Utility;
+open MvuHTML;
+open MvuAttrs;
+open Mvu;
+open Template;
+
+typename Filter = [| All | Immuno |];
+
+var filterNames = [
+  ("all", (All, "All Diseases", "All diseases described in GtoPdb.")),
+  ("immuno", (Immuno, "Immuno. Disease", "Immunologically relevant diseases described in GtoPdb."))
+];
+
+var allDiseases = {
+  var (filter, _, desc) = fromJust(lookup("all", filterNames));
+  (filter, desc)
+};
+
+fun tyStringToFilterData(tyString) {
+  switch (lookup(tyString, filterNames)) {
+    case Just((filter, _, desc)) -> (filter, desc)
+    case Nothing -> allDiseases
+  }
+}
+
+
+typename DiseaseResult =
+  (drName: String,
+   drId: Int,
+   drSynonyms: [String],
+   drTargetCount: Int,
+   drLigandCount: Int);
+
+fun getDiseaseResults(filterType) {
+  fun pred(c) {
+    switch(filterType) {
+      case All -> true
+      case Immuno -> c == "Immuno"
+    }
+  }
+
+  query {
+    for (d <-- Tables.disease)
+      for (d2c <-- Tables.disease2category)
+        where (d.disease_id == d2c.disease_id)
+        for (c <-- Tables.disease_category)
+          where ((c.disease_category_id == d2c.disease_category_id))# && pred(c.name))
+          [(drName=d.name,
+            drId=d.disease_id,
+            drSynonyms=
+              for (d2s <-- Tables.disease2synonym)
+                where (d2s.disease_id == d.disease_id)
+                [d2s.synonym],
+            drLigandCount=
+              length(
+                for (d2l <-- Tables.drug2disease)
+                  where (d2l.disease_id == d.disease_id)
+                  [d2l]),
+            drTargetCount=
+              length(
+                for (pp <-- Tables.pathophysiology)
+                  where (pp.disease_id == d.disease_id)
+                    [pp])
+           )]
+  }
+}
+
+# Model
+typename Model = (filterType: Filter, filterDesc: String, results: [(Char, [DiseaseResult])]);
+
+fun view(model) {
+  var menu = {
+    fun makeMenuItem((requestName, (filterType, renderName, _))) {
+      var liAttrs = if (filterType == model.filterType) {
+        class("active")
+      } else {
+        MvuAttrs.empty
+      };
+
+      li(liAttrs,
+        a(href("/diseaseList?type=" ^^ requestName), textNode(renderName))
+      )
+    }
+    var menuItems = MvuHTML.concat(map(makeMenuItem, filterNames));
+    div(id("cssmenu"),
+      ul(MvuAttrs.empty, menuItems))
+  };
+
+  var aToZ = {
+    fun link(char) {
+      var char = implode([char]);
+      a(style("font-weight:bold;font-size:110%") +@ href("#" ^^ char), textNode(char ^^ " "))
+    }
+    p(style("text-align:center;"), MvuHTML.concat(map(link, alphabet)))
+  };
+  var topLink = a(name("top"), MvuHTML.empty);
+
+  var dataTable = {
+    # TODO: These should be in the standard library
+    fun src(val) { MvuAttrs.attr("src", val) }
+    fun alt(val) { MvuAttrs.attr("alt", val) }
+    fun valign(val) { MvuAttrs.attr("valign", val) }
+    fun colspan(val) { MvuAttrs.attr("colSpan", val) }
+    fun width(val) { MvuAttrs.attr("width", val) }
+    fun height(val) { MvuAttrs.attr("height", val) }
+
+    fun makeRow(dr) {
+      var name =
+        td(class("info") +@
+           style("border-style: solid dotted solid solid; font-size:97%; text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
+           valign("baseline"),
+           a(href("/diseaseDisplay?diseaseId=" ^^ intToString(dr.drId)), textNode(dr.drName)));
+
+      var targets =
+        td(class("info"), textNode(intToString(dr.drTargetCount)));
+      var ligands =
+        td(class("info"), textNode(intToString(dr.drLigandCount)));
+
+      var synonyms =
+        td(class("info") +@
+           style(" font-size:97%;  text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
+           valign("baseline"),
+          MvuHTML.concat(join([textNode(", ")], map(fun(x) { [textNode(x)] }, dr.drSynonyms))));
+      tr(MvuAttrs.empty, name +* synonyms +* targets +* ligands)
+    }
+
+    fun renderLetterRow((letter, results)) {
+      var letter = implode([letter]);
+      tr(MvuAttrs.empty,
+           td(class("info") +@ style("border-right:none;") +@ colspan("3"),
+             a(style("font-size:110%;font-weight:bold;color:red;") +@ name(letter), textNode(letter))
+           ) +*
+           td(class("info") +@ style("text-align:right; border-left:none;"),
+             a(style("font-weight:normal;font-size:95%;") +@ href("#top"), textNode("Back to top"))
+       )) +*
+      MvuHTML.concat(map(makeRow, results)) +*
+      tr(MvuAttrs.empty, td(colspan("3"), MvuHTML.empty))
+    }
+
+    var rows = MvuHTML.concat(map(renderLetterRow, model.results));
+    table_(class("receptor_data_tables") +@ style("table-layout: fixed; width:100%; margin:0px; padding:0px;"),
+      colgroup(MvuAttrs.empty,
+        col(style("min-width:250px;width:360px;"), MvuHTML.empty) +*
+        col(style("width:360px;"), MvuHTML.empty) +*
+        col(style("min-width:60px;width:60px;"), MvuHTML.empty) +*
+        col(style("min-width:60px;width:60px;"), MvuHTML.empty)
+      ) +*
+      thead(MvuAttrs.empty,
+        tr(MvuAttrs.empty,
+          td(class("heading"), textNode("Disease name")) +*
+          td(class("heading"), textNode("Synonyms")) +*
+          td(class("heading"), textNode("Targets")) +*
+          td(class("heading"), textNode("Ligands"))
+        )
+      ) +*
+      tbody(MvuAttrs.empty, rows)
+    )
+  };
+
+
+  div(class("grid_16 alpha"),
+      topLink +*
+      h4(MvuAttrs.empty, textNode("The IUPHAR/BPS Guide to PHARMACOLOGY complete ligand list")) +*
+      div(class("contentboxfullhelp"),
+        menu +*
+        div(class("data_tables_container") +@ style("padding-top:20px;"),
+          div(class("ligcontainer"),
+            div(class("ligcentre"),
+              textNode(model.filterDesc))) +*
+            aToZ +*
+            dataTable
+    )))
+}
+
+sig getInitialModel : () ~> Model
+fun getInitialModel() {
+  var (filterType, desc) = switch(lookup("type", environment())) {
+    case Just(tyString) -> tyStringToFilterData(tyString)
+    case Nothing -> allDiseases
+  };
+  var results = getDiseaseResults(filterType);
+  var results  = map(fun(d) { (cmpName(d.drName), d) }, results);
+  var results =
+    sortBy(fun((cmpName, _)) { cmpName }, results);
+  var results = alphabetise(first, second, results);
+  (filterType=filterType, filterDesc=desc, results=results)
+}
+
+fun mainPage() {
+  runStatic("vdom_placeholder", getInitialModel(), view);
+  template("Disease list")
+}
+
+
+

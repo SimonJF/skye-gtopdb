@@ -38,3 +38,34 @@ fun uniquify(xs) {
 }
 
 fun listEmpty(xs) { empty(xs) }
+
+fun cmpName(name) {
+  # Firstly, strip &..; tags
+  var cmpName = (name =~ s/&.*;//) : String;
+  dropWhile(fun(c) {
+      not(('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))
+  }, map(toLower, explode(cmpName)))
+}
+
+var alphabet = map(fun(c) { chr(c) }, [65..90]);
+
+# Preconditions:
+# 1. List is sorted
+# 2. The (a) -> Char function returns an alphabetical character
+sig alphabetise : (((a) ~%~> [Char]), ((a) ~%~> b), [a]) ~%~> [(Char, [b])]
+fun alphabetise(getString, transform, xs) {
+  var (chunks, _) =
+    fold_left(fun((chunks, remaining), letter) {
+        fun safeCmp(exploded) {
+          switch(exploded) {
+            case [] -> true # Dirty data -- take it anyway
+            case x :: _ ->
+              x == toLower(letter)
+          }
+        }
+        var (thisChunk, next) = span(fun(x) { safeCmp(getString(x)) }, remaining);
+        ((letter, (map(transform, thisChunk))) :: chunks, next)
+    }, ([], xs), alphabet);
+  reverse(chunks)
+}
+

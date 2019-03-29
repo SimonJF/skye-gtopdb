@@ -6,6 +6,7 @@ open NotImplemented;
 open Navigate;
 open TargetsDisplay;
 open LigandList;
+open DiseaseList;
 
 # Main routing table.
 fun main() {
@@ -16,7 +17,7 @@ fun main() {
   addRoute("/ligandSearch", fun(_) { NotImplemented.mainPage() });
   addRoute("/navigate", fun(_) { Navigate.mainPage() });
   addRoute("/targetsDisplay", fun(_) { TargetsDisplay.mainPage() });
-  addRoute("/diseaseList", fun(_) { NotImplemented.mainPage() });
+  addRoute("/diseaseList", fun(_) { DiseaseList.mainPage() });
   addRoute("/", fun(_) { Home.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);

@@ -1,4 +1,3 @@
-var preludeSpan = span;
 open MvuHTML;
 open MvuAttrs;
 open Mvu;
@@ -6,6 +5,7 @@ open Tables;
 open Template;
 open Parser;
 open RenderMarkup;
+open Utility;
 
 # Data model
 typename Filter = [|
@@ -93,8 +93,6 @@ fun predicate(ligand, filterType) {
   }
 }
 
-var alphabet = map(fun(c) { chr(c) }, [65..90]);
-
 sig getLigands : (Filter) ~> [(Char, [LigandResult])]
 fun getLigands(filterType) {
   var res =
@@ -128,17 +126,9 @@ fun getLigands(filterType) {
   # We need to strip this junk from the beginning. We'll also need this
   # when we actually alphabetise, so store the stripped (and lowercased)
   # comparison string, too.
-  var withCmp  = map(fun(lr) {
-        # Firstly, strip &..; tags
-        var cmpName = (lr.name =~ s/&.*;//) : String;
-        var cmpName = dropWhile(fun(c) {
-            not(('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))
-        }, map(toLower, explode(cmpName)));
-        (cmpName, lr)
-  }, res);
+  var withCmp  = map(fun(lr) { (cmpName(lr.name), lr) }, res);
 
   var withCmp =
-    # TODO: Need to be smarter when alphabetising
     sortBy(fun((cmpName, _)) { cmpName }, withCmp);
 
   # Now, perform the necessary parsing and such
@@ -159,23 +149,11 @@ fun getLigands(filterType) {
       }, withCmp);
 
   # Finally, alphabetise
-  var (chunks, _) =
-    fold_left(fun((chunks, remaining), letter) {
-        fun safeCmp(exploded) {
-          switch(exploded) {
-            case [] -> true # Dirty data -- take it anyway
-            case x :: _ ->
-              x == toLower(letter)
-          }
-        }
-        var (thisChunk, next) = preludeSpan(fun((cmp, _)) { safeCmp(cmp) }, remaining);
-        ((letter, (map(second, thisChunk))) :: chunks, next)
-    }, ([], withCmp), alphabet);
-  reverse(chunks)
+  alphabetise(first, second, withCmp)
 }
 
 # Results: an alphabetised list
-typename Model = (filterType: Filter, results: [(Char, [LigandResult])]);
+typename Model = (filterType: Filter, filterDesc: String, results: [(Char, [LigandResult])]);
 
 fun view(model) {
   var menu = {
@@ -267,7 +245,6 @@ fun view(model) {
     }
 
     var rows = MvuHTML.concat(map(renderLetterRow, model.results));
-     # TODO: Separate this out for all letters
     table_(class("receptor_data_tables") +@ style("table-layout: fixed; width:100%; margin:0px; padding:0px;"),
       colgroup(MvuAttrs.empty,
         col(style("min-width:200px;width:300px;"), MvuHTML.empty) +*
@@ -300,13 +277,13 @@ fun view(model) {
         div(class("data_tables_container") +@ style("padding-top:20px;"),
           div(class("ligcontainer"),
             div(class("ligcentre"),
-              # TODO: This only makes sense for "Approved" at the moment -- where is this defined?
               textNode(model.filterDesc))) +*
             aToZ +*
             dataTable
     )))
 }
 
+sig getInitialModel : () ~> Model
 fun getInitialModel() {
   var (filterType, desc) = switch(lookup("type", environment())) {
     case Just(tyString) -> tyStringToFilterData(tyString)
