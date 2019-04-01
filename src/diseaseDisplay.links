@@ -15,12 +15,28 @@ typename Ligand = (
     ligandBioactivityComments: Markup
   );
 
+# It seems like this data is only applicable for immuno-relevant
+# ligands.
+typename ImmunoTargetInteraction = (
+    itLigandId: Int,
+    itLigandName: Markup,
+    itLigandImmuno: Bool,
+    itLigandApproved: Bool,
+    itLigandPrimary: Bool,
+    itLigandComments: Markup
+  );
+
 # FIXME: Need Ligand interactions here
 typename Target = (
     targetId: Int,
     targetName: Markup,
+    targetRole: Markup,
     targetComments: Markup,
-    targetReferences: [ReferenceId]
+    targetDrugComments: Markup,
+    targetSideEffects: Markup,
+    targetTherapeuticUse: Markup,
+    targetReferences: [ReferenceId],
+    targetInteractions: [ImmunoTargetInteraction]
   );
 
 typename DiseaseInfo =
@@ -56,10 +72,21 @@ fun getModel(diseaseId) {
                 for (o <-- Tables.object)
                   where (o.object_id == pp.object_id)
                     [(id=o.object_id, name=o.name, comments=pp.comments,
+                      role=o.role, drugComments=o.drugs, sideEffects=o.side_effects,
+                      therapeuticUse=o.use,
                       references =
                         for (pp_ref <-- Tables.pathophysiology_refs)
                           where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
-                          [pp_ref.reference_id]
+                          [pp_ref.reference_id],
+                      interactions =
+                        for (i <-- interaction)
+                          for (id2l <-- Tables.immuno_disease2ligand)
+                            for (l <-- Tables.ligand)
+                              where (o.object_id == i.object_id &&
+                                     id2l.ligand_id == i.ligand_id &&
+                                     l.ligand_id == i.ligand_id)
+                                [(lId = i.ligand_id, lName = l.name, lImmuno = l.in_gtip,
+                                  lApproved = l.approved, lPrimary = i.primary_target, lComments=id2l.comment)]
                      )],
             ligands =
               for (d2d <-- Tables.drug2disease)
@@ -76,12 +103,31 @@ fun getModel(diseaseId) {
     var synonyms = map(parseOrError, rawResult.synonyms);
     var description = parseOrError(rawResult.description);
     var (targets, targetRefs) = fold_right(fun(x, (targets, refs)) {
+        var (immunoInteractions, immunoRefs) =
+          fold_right(fun (x, (interactions, refs)) {
+              var interaction = (
+                  itLigandId = x.lId,
+                  itLigandName = x.lName,
+                  itLigandImmuno = x.lImmuno,
+                  itLigandApproved = x.lApproved,
+                  itLigandPrimary = x.lPrimary,
+                  itLigandComments = parseOrError(x.lComments)
+              );
+              var newRefs =
+                RenderMarkup.collectIds(interactions.itLigandComments);
+              (x :: interactions, newRefs ++ refs)
+          }, ([], []), x.interactions);
         var res =
           (
            targetId = x.id,
            targetName = parseOrError(x.name),
            targetComments = parseOrError(x.comments),
-           targetRefs = x.references
+           targetRole = parseOrError(x.role),
+           targetDrugComments = parseOrError(x.drugComments),
+           targetSideEffects = parseOrError(x.sideEffects),
+           targetTherapeuticUse = parseOrError(x.therapeuticUse),
+           targetRefs = x.references,
+           targetInteractions = immunoInteractions
           );
         var (refIds, _) = RenderMarkup.collectIds(res.targetComments);
         var refIds = refIds ++ x.references;
@@ -103,7 +149,7 @@ fun getModel(diseaseId) {
         (res :: ligands, refs)
     }, ([], []), rawResult.ligands);
 
-    var referenceIds = uniquify(targetRefs ++ ligandRefs);
+    var referenceIds = uniquify(targetRefs ++ ligandRefs ++ immunoRefs);
     # Generate a predicate to filter references
     (diID = rawResult.id,
      diName = name,
