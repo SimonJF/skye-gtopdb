@@ -10,14 +10,14 @@ typename ColumnName = String;
 typename SortDirection = [| Ascending | Descending |];
 typename SortStatus = [| Unsorted | Sorted:(ColumnName, SortDirection) |];
 
-typename DataTable(data, msg :: Row, sortKey) = (
-    tableId: Int,
+typename DataTable(data, msg) =
+  ( tableId: Int,
     tableColumns: [(ColumnName, Bool)], # Bool: is sortable
     tableSortStatus: SortStatus,
     tableRows: [data],
-    tableRenderCol: (data, ColumnName) {}~> HTML([| msg |]),
-    tableSortKey : (data, ColumnName) {}~> sortKey
-);
+    tableRenderRow : (data) {}~> HTML(msg),
+    tableSortKey : (data, ColumnName) {}~> String,
+    tableSortMsg: (ColumnName, SortDirection) {}~> msg );
 
 var tableCounter =
   spawnClient {
@@ -40,30 +40,32 @@ fun freshTableId() {
   }
 }
 
-sig makeTable : forall msg :: Row. (
+sig makeTable : (
     [(ColumnName, Bool)],
     [data],
-    (data, ColumnName) {}~> HTML( [| msg |]),
-    (data, ColumnName) {}~> sortKey) {}~> (TableID, DataTable(data, { |msg}, sortKey))
-fun makeTable(cols, data, renderCol, sortKey) {
+    (data) {}~> HTML(msg),
+    (data, ColumnName) {}~> String,
+    (ColumnName, SortDirection) {}~> msg) {}~> (TableID, DataTable(data, msg))
+fun makeTable(cols, data, renderRow, sortKey, sortMsg) {
   var id = freshTableId();
   (id,
    (tableId = id,
     tableColumns = cols,
     tableSortStatus = Unsorted,
     tableRows = data,
-    tableRenderCol = renderCol,
-    tableSortKey = sortKey))
+    tableRenderRow = renderRow,
+    tableSortKey = sortKey,
+    tableSortMsg = sortMsg
+  ))
 }
 
 sig renderTable :
-  (DataTable(data, { |msg}, sortKey))
-    {}~> HTML([| SortTable:(TableID, ColumnName, SortDirection) | msg |])
+  (DataTable(data, msg)) {}~> HTML(msg)
 fun renderTable(tbl) {
   MvuHTML.empty
 }
 
-sig updateSortStatus: (DataTable(d, { |m}, s), ColumnName, SortDirection) {}-> DataTable(d, { |m}, s)
+sig updateSortStatus: (DataTable(d, m), ColumnName, SortDirection) {}-> DataTable(d, m)
 fun updateSortStatus(t, colNum, dir) {
   (t with tableSortStatus = Sorted(colNum, dir))
 }
