@@ -1,0 +1,70 @@
+open MvuHTML;
+
+# A generic sortable table.
+# The update function of an HTML document embedding a table must be able to
+# handle messages of type SortTable:(TableID, ColumnName, SortDirection).
+# Handling this message should just be a case of lookng up the DataTable in
+# the model and passing it to `updateSortStatus`.
+typename TableID = Int;
+typename ColumnName = String;
+typename SortDirection = [| Ascending | Descending |];
+typename SortStatus = [| Unsorted | Sorted:(ColumnName, SortDirection) |];
+
+typename DataTable(data, msg :: Row, sortKey) = (
+    tableId: Int,
+    tableColumns: [(ColumnName, Bool)], # Bool: is sortable
+    tableSortStatus: SortStatus,
+    tableRows: [data],
+    tableRenderCol: (data, ColumnName) {}~> HTML([| msg |]),
+    tableSortKey : (data, ColumnName) {}~> sortKey
+);
+
+var tableCounter =
+  spawnClient {
+    fun go(id) {
+      receive {
+        case FreshIdRequest(pid) ->
+          pid ! FreshIdResponse(id);
+          go(id + 1)
+      }
+    }
+    go(0)
+  };
+
+fun freshTableId() {
+  spawnWait {
+    tableCounter ! FreshIdRequest(self());
+    receive {
+      case FreshIdResponse(x) -> x
+    }
+  }
+}
+
+sig makeTable : forall msg :: Row. (
+    [(ColumnName, Bool)],
+    [data],
+    (data, ColumnName) {}~> HTML( [| msg |]),
+    (data, ColumnName) {}~> sortKey) {}~> (TableID, DataTable(data, { |msg}, sortKey))
+fun makeTable(cols, data, renderCol, sortKey) {
+  var id = freshTableId();
+  (id,
+   (tableId = id,
+    tableColumns = cols,
+    tableSortStatus = Unsorted,
+    tableRows = data,
+    tableRenderCol = renderCol,
+    tableSortKey = sortKey))
+}
+
+sig renderTable :
+  (DataTable(data, { |msg}, sortKey))
+    {}~> HTML([| SortTable:(TableID, ColumnName, SortDirection) | msg |])
+fun renderTable(tbl) {
+  MvuHTML.empty
+}
+
+sig updateSortStatus: (DataTable(d, { |m}, s), ColumnName, SortDirection) {}-> DataTable(d, { |m}, s)
+fun updateSortStatus(t, colNum, dir) {
+  (t with tableSortStatus = Sorted(colNum, dir))
+}
+
