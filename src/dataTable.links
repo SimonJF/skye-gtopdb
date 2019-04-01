@@ -3,63 +3,34 @@ open MvuAttrs;
 open MvuEvents;
 
 # A generic sortable table.
-typename TableID = Int;
 typename ColumnName = String;
 typename SortDirection = [| Ascending | Descending |];
 typename SortStatus = [| Unsorted | Sorted:(ColumnName, SortDirection) |];
 
 typename DataTable(data, msg) =
-  ( tableId: Int,
-    tableColumns: [(ColumnName, Bool)], # Bool: is sortable
+  ( tableColumns: [(ColumnName, Bool)], # Bool: is sortable
     tableSortStatus: SortStatus,
     tableRows: [data],
-    tableRenderRow : (data) {}~> HTML(msg),
     tableSortKey : (ColumnName, data) {}~> String,
     tableSortMsg: (ColumnName, SortDirection) {}~> msg );
-
-var tableCounter =
-  spawnClient {
-    fun go(id) {
-      receive {
-        case FreshIdRequest(pid) ->
-          pid ! FreshIdResponse(id);
-          go(id + 1)
-      }
-    }
-    go(0)
-  };
-
-fun freshTableId() {
-  spawnWait {
-    tableCounter ! FreshIdRequest(self());
-    receive {
-      case FreshIdResponse(x) -> x
-    }
-  }
-}
 
 sig makeTable : (
     [(ColumnName, Bool)],
     [data],
-    (data) {}~> HTML(msg),
     (ColumnName, data) {}~> String,
-    (ColumnName, SortDirection) {}~> msg) {}~> (TableID, DataTable(data, msg))
-fun makeTable(cols, data, renderRow, sortKey, sortMsg) {
-  var id = freshTableId();
-  (id,
-   (tableId = id,
-    tableColumns = cols,
-    tableSortStatus = Unsorted,
-    tableRows = data,
-    tableRenderRow = renderRow,
-    tableSortKey = sortKey,
-    tableSortMsg = sortMsg
-  ))
+    (ColumnName, SortDirection) {}~> msg) {}~> DataTable(data, msg)
+fun makeTable(cols, data, sortKey, sortMsg) {
+  (tableColumns = cols,
+   tableSortStatus = Unsorted,
+   tableRows = data,
+   tableSortKey = sortKey,
+   tableSortMsg = sortMsg)
 }
 
 sig renderTable :
-  (DataTable(data, msg)) {}~> HTML(msg)
-fun renderTable(tbl) {
+  (DataTable(data, msg),
+   (data) {}~> HTML(msg)) {}~> HTML(msg)
+fun renderTable(tbl, renderRow) {
   var a0 = MvuAttrs.empty;
   var sortedData = {
     switch(tbl.tableSortStatus) {
@@ -100,7 +71,7 @@ fun renderTable(tbl) {
   }
 
   var headers = MvuHTML.concat(map(renderHeader, tbl.tableColumns));
-  var renderedRows = MvuHTML.concat(map(tbl.tableRenderRow, tbl.tableRows));
+  var renderedRows = MvuHTML.concat(map(renderRow, tbl.tableRows));
 
   table_(class("tablesorter inner_receptor_data_tables"),
       thead(a0,
