@@ -1,10 +1,8 @@
 open MvuHTML;
+open MvuAttrs;
+open MvuEvents;
 
 # A generic sortable table.
-# The update function of an HTML document embedding a table must be able to
-# handle messages of type SortTable:(TableID, ColumnName, SortDirection).
-# Handling this message should just be a case of lookng up the DataTable in
-# the model and passing it to `updateSortStatus`.
 typename TableID = Int;
 typename ColumnName = String;
 typename SortDirection = [| Ascending | Descending |];
@@ -16,7 +14,7 @@ typename DataTable(data, msg) =
     tableSortStatus: SortStatus,
     tableRows: [data],
     tableRenderRow : (data) {}~> HTML(msg),
-    tableSortKey : (data, ColumnName) {}~> String,
+    tableSortKey : (ColumnName, data) {}~> String,
     tableSortMsg: (ColumnName, SortDirection) {}~> msg );
 
 var tableCounter =
@@ -44,7 +42,7 @@ sig makeTable : (
     [(ColumnName, Bool)],
     [data],
     (data) {}~> HTML(msg),
-    (data, ColumnName) {}~> String,
+    (ColumnName, data) {}~> String,
     (ColumnName, SortDirection) {}~> msg) {}~> (TableID, DataTable(data, msg))
 fun makeTable(cols, data, renderRow, sortKey, sortMsg) {
   var id = freshTableId();
@@ -62,7 +60,52 @@ fun makeTable(cols, data, renderRow, sortKey, sortMsg) {
 sig renderTable :
   (DataTable(data, msg)) {}~> HTML(msg)
 fun renderTable(tbl) {
-  MvuHTML.empty
+  var a0 = MvuAttrs.empty;
+  var sortedData = {
+    switch(tbl.tableSortStatus) {
+      case Unsorted -> tbl.tableRows
+      case Sorted(name, Ascending) ->
+        sortBy(fun(x) { tbl.tableSortKey(name, x) }, tbl.tableRows)
+      case Sorted(name, Descending) ->
+        reverse(sortBy(fun(x) { tbl.tableSortKey(name, x) }, tbl.tableRows))
+    }
+  };
+
+  fun renderHeader((name, sortable)) {
+    if (sortable) {
+      var sortMsg =
+        if (tbl.tableSortStatus == Sorted(name, Ascending)) {
+          tbl.tableSortMsg(name, Descending)
+        } else {
+          tbl.tableSortMsg(name, Ascending)
+        };
+      var sorterClass =
+        if (tbl.tableSortStatus == Sorted(name, Ascending)) {
+          "tablesorter-headerAsc"
+        } else if (tbl.tableSortStatus == Sorted(name, Descending)) {
+          "tablesorter-headerDesc"
+        } else {
+          ""
+        };
+
+      th(class("tablesorter-header " ^^ sorterClass)
+          +@ style("border-style:solid solid solid solid;")
+          +@ onClick(fun() { sortMsg }),
+          textNode(name))
+    } else {
+      th(class("tablesorter-noSort")
+          +@ style("border-style:solid solid solid solid;"),
+          textNode(name))
+    }
+  }
+
+  var headers = MvuHTML.concat(map(renderHeader, tbl.tableColumns));
+  var renderedRows = MvuHTML.concat(map(tbl.tableRenderRow, tbl.tableRows));
+
+  table_(class("tablesorter inner_receptor_data_tables"),
+      thead(a0,
+        tr(class("info heading"), headers)) +*
+      tbody(name("toggle"), renderedRows))
 }
 
 sig updateSortStatus: (DataTable(d, m), ColumnName, SortDirection) {}-> DataTable(d, m)
