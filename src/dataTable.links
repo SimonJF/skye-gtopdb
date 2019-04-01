@@ -7,7 +7,7 @@ typename ColumnName = String;
 typename SortDirection = [| Ascending | Descending |];
 typename SortStatus = [| Unsorted | Sorted:(ColumnName, SortDirection) |];
 
-typename DataTable(data, msg) =
+typename SortableTable(data, msg) =
   ( tableColumns: [(ColumnName, Bool)], # Bool: is sortable
     tableSortStatus: SortStatus,
     tableRows: [data],
@@ -18,7 +18,7 @@ sig makeTable : (
     [(ColumnName, Bool)],
     [data],
     (ColumnName, data) {}~> String,
-    (ColumnName, SortDirection) {}~> msg) {}~> DataTable(data, msg)
+    (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
 fun makeTable(cols, data, sortKey, sortMsg) {
   (tableColumns = cols,
    tableSortStatus = Unsorted,
@@ -28,7 +28,7 @@ fun makeTable(cols, data, sortKey, sortMsg) {
 }
 
 sig renderTable :
-  (DataTable(data, msg),
+  (SortableTable(data, msg),
    (data) {}~> HTML(msg)) {}~> HTML(msg)
 fun renderTable(tbl, renderRow) {
   var a0 = MvuAttrs.empty;
@@ -79,8 +79,16 @@ fun renderTable(tbl, renderRow) {
       tbody(name("toggle"), renderedRows))
 }
 
-sig updateSortStatus: (DataTable(d, m), ColumnName, SortDirection) {}-> DataTable(d, m)
+sig updateSortStatus: (SortableTable(d, m), ColumnName, SortDirection) {}~> SortableTable(d, m)
 fun updateSortStatus(t, colNum, dir) {
   (t with tableSortStatus = Sorted(colNum, dir))
 }
+
+sig updateTableData : (SortableTable(d, m), [d]) ~> SortableTable(d, m)
+fun updateTableData(tbl, newData) {
+  (tbl with tableRows = newData)
+}
+
+sig getTableData : (SortableTable(d, m)) ~> [d]
+fun getTableData(tbl) { tbl.tableRows }
 

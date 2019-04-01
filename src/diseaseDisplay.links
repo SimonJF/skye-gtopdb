@@ -2,14 +2,34 @@ open Reference;
 open Parser;
 open RenderMarkup;
 open Utility;
+open DataTable;
+open MvuHTML;
+open MvuAttrs;
+open Tables;
+open Mvu;
+open Template;
 
 typename Reference = Reference.Reference;
 
+typename LigandID = Int;
+typename TargetID = Int;
+typename DiseaseID = Int;
+
+typename Message = [|
+    SortImmunoTargetInteractions: (TargetID, ColumnName, SortDirection)
+  | SortLigands: (ColumnName, SortDirection)
+  | ToggleLigandComments: LigandID
+  | ToggleReferences
+|];
+
+
 typename Ligand = (
-    ligandId: Int,
+    ligandId: LigandID,
+    ligandRawName: String,
     ligandName: Markup,
     ligandImmuno: Bool,
     ligandApproved: Bool,
+    ligandShowComments: Bool,
     ligandImmunoComments: Markup,
     ligandClinicalComments: Markup,
     ligandBioactivityComments: Markup
@@ -18,17 +38,19 @@ typename Ligand = (
 # It seems like this data is only applicable for immuno-relevant
 # ligands.
 typename ImmunoTargetInteraction = (
-    itLigandId: Int,
+    itLigandId: LigandID,
     itLigandName: Markup,
+    itLigandRawName: String,
     itLigandImmuno: Bool,
     itLigandApproved: Bool,
     itLigandPrimary: Bool,
-    itLigandComments: Markup
+    itLigandComments: Markup,
+    itLigandRawComments: String
   );
 
 # FIXME: Need Ligand interactions here
 typename Target = (
-    targetId: Int,
+    targetId: TargetID,
     targetName: Markup,
     targetRole: Markup,
     targetComments: Markup,
@@ -36,22 +58,69 @@ typename Target = (
     targetSideEffects: Markup,
     targetTherapeuticUse: Markup,
     targetReferences: [ReferenceId],
-    targetInteractions: [ImmunoTargetInteraction]
+    targetInteractions: SortableTable(ImmunoTargetInteraction, Message)
   );
 
 typename DiseaseInfo =
-  (diID: Int,
+  (diID: DiseaseID,
    diName: Markup,
    diSynonyms: [Markup],
    diDescription: Markup,
    diDatabaseLinks: (), # urgh
    diTargets: [Target],
-   diLigands: [Ligand],
+   diLigands: SortableTable(Ligand, Message),
+   diShowReferences: Bool,
    diReferences: [Reference]);
 
+typename Model = Maybe(DiseaseInfo);
 
-typename Model = Maybe(DiseaseInfo); # Temp.
+sig updt : (Message, Model) ~%~> Model
+fun updt(msg, model) {
 
+  fun sortImmunoTargetInteractions(targets, tid, cn, dir) {
+    switch(targets) {
+      case [] -> []
+      case t :: ts ->
+        if (t.targetId == tid) {
+          var interactionTable =
+            DataTable.updateSortStatus(t.targetInteractions, cn, dir);
+          (t with targetInteractions = interactionTable) :: ts
+        } else {
+          t :: sortImmunoTargetInteractions(ts, tid, cn, dir)
+        }
+    }
+  }
+
+  fun updtModel(model) {
+    switch(msg) {
+      case SortImmunoTargetInteractions(targetId, colName, dir) ->
+        (model with diTargets =
+          sortImmunoTargetInteractions(model.diTargets, targetId, colName, dir))
+      case SortLigands(colName, dir) ->
+        (model with diLigands =
+           DataTable.updateSortStatus(model.diLigands, colName, dir))
+      case ToggleLigandComments(lid) ->
+        var newLigands =
+          map(fun(l) {
+            if (l.ligandId == lid) {
+              (l with ligandShowComments = not(l.ligandShowComments))
+            } else {
+              l
+            }
+          }, DataTable.getTableData(model.diLigands));
+        var newLigandTable = DataTable.updateTableData(model.diLigands, newLigands);
+        (model with diLigands = newLigandTable )
+      case ToggleReferences ->
+        (model with diShowReferences = not(model.diShowReferences))
+    }
+  }
+  switch (model) {
+    case Just(model) -> Just(updtModel(model))
+    case Nothing -> Nothing
+  }
+}
+
+sig getModel : (Int) ~%~> Model
 fun getModel(diseaseId) {
   # First, get raw info from the DB
   var rawInfo =
@@ -72,21 +141,23 @@ fun getModel(diseaseId) {
                 for (o <-- Tables.object)
                   where (o.object_id == pp.object_id)
                     [(id=o.object_id, name=o.name, comments=pp.comments,
-                      role=o.role, drugComments=o.drugs, sideEffects=o.side_effects,
-                      therapeuticUse=o.use,
+                      role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
+                      therapeuticUse=pp.use,
                       references =
                         for (pp_ref <-- Tables.pathophysiology_refs)
                           where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
                           [pp_ref.reference_id],
                       interactions =
-                        for (i <-- interaction)
+                        for (i <-- Tables.interaction)
                           for (id2l <-- Tables.immuno_disease2ligand)
                             for (l <-- Tables.ligand)
                               where (o.object_id == i.object_id &&
                                      id2l.ligand_id == i.ligand_id &&
                                      l.ligand_id == i.ligand_id)
-                                [(lId = i.ligand_id, lName = l.name, lImmuno = l.in_gtip,
-                                  lApproved = l.approved, lPrimary = i.primary_target, lComments=id2l.comment)]
+                                [(lId = i.ligand_id, lName = l.name,
+                                  lImmuno = l.in_gtip, lApproved = l.approved,
+                                  lPrimary = i.primary_target,
+                                  lComments=id2l.comment)]
                      )],
             ligands =
               for (d2d <-- Tables.drug2disease)
@@ -102,21 +173,38 @@ fun getModel(diseaseId) {
     var name = parseOrError(rawResult.name);
     var synonyms = map(parseOrError, rawResult.synonyms);
     var description = parseOrError(rawResult.description);
-    var (targets, targetRefs) = fold_right(fun(x, (targets, refs)) {
+    var (targets, targetRefs, immunoRefs) =
+      fold_right(fun(x, (targets, refs, iRefs)) {
         var (immunoInteractions, immunoRefs) =
           fold_right(fun (x, (interactions, refs)) {
               var interaction = (
                   itLigandId = x.lId,
-                  itLigandName = x.lName,
+                  itLigandName = parseOrError(x.lName),
+                  itLigandRawName = x.lName,
                   itLigandImmuno = x.lImmuno,
                   itLigandApproved = x.lApproved,
                   itLigandPrimary = x.lPrimary,
-                  itLigandComments = parseOrError(x.lComments)
+                  itLigandComments = parseOrError(x.lComments),
+                  itLigandRawComments = x.lComments
               );
-              var newRefs =
-                RenderMarkup.collectIds(interactions.itLigandComments);
-              (x :: interactions, newRefs ++ refs)
+              var (newRefs, _) =
+                RenderMarkup.collectIds(interaction.itLigandComments);
+              (interaction :: interactions, newRefs ++ refs)
           }, ([], []), x.interactions);
+
+        var interactionsTable =
+          DataTable.makeTable(
+              [("Ligand", true),
+               ("", false), ("", false), ("", false), # Needed for icon display
+               ("Comments", true)],
+              immunoInteractions,
+              fun (colName, x) {
+                if (colName == "Ligand") { x.itLigandRawName }
+                else if (colName == "Comments") { x.itLigandRawComments }
+                else { "" }
+              },
+              fun (col, dir) { SortImmunoTargetInteractions(x.id, col, dir) });
+
         var res =
           (
            targetId = x.id,
@@ -126,22 +214,25 @@ fun getModel(diseaseId) {
            targetDrugComments = parseOrError(x.drugComments),
            targetSideEffects = parseOrError(x.sideEffects),
            targetTherapeuticUse = parseOrError(x.therapeuticUse),
-           targetRefs = x.references,
-           targetInteractions = immunoInteractions
+           targetReferences = x.references,
+           targetInteractions = interactionsTable
           );
         var (refIds, _) = RenderMarkup.collectIds(res.targetComments);
         var refIds = refIds ++ x.references;
-        (res :: targets, refIds ++ refs)
-    }, ([], []), rawResult.targets);
+        (res :: targets, refIds ++ refs, immunoRefs ++ iRefs)
+    }, ([], [], []), rawResult.targets);
+
     var (ligands, ligandRefs) = fold_right(fun(l, (ligands, refs)) {
         var res =
           (ligandId = l.ligand_id,
            ligandName = parseOrError(l.name),
+           ligandRawName = l.name,
            ligandImmuno = l.in_gtip,
            ligandApproved = l.approved,
            ligandImmunoComments = parseOrError(l.immuno_comments),
            ligandClinicalComments = parseOrError(l.clinical_use),
-           ligandBioactivityComments = parseOrError(l.bioactivity_comments));
+           ligandBioactivityComments = parseOrError(l.bioactivity_comments),
+           ligandShowComments = true);
         var (iCommentRefs, _) = RenderMarkup.collectIds(res.ligandImmunoComments);
         var (cCommentRefs, _) = RenderMarkup.collectIds(res.ligandClinicalComments);
         var (bCommentRefs, _) = RenderMarkup.collectIds(res.ligandBioactivityComments);
@@ -149,14 +240,27 @@ fun getModel(diseaseId) {
         (res :: ligands, refs)
     }, ([], []), rawResult.ligands);
 
+    var ligandsTable = DataTable.makeTable(
+        [("Ligand", true), ("", false), ("", false), ("References", false),
+         ("Clinical and Disease Comments", false)],
+        ligands,
+        fun (cn, x) {
+          if (cn == "Ligand") {
+            x.ligandRawName
+          } else { "" }
+        },
+        fun (cn, dir) { SortLigands(cn, dir) }
+    );
+
     var referenceIds = uniquify(targetRefs ++ ligandRefs ++ immunoRefs);
-    # Generate a predicate to filter references
     (diID = rawResult.id,
      diName = name,
      diSynonyms = synonyms,
      diDescription = description,
+     diDatabaseLinks = (),
      diTargets = targets,
-     diLigands = ligands,
+     diLigands = ligandsTable,
+     diShowReferences = false,
      diReferences = queryReferences(referenceIds))
   }
 
@@ -164,4 +268,26 @@ fun getModel(diseaseId) {
     case [] -> Nothing
     case rawResult :: _ -> Just(parseRaw(rawResult))
   }
+}
+
+sig getInitialModel : () ~%~> Model
+fun getInitialModel() {
+  switch(lookup("diseaseId", environment())) {
+    case Just(diseaseId) ->
+      if (isInt(diseaseId)) {
+        getModel(stringToInt(diseaseId))
+      } else {
+        Nothing
+      }
+    case Nothing -> Nothing
+  }
+}
+
+fun view(_) {
+  MvuHTML.empty
+}
+
+fun mainPage() {
+  Mvu.runSimple("vdom_placeholder", getInitialModel(), view, updt);
+  template("Disase Information")
 }
