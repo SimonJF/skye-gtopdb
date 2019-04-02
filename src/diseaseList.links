@@ -61,7 +61,7 @@ fun getDiseaseResults(filterType) {
               [d2s.synonym],
           drLigandCount=
             length(
-              for (d2l <-- Tables.drug2disease)
+              for (d2l <-- Tables.immuno_disease2ligand)
                 where (d2l.disease_id == d.disease_id)
                 [d2l]),
           drTargetCount=

@@ -1,4 +1,3 @@
-open Reference;
 open Parser;
 open RenderMarkup;
 open Utility;
@@ -8,8 +7,7 @@ open MvuAttrs;
 open Tables;
 open Mvu;
 open Template;
-
-typename Reference = Reference.Reference;
+open Reference;
 
 typename LigandID = Int;
 typename TargetID = Int;
@@ -70,7 +68,7 @@ typename DiseaseInfo =
    diTargets: [Target],
    diLigands: SortableTable(Ligand, Message),
    diShowReferences: Bool,
-   diReferences: [Reference]);
+   diReferences: [Reference.Reference]);
 
 typename Model = Maybe(DiseaseInfo);
 
@@ -149,21 +147,21 @@ fun getModel(diseaseId) {
                           [pp_ref.reference_id],
                       interactions =
                         for (i <-- Tables.interaction)
+                          where (o.object_id == i.object_id)
                           for (id2l <-- Tables.immuno_disease2ligand)
+                            where (id2l.ligand_id == i.ligand_id)
                             for (l <-- Tables.ligand)
-                              where (o.object_id == i.object_id &&
-                                     id2l.ligand_id == i.ligand_id &&
-                                     l.ligand_id == i.ligand_id)
-                                [(lId = i.ligand_id, lName = l.name,
+                              where (l.ligand_id == i.ligand_id)
+                                [(lId = l.ligand_id, lName = l.name,
                                   lImmuno = l.in_gtip, lApproved = l.approved,
                                   lPrimary = i.primary_target,
-                                  lComments=id2l.comment)]
+                                  lComments = id2l.comment)]
                      )],
             ligands =
-              for (d2d <-- Tables.drug2disease)
-                where (d2d.disease_id == diseaseId)
+              for (d2l <-- Tables.immuno_disease2ligand)
+                where (d2l.disease_id == diseaseId)
                   for (l <-- Tables.ligand)
-                    where (l.ligand_id == d2d.ligand_id)
+                    where (l.ligand_id == d2l.ligand_id)
                     [l]
           )]
     };
@@ -283,8 +281,75 @@ fun getInitialModel() {
   }
 }
 
-fun view(_) {
-  MvuHTML.empty
+fun view(model) {
+  var a0 = MvuAttrs.empty;
+  fun viewModel(model) {
+    fun colspan(x) { MvuAttrs.attr("colSpan", x) }
+    fun rowspan(x) { MvuAttrs.attr("rowSpan", x) }
+    fun src(x) { MvuAttrs.attr("src", x) }
+    fun valign(x) { MvuAttrs.attr("valign", x) }
+    var renderedName = RenderMarkup.renderSimple(model.diName);
+    var diseaseInfoBox = {
+      var targetCount = length(model.diTargets);
+      var immunoTargetCount =
+        length(filter(fun(t) {
+              length(DataTable.getTableData(t.targetInteractions)) > 0 },
+            model.diTargets));
+      var immunoLigandCount =
+        length(filter(fun(l) { l.ligandImmuno },
+              DataTable.getTableData(model.diLigands)));
+      var synonyms = MvuHTML.concat(join([textNode(" | ")],
+            map(fun(x) { [RenderMarkup.renderSimple(x)] }, model.diSynonyms)));
+
+      h4(a0, renderedName) +*
+      div(class("contentboxfullhelp"),
+        div(class("imageleft"), textNode("?")) +*
+        div(class("textright"),
+          table_(a0,
+            tr(a0,
+              td(a0, b(a0, textNode("Disease ID:"))) +*
+              td(a0, textNode(intToString(model.diID)))) +*
+            tr(a0,
+              td(a0, b(a0, textNode("Name:"))) +*
+              td(colspan("2") +@ width("280"), renderedName)) +*
+            tr(a0,
+              td(rowspan("3") +@ valign("top"), b(a0, textNode("Associated with:"))) +*
+              td(width("180"), b(a0, textNode(intToString(targetCount))) +*
+                textNode(" targets"))) +*
+            tr(a0,
+              td(width("180"), b(a0, textNode(intToString(immunoTargetCount))) +*
+                textNode(" immuno-relevant targets")) +*
+              td(rowspan("2") +@ valign("middle"),
+                img(src("/images/immuno_ligand.png"), MvuHTML.empty))) +*
+              td(width("180"), b(a0, textNode(intToString(immunoLigandCount))) +*
+                textNode(" immuno-relevant ligands")))) +*
+        div(class("data_tables_container"),
+            a(name("diseaseSynonyms"), MvuHTML.empty) +*
+            table_(class("receptor_data_tables fullwidth"),
+              thead(a0,
+                tr(name("hotspot") +@ class("hotspot"),
+                  td(class("info category"), textNode("Synonyms")))) +*
+              tbody(name("toggle"),
+                tr(a0, td(class("info"), synonyms)))) +*
+            a(name("diseaseLinks"), MvuHTML.empty) +*
+            table_(class("receptor_data_tables fullwidth"),
+              thead(a0,
+                tr(name("hotspot") +@ class("hotspot"),
+                  td(class("info category"), textNode("Database Links")))) +*
+              tbody(name("toggle"),
+                tr(a0, td(class("info"), textNode("Not implemented yet")))))))
+    };
+
+    div(class("grid_12"),
+        div(class("grid_16 alpha"),
+          a(name("top"), MvuHTML.empty) +*
+          diseaseInfoBox))
+  }
+
+  switch(model) {
+    case Just(model) -> viewModel(model)
+    case Nothing -> textNode("Disease not found.")
+  }
 }
 
 fun mainPage() {
