@@ -341,24 +341,6 @@ fun view(model) {
     };
 
     fun makeTargetTable(target) {
-      # <table class="receptor_data_tables_disease fullwidth">
-      #     <thead>
-      #         <tr name="hotspot" class="hotspot">
-      #             <td class="info category" colspan="2">
-      #                 <a href="ObjectDisplayForward?objectId=236" />FZD<sub>8</sub>
-      #             </td>
-      #         </tr>
-      #     </thead>
-
-      #     <tbody>
-
-      #         <tr>
-      #             <td class="info immdislig">References:&nbsp;</td>
-      #             <td class="info"><a href='javascript:callRef("ReferenceDisplayForward?referenceId=24883&displayId=15", 960, 600)' title="15. Sonnet M, Claus R, Becker N, Zucknick M, Petersen J, Lipka DB, Oakes CC, Andrulis M, Lier A, Milsom MD et al.. (2014) Genome Med. 6 (4): 34">15</a></td>
-      #         </tr>
-
-      #     </tbody>
-      # </table>
 
       fun mkTextRow((name, markup)) {
         # FIXME: Ensure refernce map is propagated in model, so it can be used here
