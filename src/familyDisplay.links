@@ -638,12 +638,10 @@ fun getInitialModel() {
                                  i_affinity_median=i.affinity_median,
                                  i_affinity_high=i.affinity_high,
                                  i_affinity_units=i.affinity_units,
-                                 # Unforunately, this doesn't work: we get an int_of_string
-                                 # runtime error. I think this must be a bug.
-                                 i_references=[-1]
-                        #           for (ar <-- Tables.interaction_affinity_refs)
-                        #             where (ar.interaction_id == i.interaction_id)
-                        #             [ar.reference_id]
+                                 i_references=
+                                   for (ar <-- Tables.interaction_affinity_refs)
+                                     where (ar.interaction_id == i.interaction_id)
+                                     [ar.reference_id]
                                 ) ],
                    displayOrder=r2f.display_order)
                 ]
@@ -657,18 +655,13 @@ fun getInitialModel() {
         var objects = map(fun(r) {
             fun getInteractions() {
               map(fun(i) {
-                  var references = query {
-                    for (ar <-- Tables.interaction_affinity_refs)
-                      where (ar.interaction_id == i.i_id)
-                      [ar.reference_id]
-                  };
                   var affinity =
                     (affinityUnits=i.i_affinity_units, affinityLow=i.i_affinity_low,
                      affinityMedian=i.i_affinity_median, affinityHigh=i.i_affinity_high);
 
                   makeInteraction(i.i_id, parseOrError(i.i_name), i.i_type,
                       i.i_action, i.i_selectivity, i.i_labelled, i.i_endogenous,
-                      i.i_species_id, references, affinity)
+                      i.i_species_id, i.i_references, affinity)
               }, r.interactions)
             }
 

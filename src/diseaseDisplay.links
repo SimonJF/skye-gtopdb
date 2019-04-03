@@ -141,10 +141,10 @@ fun getModel(diseaseId) {
                     [(id=o.object_id, name=o.name, comments=pp.comments,
                       role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
                       therapeuticUse=pp.use,
-                      references =
-                        for (pp_ref <-- Tables.pathophysiology_refs)
-                          where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
-                          [pp_ref.reference_id],
+                       references =
+                         for (pp_ref <-- Tables.pathophysiology_refs)
+                           where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
+                           [pp_ref.reference_id],
                       interactions =
                         for (i <-- Tables.interaction)
                           where (o.object_id == i.object_id)
@@ -340,10 +340,72 @@ fun view(model) {
                 tr(a0, td(class("info"), textNode("Not implemented yet")))))))
     };
 
+    fun makeTargetTable(target) {
+      # <table class="receptor_data_tables_disease fullwidth">
+      #     <thead>
+      #         <tr name="hotspot" class="hotspot">
+      #             <td class="info category" colspan="2">
+      #                 <a href="ObjectDisplayForward?objectId=236" />FZD<sub>8</sub>
+      #             </td>
+      #         </tr>
+      #     </thead>
+
+      #     <tbody>
+
+      #         <tr>
+      #             <td class="info immdislig">References:&nbsp;</td>
+      #             <td class="info"><a href='javascript:callRef("ReferenceDisplayForward?referenceId=24883&displayId=15", 960, 600)' title="15. Sonnet M, Claus R, Becker N, Zucknick M, Petersen J, Lipka DB, Oakes CC, Andrulis M, Lier A, Milsom MD et al.. (2014) Genome Med. 6 (4): 34">15</a></td>
+      #         </tr>
+
+      #     </tbody>
+      # </table>
+
+      fun mkTextRow((name, markup)) {
+        # FIXME: Ensure refernce map is propagated in model, so it can be used here
+        var renderedMarkup = renderMarkup(markup, [], []);
+        if (renderedMarkup == MvuHTML.empty) {
+          MvuHTML.empty
+        } else {
+          tr(a0,
+            td(class("info immdislig"), textNode(name ^^ ": ")) +*
+            td(class("info"), renderedMarkup))
+        }
+      }
+
+      var textRows =
+        MvuHTML.concat(map(mkTextRow, [
+          ("Role", target.targetRole),
+          ("Comments", target.targetComments),
+          ("Drug comments", target.targetDrugComments),
+          ("Side effects", target.targetSideEffects),
+          ("Therapeutic use", target.targetTherapeuticUse)
+        ]));
+
+      table_(class("receptor_data_tables_disease fullwidth"),
+          thead(a0,
+            tr(name("hotspot") +@ class("hotspot"),
+              td(class("info category") +@ attr("colSpan", "2"),
+                a(href("/objectDisplay?objectId=" ^^ (intToString(target.targetId))),
+                  renderSimple(target.targetName))))) +*
+          tbody(a0, textRows))
+    }
+
+    var targetsBox = {
+      var targetTables = MvuHTML.concat(map(makeTargetTable, model.diTargets));
+      div(class("grid_16 alpha"),
+          h4(a0, textNode("Targets")) +*
+          div(class("contentboxfullhelp"),
+            div(class("disease_data_tables_container"),
+              targetTables)))
+    };
+
+
     div(class("grid_12"),
         div(class("grid_16 alpha"),
           a(name("top"), MvuHTML.empty) +*
-          diseaseInfoBox))
+          diseaseInfoBox +*
+          targetsBox
+          ))
   }
 
   switch(model) {
@@ -354,5 +416,5 @@ fun view(model) {
 
 fun mainPage() {
   Mvu.runSimple("vdom_placeholder", getInitialModel(), view, updt);
-  template("Disase Information")
+  template("Disease Information")
 }
