@@ -40,6 +40,27 @@ fun uniquify(xs) {
   reverse(fold_left(fun(xs, x) { uniqueCons(x, xs) }, [], xs))
 }
 
+#sig elemBy : ((a, a) ~> Bool, a, [a]) ~> Bool
+fun elemBy(f, x, xs) {
+  switch(xs) {
+    case [] -> false
+    case y :: ys -> if (f(x, y)) { true } else { elemBy(f, x, ys) }
+  }
+}
+
+#sig uniquifyBy : ((a, a) ~> Bool, [a]) ~> [a]
+fun uniquifyBy(f, xs) {
+
+  fun uniqueCons(x, xs) {
+    if (elemBy(f, x, xs)) {
+      xs
+    } else {
+      x :: xs
+    }
+  }
+  reverse(fold_left(fun(xs, x) { uniqueCons(x, xs) }, [], xs))
+}
+
 
 fun cmpName(name) {
   # Firstly, strip &..; tags

@@ -48,12 +48,12 @@ typename ImmunoTargetInteraction = (
     itLigandRawComments: String
   );
 
-# FIXME: Need Ligand interactions here
 typename Target = (
     targetId: TargetID,
     targetName: Markup,
     targetRole: Markup,
     targetComments: Markup,
+    targetImmunoComments: Markup,
     targetDrugComments: Markup,
     targetSideEffects: Markup,
     targetTherapeuticUse: Markup,
@@ -139,8 +139,13 @@ fun getModel(diseaseId) {
               for (pp <-- Tables.pathophysiology)
                 where (pp.disease_id == diseaseId)
                 for (o <-- Tables.object)
+                # TODO: immuno_disease2object contains comments
                   where (o.object_id == pp.object_id)
                     [(id=o.object_id, name=o.name, comments=pp.comments,
+                      immunoComments=
+                        for (id2o <-- Tables.immuno_disease2object)
+                          where (id2o.disease_id == diseaseId && id2o.object_id == o.object_id)
+                          [id2o.comment],
                       role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
                       therapeuticUse=pp.use,
                        references =
@@ -164,7 +169,15 @@ fun getModel(diseaseId) {
                 where (d2l.disease_id == diseaseId)
                   for (l <-- Tables.ligand)
                     where (l.ligand_id == d2l.ligand_id)
-                    [l]
+                    [
+                      (lId= l.ligand_id,
+                       lName = l.name,
+                       lImmuno = l.in_gtip,
+                       lApproved = l.approved,
+                       lImmunoComments = l.immuno_comments,
+                       lClinicalComments = l.clinical_use,
+                       lBioactivityComments = l.bioactivity_comments)
+                    ]
           )]
     };
 
@@ -191,6 +204,9 @@ fun getModel(diseaseId) {
                 RenderMarkup.collectIds(interaction.itLigandComments);
               (interaction :: interactions, newRefs ++ refs)
           }, ([], []), x.interactions);
+        var immunoInteractions =
+          uniquifyBy(fun(x, y) { x.itLigandRawName == y.itLigandRawName },
+              immunoInteractions);
 
         var interactionsTable =
           DataTable.makeTable(
@@ -210,6 +226,8 @@ fun getModel(diseaseId) {
            targetId = x.id,
            targetName = parseOrError(x.name),
            targetComments = parseOrError(x.comments),
+           targetImmunoComments =
+             fold_right(fun(comment, acc) { MarkupAppend(parseOrError(comment), acc) }, MarkupEmpty, x.immunoComments),
            targetRole = parseOrError(x.role),
            targetDrugComments = parseOrError(x.drugComments),
            targetSideEffects = parseOrError(x.sideEffects),
@@ -217,21 +235,23 @@ fun getModel(diseaseId) {
            targetReferences = x.references,
            targetInteractions = interactionsTable
           );
+        debug("Target comments: " ^^ x.comments);
         var (refIds, _) = RenderMarkup.collectIds(res.targetComments);
         var refIds = refIds ++ x.references;
         (res :: targets, refIds ++ refs, immunoRefs ++ iRefs)
     }, ([], [], []), rawResult.targets);
+    var targets = sortBy(fun(t) { t.targetId }, targets);
 
     var (ligands, ligandRefs) = fold_right(fun(l, (ligands, refs)) {
         var res =
-          (ligandId = l.ligand_id,
-           ligandName = parseOrError(l.name),
-           ligandRawName = l.name,
-           ligandImmuno = l.in_gtip,
-           ligandApproved = l.approved,
-           ligandImmunoComments = parseOrError(l.immuno_comments),
-           ligandClinicalComments = parseOrError(l.clinical_use),
-           ligandBioactivityComments = parseOrError(l.bioactivity_comments),
+          (ligandId = l.lId,
+           ligandName = parseOrError(l.lName),
+           ligandRawName = l.lName,
+           ligandImmuno = l.lImmuno,
+           ligandApproved = l.lApproved,
+           ligandImmunoComments = parseOrError(l.lImmunoComments),
+           ligandClinicalComments = parseOrError(l.lClinicalComments),
+           ligandBioactivityComments = parseOrError(l.lBioactivityComments),
            ligandShowComments = true);
         var (iCommentRefs, _) = RenderMarkup.collectIds(res.ligandImmunoComments);
         var (cCommentRefs, _) = RenderMarkup.collectIds(res.ligandClinicalComments);
@@ -376,24 +396,6 @@ fun view(model) {
                   div(style("padding:3px; word-wrap: break-word; overflow: hidden;"),
                     renderMarkup(it.itLigandComments, [], []))))
           }
-           #<tr class="info">
-           #  <td style="border-style: solid solid solid solid; text-wrap:normal; overflow-wrap:break-word; word-break: break-all; min-width:80px;" valign="baseline">
-           #    <a href="LigandDisplayForward?tab=biology&ligandId=7882">
-           #      <b>crenolanib</b>
-           #    </a>
-           #  </td>
-           #  <td style="border-style: solid none solid none;padding:1px;width:20px;text-align:center;"> </td>
-           #  <td style="border-style: solid none solid none;padding:1px;width:20px;text-align:center;"> </td>
-           #  <td style="border-style: solid solid solid none;padding:1px;width:22px;text-align:center;">
-           #    <a style="color:white;" title="Immunopharmacology Ligand">
-           #    <img id="logo" src="images/immuno_ligand.png" alt="Immunopharmacology Ligand"/> </a>
-           #  </td>
-           #  <td class="info" title="immuno ligand disease association comment" valign="middle" style="min-width:100px;">
-           #    <div style="padding: 3px; word-wrap: break-word; overflow: hidden;">
-           #      Phase 3 clinical candidate for FLT3 mutation positive relapsed/refractory AML.
-           #    </div>
-           #  </td>
-           #</tr>
           tr(a0,
               td(class("info immdislig"), textNode("Ligand interactions: ")) +*
               td(class("table_container"),
@@ -405,6 +407,7 @@ fun view(model) {
         MvuHTML.concat(map(mkTextRow, [
           ("Role", target.targetRole),
           ("Comments", target.targetComments),
+          ("Comments", target.targetImmunoComments),
           ("Drug comments", target.targetDrugComments),
           ("Side effects", target.targetSideEffects),
           ("Therapeutic use", target.targetTherapeuticUse)
