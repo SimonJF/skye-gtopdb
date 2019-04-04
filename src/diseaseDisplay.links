@@ -1,3 +1,5 @@
+# Hack: "empty" is shadowed by MvuHTML.* and MvuAttrs.*,
+# and we can't refer to the prelude yet
 open Parser;
 open RenderMarkup;
 open Utility;
@@ -354,6 +356,51 @@ fun view(model) {
         }
       }
 
+      var interactionsRow = {
+        var data = DataTable.getTableData(target.targetInteractions);
+        if (listEmpty(data)) {
+          MvuHTML.empty
+        } else {
+          fun renderRow(it) {
+            var imgCols =
+              MvuHTML.concat(map(boolImage,
+                [("/images/approved.png", it.itLigandApproved, "Approved"),
+                 ("/images/primary.png", it.itLigandPrimary, "Primary target"),
+                 ("/images/immuno_ligand.png", it.itLigandImmuno, "Immunopharmacology ligand")]));
+
+            tr(class("info"),
+                td(style("border-style: solid solid solid solid; text-wrap:normal; overflow-wrap:break-word; word-break: break-all; min-width:80px;"),
+                  a(href("ligandDisplay?ligandId=" ^^ intToString(it.itLigandId)), b(a0, renderSimple(it.itLigandName)))) +*
+                imgCols +*
+                td(class("info") +@ style("min-width:100px;"),
+                  div(style("padding:3px; word-wrap: break-word; overflow: hidden;"),
+                    renderMarkup(it.itLigandComments, [], []))))
+          }
+           #<tr class="info">
+           #  <td style="border-style: solid solid solid solid; text-wrap:normal; overflow-wrap:break-word; word-break: break-all; min-width:80px;" valign="baseline">
+           #    <a href="LigandDisplayForward?tab=biology&ligandId=7882">
+           #      <b>crenolanib</b>
+           #    </a>
+           #  </td>
+           #  <td style="border-style: solid none solid none;padding:1px;width:20px;text-align:center;"> </td>
+           #  <td style="border-style: solid none solid none;padding:1px;width:20px;text-align:center;"> </td>
+           #  <td style="border-style: solid solid solid none;padding:1px;width:22px;text-align:center;">
+           #    <a style="color:white;" title="Immunopharmacology Ligand">
+           #    <img id="logo" src="images/immuno_ligand.png" alt="Immunopharmacology Ligand"/> </a>
+           #  </td>
+           #  <td class="info" title="immuno ligand disease association comment" valign="middle" style="min-width:100px;">
+           #    <div style="padding: 3px; word-wrap: break-word; overflow: hidden;">
+           #      Phase 3 clinical candidate for FLT3 mutation positive relapsed/refractory AML.
+           #    </div>
+           #  </td>
+           #</tr>
+          tr(a0,
+              td(class("info immdislig"), textNode("Ligand interactions: ")) +*
+              td(class("table_container"),
+                DataTable.renderTable(target.targetInteractions, renderRow)))
+        }
+      };
+
       var textRows =
         MvuHTML.concat(map(mkTextRow, [
           ("Role", target.targetRole),
@@ -369,7 +416,10 @@ fun view(model) {
               td(class("info category") +@ attr("colSpan", "2"),
                 a(href("/objectDisplay?objectId=" ^^ (intToString(target.targetId))),
                   renderSimple(target.targetName))))) +*
-          tbody(a0, textRows))
+          tbody(a0,
+            textRows +*
+            interactionsRow
+          ))
     }
 
     var targetsBox = {

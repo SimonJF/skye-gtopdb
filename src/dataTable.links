@@ -59,7 +59,7 @@ fun renderTable(tbl, renderRow) {
           ""
         };
 
-      th(class("tablesorter-header " ^^ sorterClass)
+      th(class("ligand_header header tablesorter-header " ^^ sorterClass)
           +@ style("border-style:solid solid solid solid;")
           +@ onClick(fun() { sortMsg }),
           textNode(name))
@@ -71,7 +71,7 @@ fun renderTable(tbl, renderRow) {
   }
 
   var headers = MvuHTML.concat(map(renderHeader, tbl.tableColumns));
-  var renderedRows = MvuHTML.concat(map(renderRow, tbl.tableRows));
+  var renderedRows = MvuHTML.concat(map(renderRow, sortedData));
 
   table_(class("tablesorter inner_receptor_data_tables"),
       thead(a0,

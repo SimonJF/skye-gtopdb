@@ -191,20 +191,6 @@ fun view(model) {
     fun height(val) { MvuAttrs.attr("height", val) }
 
     fun makeRow(lr) {
-      fun boolImage((imgSrc, enabled, altText)) {
-        if (enabled) {
-          td(class("info") +@
-             style("border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
-            a(style("color:white") +@ title(altText),
-              img(src(imgSrc) +@ width("16") +@ height("16") +@ alt(altText), MvuHTML.empty)))
-        } else {
-          td(class("info") +@
-             style("border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
-             MvuHTML.empty
-          )
-        }
-      }
-
       var name =
         td(class("info") +@
            style("border-style: solid dotted solid solid; font-size:97%; text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@

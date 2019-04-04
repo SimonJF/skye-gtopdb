@@ -1,3 +1,5 @@
+fun listEmpty(xs) { empty(xs) }
+fun listSpan(f, xs) { span(f, xs) }
 ## Useful in defining list predicates in LINQ.
 # sig contains : ([a]) ~> ((a) {}-> Bool)
 # fun contains(l) {
@@ -6,7 +8,8 @@
 #     case x::xs -> fun (y) { x == y || contains(xs)(x) }
 #   }
 # }
-
+open MvuHTML;
+open MvuAttrs;
 
 sig contains : ([a]) ~> ((a) {}-> Bool)
 fun contains(xs) {
@@ -37,7 +40,6 @@ fun uniquify(xs) {
   reverse(fold_left(fun(xs, x) { uniqueCons(x, xs) }, [], xs))
 }
 
-fun listEmpty(xs) { empty(xs) }
 
 fun cmpName(name) {
   # Firstly, strip &..; tags
@@ -63,9 +65,25 @@ fun alphabetise(getString, transform, xs) {
               x == toLower(letter)
           }
         }
-        var (thisChunk, next) = span(fun(x) { safeCmp(getString(x)) }, remaining);
+        var (thisChunk, next) = listSpan(fun(x) { safeCmp(getString(x)) }, remaining);
         ((letter, (map(transform, thisChunk))) :: chunks, next)
     }, ([], xs), alphabet);
   reverse(chunks)
 }
 
+fun src(s) { MvuAttrs.attr("src", s) }
+fun alt(s) { MvuAttrs.attr("alt", s) }
+
+fun boolImage((imgSrc, enabled, altText)) {
+  if (enabled) {
+    td(class("info") +@
+       style("border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
+      a(style("color:white") +@ title(altText),
+        img(src(imgSrc) +@ width("16") +@ height("16") +@ alt(altText), MvuHTML.empty)))
+  } else {
+    td(class("info") +@
+       style("border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
+       MvuHTML.empty
+    )
+  }
+}
