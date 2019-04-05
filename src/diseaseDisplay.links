@@ -53,7 +53,6 @@ typename Target = (
     targetName: Markup,
     targetRole: Markup,
     targetComments: Markup,
-    targetImmunoComments: Markup,
     targetDrugComments: Markup,
     targetSideEffects: Markup,
     targetTherapeuticUse: Markup,
@@ -122,6 +121,35 @@ fun updt(msg, model) {
 
 sig getModel : (Int) ~%~> Model
 fun getModel(diseaseId) {
+  fun mkPathoTarget(o, pp) {
+    [(id=o.object_id, name=o.name, comments=pp.comments,
+      role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
+      therapeuticUse=pp.use,
+      references =
+        for (pp_ref <-- Tables.pathophysiology_refs)
+          where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
+          [pp_ref.reference_id],
+      interactions = [-1])]
+  }
+
+  fun mkImmunoTarget(o, id2o) {
+    [(id=o.object_id, name=o.name,
+      comments=id2o.comment,
+      role="", drugComments="", sideEffects="", therapeuticUse="",
+      references = [-1], # TODO
+      interactions =
+        for (i <-- Tables.interaction)
+          where (o.object_id == i.object_id)
+          for (id2l <-- Tables.immuno_disease2ligand)
+            where (id2l.ligand_id == i.ligand_id && id2l.disease_id == diseaseId)
+            for (l <-- Tables.ligand)
+              where (l.ligand_id == i.ligand_id)
+                [(lId = l.ligand_id, lName = l.name,
+                  lImmuno = l.in_gtip, lApproved = l.approved,
+                  lPrimary = i.primary_target,
+                  lComments = id2l.comment)])]
+  }
+
   # First, get raw info from the DB
   var rawInfo =
     query {
@@ -135,34 +163,18 @@ fun getModel(diseaseId) {
                 [d2s.synonym],
             description = d.description,
             dblinks = (), # FIXME
-            targets =
+            patho_targets =
               for (pp <-- Tables.pathophysiology)
                 where (pp.disease_id == diseaseId)
+                  for (o <-- Tables.object)
+                    where (o.object_id == pp.object_id)
+                    mkPathoTarget(o, pp),
+            immuno_targets =
+              for (id2o <-- Tables.immuno_disease2object)
+                where (id2o.disease_id == diseaseId)
                 for (o <-- Tables.object)
-                  where (o.object_id == pp.object_id)
-                    [(id=o.object_id, name=o.name, comments=pp.comments,
-                      immunoComments=
-                        for (id2o <-- Tables.immuno_disease2object)
-                          where (id2o.disease_id == diseaseId && id2o.object_id == o.object_id)
-                          [id2o.comment],
-                      role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
-                      therapeuticUse=pp.use,
-                       references =
-                         for (pp_ref <-- Tables.pathophysiology_refs)
-                           where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
-                           [pp_ref.reference_id],
-                      interactions =
-                        for (i <-- Tables.interaction)
-                          where (o.object_id == i.object_id)
-                          for (id2l <-- Tables.immuno_disease2ligand)
-                            where (id2l.ligand_id == i.ligand_id && id2l.disease_id == diseaseId)
-                            for (l <-- Tables.ligand)
-                              where (l.ligand_id == i.ligand_id)
-                                [(lId = l.ligand_id, lName = l.name,
-                                  lImmuno = l.in_gtip, lApproved = l.approved,
-                                  lPrimary = i.primary_target,
-                                  lComments = id2l.comment)]
-                     )],
+                  where (o.object_id == id2o.object_id)
+                    mkImmunoTarget(o, id2o),
             ligands =
               for (d2l <-- Tables.immuno_disease2ligand)
                 where (d2l.disease_id == diseaseId)
@@ -173,7 +185,7 @@ fun getModel(diseaseId) {
                        lName = l.name,
                        lImmuno = l.in_gtip,
                        lApproved = l.approved,
-                       lImmunoComments = l.immuno_comments,
+                       lImmunoComments = d2l.comment,
                        lClinicalComments = l.clinical_use,
                        lBioactivityComments = l.bioactivity_comments)
                     ]
@@ -185,6 +197,30 @@ fun getModel(diseaseId) {
     var name = parseOrError(rawResult.name);
     var synonyms = map(parseOrError, rawResult.synonyms);
     var description = parseOrError(rawResult.description);
+    # We may get multiple results for targets, given that they may be in both
+    # immuno and pathophysiology tables, or one. If they are in both, we need
+    # to merge the results.
+    var groupedTargets =
+      groupByFlat(fun(target) { target.id },
+        rawResult.patho_targets ++ rawResult.immuno_targets);
+    # Now we've grouped, we need to merge
+    var targets = map(fun((_, group)) {
+        switch(group) {
+          case [] -> error("Error in groupBy")
+          case [x] -> x
+          case x :: y :: _ ->
+            # Slightly hacky for now (some unneeded spaces etc)
+            (id=x.id,
+              name=x.name,
+              comments=x.comments ^^ " " ^^ y.comments,
+              role=x.role ^^ " " ^^ y.role,
+              drugComments=x.drugComments ^^ " " ^^ y.drugComments,
+              sideEffects=x.sideEffects ^^ " " ^^ y.sideEffects,
+              therapeuticUse=x.therapeuticUse ^^ " " ^^ y.therapeuticUse,
+              references = x.references ++ y.references,
+              interactions = x.interactions ++ y.interactions)
+        }
+    }, groupedTargets);
     var (targets, targetRefs, immunoRefs) =
       fold_right(fun(x, (targets, refs, iRefs)) {
         var (immunoInteractions, immunoRefs) =
@@ -225,8 +261,6 @@ fun getModel(diseaseId) {
            targetId = x.id,
            targetName = parseOrError(x.name),
            targetComments = parseOrError(x.comments),
-           targetImmunoComments =
-             fold_right(fun(comment, acc) { MarkupAppend(parseOrError(comment), acc) }, MarkupEmpty, x.immunoComments),
            targetRole = parseOrError(x.role),
            targetDrugComments = parseOrError(x.drugComments),
            targetSideEffects = parseOrError(x.sideEffects),
@@ -237,8 +271,7 @@ fun getModel(diseaseId) {
         var (refIds, _) = RenderMarkup.collectIds(res.targetComments);
         var refIds = refIds ++ x.references;
         (res :: targets, refIds ++ refs, immunoRefs ++ iRefs)
-    }, ([], [], []), rawResult.targets);
-    var targets = uniquifyBy(fun(t1, t2) { t1.targetId == t2.targetId }, targets);
+    }, ([], [], []), targets);
     var targets = sortBy(fun(t) { t.targetId }, targets);
 
     var (ligands, ligandRefs) = fold_right(fun(l, (ligands, refs)) {
@@ -406,7 +439,6 @@ fun view(model) {
         MvuHTML.concat(map(mkTextRow, [
           ("Role", target.targetRole),
           ("Comments", target.targetComments),
-          ("Comments", target.targetImmunoComments),
           ("Drug comments", target.targetDrugComments),
           ("Side effects", target.targetSideEffects),
           ("Therapeutic use", target.targetTherapeuticUse)
