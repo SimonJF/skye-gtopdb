@@ -139,7 +139,6 @@ fun getModel(diseaseId) {
               for (pp <-- Tables.pathophysiology)
                 where (pp.disease_id == diseaseId)
                 for (o <-- Tables.object)
-                # TODO: immuno_disease2object contains comments
                   where (o.object_id == pp.object_id)
                     [(id=o.object_id, name=o.name, comments=pp.comments,
                       immunoComments=
@@ -156,7 +155,7 @@ fun getModel(diseaseId) {
                         for (i <-- Tables.interaction)
                           where (o.object_id == i.object_id)
                           for (id2l <-- Tables.immuno_disease2ligand)
-                            where (id2l.ligand_id == i.ligand_id)
+                            where (id2l.ligand_id == i.ligand_id && id2l.disease_id == diseaseId)
                             for (l <-- Tables.ligand)
                               where (l.ligand_id == i.ligand_id)
                                 [(lId = l.ligand_id, lName = l.name,
@@ -235,11 +234,11 @@ fun getModel(diseaseId) {
            targetReferences = x.references,
            targetInteractions = interactionsTable
           );
-        debug("Target comments: " ^^ x.comments);
         var (refIds, _) = RenderMarkup.collectIds(res.targetComments);
         var refIds = refIds ++ x.references;
         (res :: targets, refIds ++ refs, immunoRefs ++ iRefs)
     }, ([], [], []), rawResult.targets);
+    var targets = uniquifyBy(fun(t1, t2) { t1.targetId == t2.targetId }, targets);
     var targets = sortBy(fun(t) { t.targetId }, targets);
 
     var (ligands, ligandRefs) = fold_right(fun(l, (ligands, refs)) {
