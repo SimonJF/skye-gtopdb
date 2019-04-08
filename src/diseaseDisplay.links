@@ -412,7 +412,6 @@ fun view(model) {
       var synonyms = MvuHTML.concat(join([textNode(" | ")],
             map(fun(x) { [RenderMarkup.renderSimple(x)] }, model.diSynonyms)));
 
-      var dbLinks = MvuHTML.empty;
      #  var dbLinks =
      #    MvuHTML.concat(map(fun(link) {
      #      p(a0,

@@ -5,10 +5,12 @@ open MvuAttrs;
 open Utility;
 open Tables;
 
+typename ReferenceID = Int;
+typename ReferenceNumber = Int;
 typename ReferenceType = [| Journal | Other |];
 
 typename Reference = (
-  referenceId: Int,
+  referenceId: ReferenceID,
   referenceType: String,
   journalName: String,
   title: String,
