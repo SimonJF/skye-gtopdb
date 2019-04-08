@@ -122,6 +122,8 @@ fun updt(msg, model) {
 sig getModel : (Int) ~%~> Model
 fun getModel(diseaseId) {
   fun mkPathoTarget(o, pp) {
+    var dummy_interaction = (lId = (-1), lName = "",
+        lImmuno = false, lApproved = false, lPrimary = false, lComments = "");
     [(id=o.object_id, name=o.name, comments=pp.comments,
       role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
       therapeuticUse=pp.use,
@@ -129,7 +131,7 @@ fun getModel(diseaseId) {
         for (pp_ref <-- Tables.pathophysiology_refs)
           where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
           [pp_ref.reference_id],
-      interactions = [-1])]
+      interactions = [dummy_interaction])] # Horrid hack until we get the empty list bug sorted
   }
 
   fun mkImmunoTarget(o, id2o) {
@@ -205,22 +207,34 @@ fun getModel(diseaseId) {
         rawResult.patho_targets ++ rawResult.immuno_targets);
     # Now we've grouped, we need to merge
     var targets = map(fun((_, group)) {
+        fun removeDummyInteractions(interactions) {
+          filter(fun(x) { not(x.lId == (-1)) }, interactions)
+        }
+        fun concatComments(x, y) {
+          switch((x, y)) {
+            case ("", x) -> x
+            case (y, "") -> y
+            case (x, y) -> x ^^ " " ^^ y
+          }
+        }
         switch(group) {
           case [] -> error("Error in groupBy")
-          case [x] -> x
+          case [x] ->
+            (x with interactions = removeDummyInteractions(x.interactions))
           case x :: y :: _ ->
             # Slightly hacky for now (some unneeded spaces etc)
             (id=x.id,
               name=x.name,
-              comments=x.comments ^^ " " ^^ y.comments,
-              role=x.role ^^ " " ^^ y.role,
-              drugComments=x.drugComments ^^ " " ^^ y.drugComments,
-              sideEffects=x.sideEffects ^^ " " ^^ y.sideEffects,
-              therapeuticUse=x.therapeuticUse ^^ " " ^^ y.therapeuticUse,
+              comments=concatComments(x.comments, y.comments),
+              role=concatComments(x.role, y.role),
+              drugComments=concatComments(x.drugComments, y.drugComments),
+              sideEffects=concatComments(x.sideEffects, y.sideEffects),
+              therapeuticUse=concatComments(x.therapeuticUse, y.therapeuticUse),
               references = x.references ++ y.references,
-              interactions = x.interactions ++ y.interactions)
+              interactions = removeDummyInteractions(x.interactions ++ y.interactions))
         }
     }, groupedTargets);
+
     var (targets, targetRefs, immunoRefs) =
       fold_right(fun(x, (targets, refs, iRefs)) {
         var (immunoInteractions, immunoRefs) =
