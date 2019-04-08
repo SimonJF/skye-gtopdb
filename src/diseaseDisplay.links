@@ -1,5 +1,3 @@
-# Hack: "empty" is shadowed by MvuHTML.* and MvuAttrs.*,
-# and we can't refer to the prelude yet
 open Parser;
 open RenderMarkup;
 open Utility;
@@ -30,6 +28,7 @@ typename Ligand = (
     ligandImmuno: Bool,
     ligandApproved: Bool,
     ligandShowComments: Bool,
+    ligandReferences: [Int],
     ligandImmunoComments: Markup,
     ligandClinicalComments: Markup,
     ligandBioactivityComments: Markup
@@ -69,7 +68,8 @@ typename DiseaseInfo =
    diTargets: [Target],
    diLigands: SortableTable(Ligand, Message),
    diShowReferences: Bool,
-   diReferences: [Reference.Reference]);
+   diReferences: [(ReferenceId, (ReferenceNumber, Reference.Reference))]
+   );
 
 typename Model = Maybe(DiseaseInfo);
 
@@ -147,7 +147,11 @@ fun getModel(diseaseId) {
           [(id=o.object_id, name=o.name,
             comments=id2o.comment,
             role="", drugComments="", sideEffects="", therapeuticUse="",
-            references = [-1])]
+            references =
+              for (id2o_ref <-- Tables.immuno_disease2object_refs)
+                where (id2o_ref.immuno_disease2object_id == id2o.immuno_disease2object_id)
+                [id2o_ref.reference_id]
+          )]
     }
   }
 
@@ -299,6 +303,15 @@ fun getModel(diseaseId) {
     var targets = sortBy(fun(t) { t.targetId }, targets);
 
     var (ligands, ligandRefs) = fold_right(fun(l, (ligands, refs)) {
+        var id2l_refs =
+          query {
+            for (id2l <-- Tables.immuno_disease2ligand)
+              where (id2l.disease_id == diseaseId && id2l.ligand_id == l.lId)
+              for (id2l_ref <-- Tables.immuno_disease2ligand_refs)
+                where (id2l.immuno_disease2ligand_id == id2l_ref.immuno_disease2ligand_id)
+                [id2l_ref.reference_id]
+          };
+
         var res =
           (ligandId = l.lId,
            ligandName = parseOrError(l.lName),
@@ -308,11 +321,12 @@ fun getModel(diseaseId) {
            ligandImmunoComments = parseOrError(l.lImmunoComments),
            ligandClinicalComments = parseOrError(l.lClinicalComments),
            ligandBioactivityComments = parseOrError(l.lBioactivityComments),
-           ligandShowComments = false);
+           ligandShowComments = false,
+           ligandReferences = id2l_refs);
         var (iCommentRefs, _) = RenderMarkup.collectIds(res.ligandImmunoComments);
         var (cCommentRefs, _) = RenderMarkup.collectIds(res.ligandClinicalComments);
         var (bCommentRefs, _) = RenderMarkup.collectIds(res.ligandBioactivityComments);
-        var refs = iCommentRefs ++ cCommentRefs ++ bCommentRefs ++ refs;
+        var refs = id2l_refs ++ iCommentRefs ++ cCommentRefs ++ bCommentRefs ++ refs;
         (res :: ligands, refs)
     }, ([], []), rawResult.ligands);
 
@@ -337,7 +351,7 @@ fun getModel(diseaseId) {
      diTargets = targets,
      diLigands = ligandsTable,
      diShowReferences = false,
-     diReferences = queryReferences(referenceIds))
+     diReferences = mkReferenceData(queryReferences(referenceIds)))
   }
 
   switch (rawInfo) {
@@ -422,8 +436,7 @@ fun view(model) {
     fun makeTargetTable(target) {
 
       fun mkTextRow((name, markup)) {
-        # FIXME: Ensure refernce map is propagated in model, so it can be used here
-        var renderedMarkup = renderMarkup(markup, [], []);
+        var renderedMarkup = renderMarkup(markup, model.diReferences, []);
         if (renderedMarkup == MvuHTML.empty) {
           MvuHTML.empty
         } else {
@@ -499,14 +512,16 @@ fun view(model) {
 
         var toggleCol = {
           var arrowClass = if (ligand.ligandShowComments) { "arrow up" } else { "arrow down" };
-          td(style("min-width:30px;width:120px;") +@ valign("middle"),
-            a(class("toggle") +@ onClick(fun () { ToggleLigandComments(ligand.ligandId) }),
+          td(style("min-width:30px;width:120px;")
+              +@ valign("middle")
+              +@ onClick(fun () { ToggleLigandComments(ligand.ligandId) }),
+            a(class("toggle"),
               div(class(arrowClass), MvuHTML.empty)))
         };
 
         var commentsRow = {
           fun renderComment((name, markup)) {
-            var rendered = renderSimple(markup);
+            var rendered = renderMarkup(markup, model.diReferences, []);
             if (rendered == MvuHTML.empty) {
               MvuHTML.empty
             } else {
@@ -525,10 +540,11 @@ fun view(model) {
           } else { MvuHTML.empty }
         };
 
-        var referencesCol = td(style("min-width:70px;width:70px;"), textNode("Not implemented yet"));
+        var referencesCol = td(style("min-width:70px;width:70px;"),
+            renderCitationList(ligand.ligandReferences, model.diReferences));
 
         tr(class("info tableSorter-hasChildRow") +@ role("row"),
-          td(style("borderstyle: solid solid solid solid; text-wrap:normal; overflow-wrap:break-word; word-break: break-all; min-width:50px;width:50px")
+          td(style("borderstyle: solid solid solid solid; text-wrap:normal; overflow-wrap:break-word; word-break: break-all; min-width:80px;")
               +@ valign("baseline"),
             a(href("/ligandDisplay?tab=summary&ligandId=" ^^ intToString(ligand.ligandId)), renderSimple(ligand.ligandName))) +*
           imgCols +*

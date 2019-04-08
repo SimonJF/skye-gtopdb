@@ -164,3 +164,7 @@ fun displayReferences(refs) {
     renderReference(prefixNode, ref)}, refs))
 }
 
+fun mkReferenceData(refList) {
+  mapi(fun(ref, i) { (ref.referenceId, (i, ref)) },
+    sortBy(fun(ref) { ref.authors }, refList))
+}

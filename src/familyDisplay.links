@@ -715,9 +715,7 @@ fun getInitialModel() {
         # References need to be numbered based on ordering.
         # This constructs a map from reference IDs to pairs of reference
         # numbers and references.
-        var referenceData =
-          mapi(fun(ref, i) { (ref.referenceId, (i, ref)) },
-            sortBy(fun(ref) { ref.authors }, references));
+        var referenceData = mkReferenceData(references);
 
         var ligands = query {
             for (l <-- ligand)
