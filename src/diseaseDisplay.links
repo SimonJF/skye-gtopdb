@@ -446,6 +446,11 @@ fun view(model) {
         }
       }
 
+      var referencesRow =
+        tr(a0,
+            td(class("info"), textNode("References: ")) +*
+            td(class("info"), renderCitationList(target.targetReferences, model.diReferences)));
+
       var interactionsRow = {
         var data = DataTable.getTableData(target.targetInteractions);
         if (listEmpty(data)) {
@@ -490,6 +495,7 @@ fun view(model) {
                   renderSimple(target.targetName))))) +*
           tbody(a0,
             textRows +*
+            referencesRow +*
             interactionsRow
           ))
     }
