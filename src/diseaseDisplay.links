@@ -138,11 +138,17 @@ fun getModel(diseaseId) {
     }
   }
 
-  fun mkImmunoTarget(o, id2o) {
-    [(id=o.object_id, name=o.name,
-      comments=id2o.comment,
-      role="", drugComments="", sideEffects="", therapeuticUse="",
-      references = [-1])] # TODO
+  fun getImmunoTargets() {
+    query {
+      for (id2o <-- Tables.immuno_disease2object)
+        where (id2o.disease_id == diseaseId)
+        for (o <-- Tables.object)
+          where (o.object_id == id2o.object_id)
+          [(id=o.object_id, name=o.name,
+            comments=id2o.comment,
+            role="", drugComments="", sideEffects="", therapeuticUse="",
+            references = [-1])]
+    }
   }
 
   # First, get raw info from the DB
@@ -159,12 +165,7 @@ fun getModel(diseaseId) {
             description = d.description,
             dblinks = (), # FIXME
             patho_targets = getPathoTargets(),
-            immuno_targets =
-              for (id2o <-- Tables.immuno_disease2object)
-                where (id2o.disease_id == diseaseId)
-                for (o <-- Tables.object)
-                  where (o.object_id == id2o.object_id)
-                    mkImmunoTarget(o, id2o),
+            immuno_targets = getImmunoTargets(),
             ligands =
               for (d2l <-- Tables.immuno_disease2ligand)
                 where (d2l.disease_id == diseaseId)
@@ -190,12 +191,18 @@ fun getModel(diseaseId) {
     # We may get multiple results for targets, given that they may be in both
     # immuno and pathophysiology tables, or one. If they are in both, we need
     # to merge the results.
-    var groupedTargets =
-      groupByFlat(fun(target) { target.id },
-        rawResult.patho_targets ++ rawResult.immuno_targets);
-
+    var allTargets = rawResult.patho_targets ++ rawResult.immuno_targets;
+    fun groupTargets(acc, rest) {
+      switch(rest) {
+        case [] -> acc
+        case x :: xs ->
+          var (group, others) = partition(fun(y) { y.id == x.id }, rest);
+          groupTargets(group :: acc, others)
+      }
+    }
+    var groupedTargets = groupTargets([], allTargets);
     # Now we've grouped, we need to merge
-    var targets = map(fun((_, group)) {
+    var targets = map(fun(group) {
         fun removeDummyInteractions(interactions) {
           filter(fun(x) { not(x.lId == (-1)) }, interactions)
         }
@@ -209,16 +216,17 @@ fun getModel(diseaseId) {
         switch(group) {
           case [] -> error("Error in groupBy")
           case [x] -> x
-          case x :: y :: _ ->
-            # Slightly hacky for now (some unneeded spaces etc)
-            (id=x.id,
-              name=x.name,
-              comments=concatComments(x.comments, y.comments),
-              role=concatComments(x.role, y.role),
-              drugComments=concatComments(x.drugComments, y.drugComments),
-              sideEffects=concatComments(x.sideEffects, y.sideEffects),
-              therapeuticUse=concatComments(x.therapeuticUse, y.therapeuticUse),
-              references = x.references ++ y.references)
+          case x :: xs ->
+            fold_left(fun(x, y) {
+              (id=x.id,
+                name=x.name,
+                comments=concatComments(x.comments, y.comments),
+                role=concatComments(x.role, y.role),
+                drugComments=concatComments(x.drugComments, y.drugComments),
+                sideEffects=concatComments(x.sideEffects, y.sideEffects),
+                therapeuticUse=concatComments(x.therapeuticUse, y.therapeuticUse),
+                references = x.references ++ y.references)
+            }, x, xs)
         }
     }, groupedTargets);
 
