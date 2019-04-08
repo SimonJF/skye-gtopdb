@@ -121,35 +121,28 @@ fun updt(msg, model) {
 
 sig getModel : (Int) ~%~> Model
 fun getModel(diseaseId) {
-  fun mkPathoTarget(o, pp) {
-    var dummy_interaction = (lId = (-1), lName = "",
-        lImmuno = false, lApproved = false, lPrimary = false, lComments = "");
-    [(id=o.object_id, name=o.name, comments=pp.comments,
-      role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
-      therapeuticUse=pp.use,
-      references =
-        for (pp_ref <-- Tables.pathophysiology_refs)
-          where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
-          [pp_ref.reference_id],
-      interactions = [dummy_interaction])] # Horrid hack until we get the empty list bug sorted
+
+  fun getPathoTargets() {
+    query {
+      for (pp <-- Tables.pathophysiology)
+      where (pp.disease_id == diseaseId)
+        for (o <-- Tables.object)
+        where (o.object_id == pp.object_id)
+        [(id=o.object_id, name=o.name, comments=pp.comments,
+          role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
+          therapeuticUse=pp.use,
+          references =
+            for (pp_ref <-- Tables.pathophysiology_refs)
+              where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
+              [pp_ref.reference_id])]
+    }
   }
 
   fun mkImmunoTarget(o, id2o) {
     [(id=o.object_id, name=o.name,
       comments=id2o.comment,
       role="", drugComments="", sideEffects="", therapeuticUse="",
-      references = [-1], # TODO
-      interactions =
-        for (i <-- Tables.interaction)
-          where (o.object_id == i.object_id)
-          for (id2l <-- Tables.immuno_disease2ligand)
-            where (id2l.ligand_id == i.ligand_id && id2l.disease_id == diseaseId)
-            for (l <-- Tables.ligand)
-              where (l.ligand_id == i.ligand_id)
-                [(lId = l.ligand_id, lName = l.name,
-                  lImmuno = l.in_gtip, lApproved = l.approved,
-                  lPrimary = i.primary_target,
-                  lComments = id2l.comment)])]
+      references = [-1])] # TODO
   }
 
   # First, get raw info from the DB
@@ -165,12 +158,7 @@ fun getModel(diseaseId) {
                 [d2s.synonym],
             description = d.description,
             dblinks = (), # FIXME
-            patho_targets =
-              for (pp <-- Tables.pathophysiology)
-                where (pp.disease_id == diseaseId)
-                  for (o <-- Tables.object)
-                    where (o.object_id == pp.object_id)
-                    mkPathoTarget(o, pp),
+            patho_targets = getPathoTargets(),
             immuno_targets =
               for (id2o <-- Tables.immuno_disease2object)
                 where (id2o.disease_id == diseaseId)
@@ -205,6 +193,7 @@ fun getModel(diseaseId) {
     var groupedTargets =
       groupByFlat(fun(target) { target.id },
         rawResult.patho_targets ++ rawResult.immuno_targets);
+
     # Now we've grouped, we need to merge
     var targets = map(fun((_, group)) {
         fun removeDummyInteractions(interactions) {
@@ -219,8 +208,7 @@ fun getModel(diseaseId) {
         }
         switch(group) {
           case [] -> error("Error in groupBy")
-          case [x] ->
-            (x with interactions = removeDummyInteractions(x.interactions))
+          case [x] -> x
           case x :: y :: _ ->
             # Slightly hacky for now (some unneeded spaces etc)
             (id=x.id,
@@ -230,15 +218,28 @@ fun getModel(diseaseId) {
               drugComments=concatComments(x.drugComments, y.drugComments),
               sideEffects=concatComments(x.sideEffects, y.sideEffects),
               therapeuticUse=concatComments(x.therapeuticUse, y.therapeuticUse),
-              references = x.references ++ y.references,
-              interactions = removeDummyInteractions(x.interactions ++ y.interactions))
+              references = x.references ++ y.references)
         }
     }, groupedTargets);
 
     var (targets, targetRefs, immunoRefs) =
       fold_right(fun(x, (targets, refs, iRefs)) {
-        var (immunoInteractions, immunoRefs) =
-          fold_right(fun (x, (interactions, refs)) {
+        var raw_interactions =
+          query {
+            for (i <-- Tables.interaction)
+              where (i.object_id == x.id)
+              for (id2l <-- Tables.immuno_disease2ligand)
+                where (id2l.ligand_id == i.ligand_id && id2l.disease_id == diseaseId)
+                for (l <-- Tables.ligand)
+                  where (l.ligand_id == i.ligand_id)
+                    [(lId = l.ligand_id, lName = l.name,
+                      lImmuno = l.in_gtip, lApproved = l.approved,
+                      lPrimary = i.primary_target,
+                      lComments = id2l.comment)]
+          };
+
+          var (immunoInteractions, immunoRefs) =
+            fold_right(fun (x, (interactions, refs)) {
               var interaction = (
                   itLigandId = x.lId,
                   itLigandName = parseOrError(x.lName),
@@ -252,7 +253,8 @@ fun getModel(diseaseId) {
               var (newRefs, _) =
                 RenderMarkup.collectIds(interaction.itLigandComments);
               (interaction :: interactions, newRefs ++ refs)
-          }, ([], []), x.interactions);
+          }, ([], []), raw_interactions);
+
         var immunoInteractions =
           uniquifyBy(fun(x, y) { x.itLigandRawName == y.itLigandRawName },
               immunoInteractions);
