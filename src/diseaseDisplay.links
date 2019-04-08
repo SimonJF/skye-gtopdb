@@ -574,12 +574,41 @@ fun view(model) {
                     td(class("table_container") +@ colspan("3"), ligandsTable)))))))
     };
 
+    # TODO: This should be abstracted out to a different file
+    var referencesBox = {
+      var inner = displayReferences(model.diReferences);
+      var showHideLink =
+        if(model.diShowReferences) {
+          a(id("hide_overview") +@ onClick(fun() { ToggleReferences }),
+            small(a0, textNode("Hide")))
+        } else {
+          a(id("show_overview") +@ onClick(fun() { ToggleReferences }),
+            small(a0, textNode("Show")))
+        };
+
+      var innerSection =
+        if(model.diShowReferences) {
+          div(class("visibleSection"), inner)
+        } else {
+          MvuHTML.empty
+        };
+
+      div(class("grid_16 alpha"),
+        h4(a0, textNode("References")) +*
+        div(class("contentboxfullhelp"),
+          div(class("imageleft"), textNode("?")) +*
+          div(class("textright"),
+            p(class("split_para"), showHideLink) +*
+            innerSection)))
+    };
+
     div(class("grid_12"),
         div(class("grid_16 alpha"),
           a(name("top"), MvuHTML.empty) +*
           diseaseInfoBox +*
           targetsBox +*
-          ligandsBox))
+          ligandsBox +*
+          referencesBox))
   }
 
   switch(model) {
