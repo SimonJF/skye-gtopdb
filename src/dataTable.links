@@ -76,7 +76,7 @@ fun renderTable(tbl, renderRow) {
   table_(class("tablesorter inner_receptor_data_tables"),
       thead(a0,
         tr(class("info heading"), headers)) +*
-      tbody(name("toggle"), renderedRows))
+      tbody(a0, renderedRows))
 }
 
 sig updateSortStatus: (SortableTable(d, m), ColumnName, SortDirection) {}~> SortableTable(d, m)

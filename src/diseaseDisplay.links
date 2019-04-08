@@ -308,7 +308,7 @@ fun getModel(diseaseId) {
            ligandImmunoComments = parseOrError(l.lImmunoComments),
            ligandClinicalComments = parseOrError(l.lClinicalComments),
            ligandBioactivityComments = parseOrError(l.lBioactivityComments),
-           ligandShowComments = true);
+           ligandShowComments = false);
         var (iCommentRefs, _) = RenderMarkup.collectIds(res.ligandImmunoComments);
         var (cCommentRefs, _) = RenderMarkup.collectIds(res.ligandClinicalComments);
         var (bCommentRefs, _) = RenderMarkup.collectIds(res.ligandBioactivityComments);
@@ -366,6 +366,7 @@ fun view(model) {
     fun rowspan(x) { MvuAttrs.attr("rowSpan", x) }
     fun src(x) { MvuAttrs.attr("src", x) }
     fun valign(x) { MvuAttrs.attr("valign", x) }
+    fun role(x) { MvuAttrs.attr("role", x) }
     var renderedName = RenderMarkup.renderSimple(model.diName);
     var diseaseInfoBox = {
       var targetCount = length(model.diTargets);
@@ -489,13 +490,80 @@ fun view(model) {
               targetTables)))
     };
 
+    var ligandsBox = {
+      fun renderRow(ligand) {
+        var imgCols =
+          MvuHTML.concat(map(boolImage,
+            [("/images/approved.png", ligand.ligandApproved, "Approved"),
+             ("/images/immuno_ligand.png", ligand.ligandImmuno, "Immunopharmacology ligand")]));
+
+        var toggleCol = {
+          var arrowClass = if (ligand.ligandShowComments) { "arrow up" } else { "arrow down" };
+          td(style("min-width:30px;width:120px;") +@ valign("middle"),
+            a(class("toggle") +@ onClick(fun () { ToggleLigandComments(ligand.ligandId) }),
+              div(class(arrowClass), MvuHTML.empty)))
+        };
+
+        var commentsRow = {
+          fun renderComment((name, markup)) {
+            var rendered = renderSimple(markup);
+            if (rendered == MvuHTML.empty) {
+              MvuHTML.empty
+            } else {
+              p(a0,
+                b(a0, textNode(name ^^ ": ")) +* rendered)
+            }
+          }
+
+          if (ligand.ligandShowComments) {
+            tr(class("info"),
+              td(colspan("5") +@ style("table-cell"),
+              MvuHTML.concat(map(renderComment, [
+                  ("Immuno Disease Comments", ligand.ligandImmunoComments),
+                  ("Clinical Use", ligand.ligandClinicalComments),
+                  ("Bioactivity Comments", ligand.ligandBioactivityComments)]))))
+          } else { MvuHTML.empty }
+        };
+
+        var referencesCol = td(style("min-width:70px;width:70px;"), textNode("Not implemented yet"));
+
+        tr(class("info tableSorter-hasChildRow") +@ role("row"),
+          td(style("borderstyle: solid solid solid solid; text-wrap:normal; overflow-wrap:break-word; word-break: break-all; min-width:50px;width:50px")
+              +@ valign("baseline"),
+            a(href("/ligandDisplay?tab=summary&ligandId=" ^^ intToString(ligand.ligandId)), renderSimple(ligand.ligandName))) +*
+          imgCols +*
+          referencesCol +*
+          toggleCol
+        ) +*
+        commentsRow
+      }
+
+      var ligandsTable =
+        DataTable.renderTable(model.diLigands, renderRow);
+
+      div(class("grid_16 alpha"),
+          h4(a0, textNode("Ligands")) +*
+          div(class("contentboxfullhelp"),
+            div(class("disease_ligand_data_tables_container"),
+              table_(class("receptor_data_tables_disease fullwidth"),
+                tbody(name("toggle"),
+                  tr(a0,
+                    td(class("table_instructions") +@ style("text-align:left; border-style: solid none solid solid;font-weight:bold;"),
+                      textNode("Key to terms and symbols")) +*
+                    td(class("table_instructions") +@ style("text-align:center; border-style: solid none solid none;font-size:105%;font-weight:bold;"),
+                      textNode("Click ligand name to view ligand summary")) +*
+                    td(class("table_instructions") +@ style("text-align:center; border-style: solid dolid solid none; text-align:right;"),
+                      textNode("Click column headers to sort"))) +*
+                  tr(a0,
+                    td(class("table_container") +@ colspan("3"), ligandsTable)))))))
+    };
 
     div(class("grid_12"),
         div(class("grid_16 alpha"),
           a(name("top"), MvuHTML.empty) +*
           diseaseInfoBox +*
-          targetsBox
-          ))
+          targetsBox +*
+          ligandsBox))
   }
 
   switch(model) {
