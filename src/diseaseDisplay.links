@@ -59,18 +59,23 @@ typename Target = (
     targetInteractions: SortableTable(ImmunoTargetInteraction, Message)
   );
 
+# TODO: Might be worth abstracting this out, actually
+typename DatabaseLink =
+  (dbName: String,
+   dbLinkText: String,
+   dbLinkURL: String);
+
 typename DiseaseInfo =
   (diID: DiseaseID,
    diName: Markup,
    diSynonyms: [Markup],
    diDescription: Markup,
-   diDatabaseLinks: (), # urgh
+   diDatabaseLinks: (), #[DatabaseLink],
    diTargets: [Target],
    diLigands: SortableTable(Ligand, Message),
    diShowReferences: Bool,
    diReferences: [(ReferenceId, (ReferenceNumber, Reference.Reference))]
    );
-
 typename Model = Maybe(DiseaseInfo);
 
 sig updt : (Message, Model) ~%~> Model
@@ -167,7 +172,13 @@ fun getModel(diseaseId) {
                 where (d2s.disease_id == diseaseId)
                 [d2s.synonym],
             description = d.description,
-            dblinks = (), # FIXME
+            dbLinks = (), # Broken at the moment, due to `prefix` being reserved
+            # for (ddl <-- Tables.disease_database_link)
+            #   where (ddl.disease_id == diseaseId)
+            #   for (db <-- Tables.tbl_database)
+            #     where (db.database_id == ddl.database_id)
+            #     [(dbName=db.name, dbUrl=db.url, dbPlaceholder=ddl.placeholder,
+            #       dbPrefix=db.db_prefix)],
             patho_targets = getPathoTargets(),
             immuno_targets = getImmunoTargets(),
             ligands =
@@ -343,11 +354,18 @@ fun getModel(diseaseId) {
     );
 
     var referenceIds = uniquify(targetRefs ++ ligandRefs ++ immunoRefs);
+
+    # var dbLinks = map(fun(link) {
+    #   (dbName=link.dbName,
+    #    dbLinkText = link.dbPrefix ^^ link.dbPlaceholder,
+    #    dbLinkURL = (link.dbUrl =~ s/\$PLACEHOLDER/(link.dbPlaceholder)/ ))
+    # }, rawResult.dbLinks);
+
     (diID = rawResult.id,
      diName = name,
      diSynonyms = synonyms,
      diDescription = description,
-     diDatabaseLinks = (),
+     diDatabaseLinks = (), #dbLinks,
      diTargets = targets,
      diLigands = ligandsTable,
      diShowReferences = false,
@@ -394,6 +412,14 @@ fun view(model) {
       var synonyms = MvuHTML.concat(join([textNode(" | ")],
             map(fun(x) { [RenderMarkup.renderSimple(x)] }, model.diSynonyms)));
 
+      var dbLinks = MvuHTML.empty;
+     #  var dbLinks =
+     #    MvuHTML.concat(map(fun(link) {
+     #      p(a0,
+     #          textNode(link.dbName ^^ ": ") +*
+     #          a(href(link.dbLinkText), textNode(link.dbLinkText)))
+     #    }, model.diDatabaseLinks));
+
       h4(a0, renderedName) +*
       div(class("contentboxfullhelp"),
         div(class("imageleft"), textNode("?")) +*
@@ -430,7 +456,7 @@ fun view(model) {
                 tr(name("hotspot") +@ class("hotspot"),
                   td(class("info category"), textNode("Database Links")))) +*
               tbody(name("toggle"),
-                tr(a0, td(class("info"), textNode("Not implemented yet")))))))
+                tr(a0, td(class("info"), dbLinks))))))
     };
 
     fun makeTargetTable(target) {
