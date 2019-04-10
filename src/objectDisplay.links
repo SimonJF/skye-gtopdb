@@ -2,6 +2,7 @@
 # Detailed information about objects (i.e., ligand targets: receptors,
 # ion channels, etc.)
 open Parser;
+open RenderMarkup;
 open Reference;
 open DataTable;
 open Contributor;
@@ -13,7 +14,7 @@ typename Family = (familyId: Int, familyName: Markup);
 typename AnnotationStatus = Int; # TODO: More meaningful datatype here
 typename LigandID = Int;
 typename SpeciesID = Int;
-typename PDBID = Int;
+typename PDBID = String;
 
 typename GeneProteinInfo = (
     gpiSpecies: String,
@@ -25,10 +26,11 @@ typename GeneProteinInfo = (
 );
 
 typename PDBData = (
-    pdbId: PDBID,
-    pdbLigand: (pdblID: LigandID, pdblName: Markup,
-      pdblCode: String, pdblDescription: Markup),
-    pdbSpeciesID: SpeciesID,
+    pdbCode: PDBID,
+    pdbLigandId: String,
+    pdbLigandName: Markup,
+    pdbLigandDescription: Markup,
+    pdbSpeciesId: SpeciesID,
     pdbReferences: [ReferenceID],
     pdbResolution: Float
 );
@@ -201,7 +203,10 @@ fun getInitialModel(objectId) {
         pdbData =
           for (pdb <-- Tables.pdb_structure)
             where (pdb.object_id == objectId)
+            for (l <-- Tables.ligand)
+              where (l.ligand_id == pdb.ligand_id)
               [(pdb = pdb,
+                ligand = l,
                 refs =
                   for (pdbR <-- Tables.pdb_structure_refs)
                     where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
@@ -341,6 +346,24 @@ fun getInitialModel(objectId) {
 
       (acc with references = (refs ++ acc.references))
     }, emptyResult, rawInteractions)
+  }
+
+  fun transformPDB(rawPDB) {
+    var pdb = rawPDB.pdb;
+    var ligand = rawPDB.ligand;
+    var refs = rawPDB.refs;
+    var res =
+      (pdbCode = pdb.pdb_code,
+       pdbLigandId = ligand.ligand_id,
+       pdbLigandName = parseOrError(ligand.name),
+       pdbLigandDescription = parseOrError(pdb.description),
+       pdbSpeciesId = pdb.species_id,
+       pdbReferences = [],
+       pdbResolution = pdb.resolution);
+    var (description_refs, description_ligands) =
+      RenderMarkup.collectIds(res.pdbLigandDescription);
+    var allRefs = refs ++ description_refs;
+    ((res with pdbReferences = allRefs), allRefs, description_ligands)
   }
 
   ()
