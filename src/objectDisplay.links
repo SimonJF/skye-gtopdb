@@ -5,6 +5,7 @@ open Parser;
 open Reference;
 open DataTable;
 open Contributor;
+open InteractionUtilities;
 
 typename Message = ();
 
@@ -75,7 +76,7 @@ typename Phenotype = (
     phenoPhenotype: Markup
 );
 
-typename LigandSize = [| LigandSmall | LigandPeptide |];
+typename LigandSize = [| Small | Peptide | OtherSize |];
 
 typename ChannelBlockers = (
     channelLigandName: Markup,
@@ -99,9 +100,8 @@ typename Interaction = (
     iLigandSpecies: SpeciesID,
     iLigandAction: String,
     iLigandAffinity: Float,
-    iLigandParameter: String,
     iLigandReferences: [ReferenceID],
-    iLigandDetailedAffinity: (String, ReferenceID)
+    iLigandDetailedAffinity: [(String, ReferenceID)]
 );
 
 typename ObjectInfo = (
@@ -215,11 +215,13 @@ fun getInitialModel(objectId) {
         interactions =
           for (i <-- Tables.interaction)
             where (o.object_id == objectId)
-              [(i = i,
-                refs =
-                  for (iar <-- Tables.interaction_affinity_refs)
-                    where (iar.interaction_id == i.interaction_id)
-                    [iar.reference_id])],
+              for (l <-- Tables.ligand)
+                [(interaction = i,
+                  ligand = l,
+                  refs =
+                    for (iar <-- Tables.interaction_affinity_refs)
+                      where (iar.interaction_id == i.interaction_id)
+                      [iar.reference_id])],
         transductionMechanisms =
           for (t <-- Tables.transduction)
             where (t.object_id == objectId)
@@ -263,6 +265,83 @@ fun getInitialModel(objectId) {
         )]
   };
 
+  # OK, first parse interactions. Given the interactions field from the raw
+  # data, this should get us a record of:
+  # (agonists: [Interaction],
+  #  antagonists: [Interaction],
+  #  allostericModulators: [Interaction],
+  #  activators: [Interaction],
+  #  inhibitors: [Interaction],
+  #  channelBlockers: [Interaction],
+  #  gatingInhibitors: [Interaction],
+  #  subunitSpecific: [Interaction],
+  #  references: [ReferenceID])
+  fun transformInteractions(rawInteractions) {
+    var emptyResult =
+      (agonists = [], antagonists = [], allostericModulators = [],
+       activators = [], inhibitors = [], channelBlockers = [],
+       gatingInhibitors = [], subunitSpecific = [], references = []);
+
+    fold_left(fun(acc, x) {
+      var i = x.interaction;
+      var l = x.ligand;
+      var refs = x.refs;
+      var size = {
+        if (l.type == "Peptide" || l.type == "Antibody") {
+          Peptide
+        } else if (l.type == "Metabolite"
+            || l.type == "Synthetic organic" || l.type == "Natural product") {
+          Small
+        } else {
+          OtherSize
+        }
+      };
+
+      var interaction_aff = (
+          affinityUnits = i.affinity_units,
+          affinityLow = i.affinity_low,
+          affinityMedian = i.affinity_median,
+          affinityHigh = i.affinity_high
+        );
+
+      var parsed = (
+        iLigandName = parseOrError(l.name),
+        iLigandSize = size,
+        iLigandPrimary = i.primary,
+        iLigandEndogenous = i.endogenous,
+        iLigandLabelled = l.labelled,
+        iLigandRadioactive = l.radioactive,
+        iLigandSpecies = i.species_id,
+        iLigandAction = i.action,
+        iLigandAffinity = interaction_aff,
+        iLigandReferences = refs,
+        iLigandDetailedAffinity = []
+      );
+
+      var acc =
+        if (i.type == "Agonist") {
+          (acc with agonists = ( parsed :: acc.agonists ))
+        } else if (i.type == "Antagonist") {
+          (acc with antagonists = ( parsed :: acc.antagonists ))
+        } else if (i.type == "Allosteric modulator") {
+          (acc with allostericModulators = ( parsed :: acc.allostericModulators ))
+        } else if (i.type == "Activator") {
+          (acc with activators = ( parsed :: acc.activators ))
+        } else if (i.type == "Inhibitor") {
+          (acc with inhibitors = ( parsed :: acc.inhibitors ))
+        } else if (i.type == "Channel blocker") {
+          (acc with channelBlockers = ( parsed :: acc.channelBlockers ))
+        } else if (i.type == "Gating inhibitor") {
+          (acc with gatingInhibitors = ( parsed :: acc.gatingInhibitors ))
+        } else if (i.type == "Subunit-specific") {
+          (acc with subunitSpecific = ( parsed :: acc.subunitSpecific ))
+        } else {
+          acc
+        };
+
+      (acc with references = (refs ++ acc.references))
+    }, emptyResult, rawInteractions)
+  }
 
   ()
 }

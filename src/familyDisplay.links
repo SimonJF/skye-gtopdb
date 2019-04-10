@@ -8,6 +8,7 @@ open Template;
 open RenderMarkup;
 open Parser;
 open Utility;
+open InteractionUtilites;
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -24,9 +25,6 @@ typename ExternalRef = (
   refUrl: String
 );
 
-typename InteractionAffinity =
-  (affinityUnits: String, affinityLow: Float,
-   affinityMedian: Float, affinityHigh: Float);
 
 typename Interaction = (
   interactionLigandId: Int,
