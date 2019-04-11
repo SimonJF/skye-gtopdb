@@ -109,6 +109,27 @@ typename Variant = (
     vReferences: [ReferenceID]
 );
 
+typename ReceptorComments = (
+  listComments: Markup,
+  associatedProteinsComments: Markup,
+  functionalAssayComments: Markup,
+  tissueDistributionComments: Markup,
+  functionsComments: Markup,
+  alteredExpressionComments: Markup,
+  expressionPathophysiologyComments: Markup,
+  mutationsPathophysiologyComments: Markup,
+  variantsComments: Markup,
+  xenobioticExpressionComments: Markup,
+  antibodyComments: Markup,
+  agonistsComments: Markup,
+  antagonistsComments: Markup,
+  allostericModulatorsComments: Markup,
+  activatorsComments: Markup,
+  inhibitorsComments: Markup,
+  channelBlockersComments: Markup,
+  gatingInhibitorsComments: Markup
+);
+
 typename ObjectInfo = (
     objectId: Int,
     objectName: Markup,
@@ -122,9 +143,7 @@ typename ObjectInfo = (
     # TODO: Potency order(!?)
     objectPotencyOrder: (),
     objectAgonists: SortableTable(Interaction, Message),
-    objectAgonistComments: Markup,
     objectAntagonists: SortableTable(Interaction, Message),
-    objectAntagonistComments: Markup,
     objectAllostericModulators: SortableTable(Interaction, Message),
     objectChannelInfo: SortableTable(ChannelBlockers, Message),
     objectOtherBindingLigands: SortableTable(Interaction, Message),
@@ -216,7 +235,7 @@ fun getInitialModel(objectId) {
                     where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
                     [pdbR])],
         potencyOrder = (), # FIXME: FILL ME IN
-        rb =
+        receptorBasic =
           rbOrDefault(
             for(rb <-- Tables.receptor_basic)
               where (rb.object_id == objectId)
@@ -381,6 +400,63 @@ fun getInitialModel(objectId) {
        vReferences = rawV.refs
       );
     (res, refIDs ++ res.vReferences, ligandIDs)
+  }
+
+
+ #typename ReceptorComments = (
+ #  listComments: Markup,
+ #  associatedProteinsComments: Markup,
+ #  functionalAssayComments: Markup,
+ #  tissueDistributionComments: Markup,
+ #  functionsComments: Markup,
+ #  alteredExpressionComments: Markup,
+ #  expressionPathophysiologyComments: Markup,
+ #  mutationsPathophysiologyComments: Markup,
+ #  variantsComments: Markup,
+ #  xenobioticExpressionComments: Markup,
+ #  antibodyComments: Markup,
+ #  agonistsComments: Markup,
+ #  antagonistsComments: Markup,
+ #  allostericModulatorsComments: Markup,
+ #  activatorsComments: Markup,
+ #  inhibitorsComments: Markup,
+ #  channelBlockersComments: Markup,
+ #  gatingInhibitorsComments: Markup
+ #)
+  fun transformReceptorComments(rb) {
+    var res = (
+      listComments = parseOrError(rb.list_comments),
+      associatedProteinsComments = parseOrError(rb.associated_proteins_comments),
+      functionalAssayComments = parseOrError(rb.functional_assay_comments),
+      tissueDistributionComments = parseOrError(rb.tissue_distribution_comments),
+      functionsComments = parseOrError(rb.functions_comments),
+      alteredExpressionComments = parseOrError(rb.altered_expression_comments),
+      expressionPathophysiologyComments = parseOrError(rb.expression_pathophysiology_comments),
+      mutationsPathophysiologyComments = parseOrError(rb.mutations_pathophysiology_comments),
+      variantsComments = parseOrError(rb.variants_comments),
+      xenobioticExpressionComments = parseOrError(rb.xenobiotic_expression_comments),
+      antibodyComments = parseOrError(rb.antibody_comments),
+      agonistsComments = parseOrError(rb.agonists_comments),
+      antagonistsComments = parseOrError(rb.antagonists_comments),
+      allostericModulatorsComments = parseOrError(rb.allosteric_modulators_comments),
+      activatorsComments = parseOrError(rb.activators_comments),
+      inhibitorsComments = parseOrError(rb.inhibitors_comments),
+      channelBlockersComments = parseOrError(rb.channel_blockers_comments),
+      gatingInhibitorsComments = parseOrError(rb.gating_inhibitors_comments));
+
+
+    var (commentRefs, commentLigands) = collectAllIds(
+      [res.listComments, res.associatedProteinsComments,
+        res.functionalAssayComments, res.tissueDistributionComments,
+        res.functionsComments, res.alteredExpressionComments,
+        res.expressionPathophysiologyComments,
+        res.mutationsPathophysiologyComments, res.variantsComments,
+        res.xenobioticExpressionComments, res.antibodyComments,
+        res.agonistsComments, res.antagonistsComments,
+        res.allostericModulatorsComments, res.activatorsComments,
+        res.inhibitorsComments, res.channelBlockersComments,
+        res.gatingInhibitorsComments]);
+    (res, commentRefs, commentLigands)
   }
 
   ()

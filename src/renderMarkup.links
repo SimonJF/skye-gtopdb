@@ -29,6 +29,13 @@ fun collectIds(m) {
   go(m)
 }
 
+fun collectAllIds(ms) {
+  fold_left(fun((refIDs, ligandIDs), x) {
+      var (xRefs, xLigands) = collectIds(x);
+      (xRefs ++ refIDs, xLigands ++ ligandIDs)
+  }, ([], []), ms)
+}
+
 #sig renderMarkup :
 #  (Parser.Markup, [(ReferenceId, (Int, Reference))],
 #    [(LigandId, String)]) ~> HTML(a)
