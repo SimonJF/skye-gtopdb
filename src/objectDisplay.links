@@ -11,6 +11,7 @@ open DataTable;
 open Contributor;
 open InteractionUtilities;
 open Transduction;
+open Utility;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -18,7 +19,7 @@ typename InteractionTable = [|
   | GatingInhibitorsTable | SubunitSpecificTable
 |];
 
-typename Message = [| SortInteractionTable(InteractionTable, SortDirection) |];
+typename Message = [| SortInteractionTable:(InteractionTable, SortDirection) |];
 
 typename Family = (familyId: Int, familyName: Markup);
 typename AnnotationStatus = Int; # TODO: More meaningful datatype here
@@ -375,82 +376,68 @@ fun getInitialModel(objectId) {
   }
 
   fun mkInteractionTables(parsedInteractions) {
-   #sig makeTable : (
-   #    [(ColumnName, Bool)],
-   #    [data],
-   #    (ColumnName, data, data) {}~> Int,
-   #    (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
-   #  }
-
     # Columns are slightly different based on the type of interaction.
     # Agonists / antagonists / channel blockers / allosteric modulators:
     #  ligand, data cols, species, action, affinity, parameter, references
     # Activators / Inhibitors / Gating inhibitors:
     #  ligand, data cols, species, action, affinity, parameter, holding voltage, reference
 
-    fun mkDataCols(i) {
-    }
-
     fun mkStandardInteractionTable(tableTy, interactions) {
       var cols = [
-        ("Ligand", true),
-        ("", false), ("", false), ("", false), ("", false), ("", false),
-        ("Species", true), ("Action", true), ("Affinity", true),
-        ("Parameter", true), ("References", false)
+        ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
+        ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
+        ("", NotSortable),
+        ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
+        ("Action", Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) })),
+        # TODO: Some will have affinity ranges. We'll need to be more careful
+        # about how we compare these -- this is a hack ATM.
+        ("Affinity", Sortable(fun(x, y) {
+            simpleCmp(x.iLigandAffinity.affinityMedian,
+                y.iLigandAffinity.affinityMedian) })),
+        ("Parameter", Sortable(fun(x, y) {
+            simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
+        ("References", NotSortable)
       ];
-
-      fun comparator(colName, x, y) {
-        (if (colName == "Ligand") {
-           simpleCmp(x.iLigandName, y.iLigandName)
-         } else if (colName == "Species") {
-           simpleCmp(x.iLigandSpecies, y.iLigandSpecies)
-         } else if (colName == "Action") {
-           simpleCmp(x.iLigandAction, y.iLigandAction)
-         } else if (colName == "Affinity") {
-           simpleCmp(x.iLigandAffinity, y.iLigandAffinity)
-         } else if (colName == "Parameter") {
-           simpleCmp(x.iLigandAffinity.affinityUnits,
-               y.iLigandAffinity.affinityUnits)
-         } else {
-           0
-         }
-      }
       fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
-      DataTable.makeTable(cols, interactions, comparator, sortMessage)
+      DataTable.makeTable(cols, interactions, sortMessage)
     }
 
-    fun mkActivatorTable(interactions) {
+    fun mkActivatorTable(tableTy, interactions) {
       var cols = [
-        ("Ligand", true),
-        ("", false), ("", false), ("", false), ("", false), ("", false),
-        ("Species", true), ("Affinity", true), ("Parameter", true),
-        ("Concentration range (M)", true), ("Holding voltage (mV)", true),
-        ("References", false)
+        ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
+        ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
+        ("", NotSortable),
+        ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
+        ("Affinity", Sortable(fun(x, y) {
+            simpleCmp(x.iLigandAffinity.affinityMedian,
+                y.iLigandAffinity.affinityMedian) })),
+        ("Parameter", Sortable(fun(x, y) {
+            simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
+         # FIXME: Need to fix these up when we have the right details in the model
+        ("Concentration range (M)", NotSortable), ("Holding voltage (mV)", NotSortable),
+        ("References", NotSortable)
       ];
 
-      fun comparator(colName, x, y) {
-        (if (colName == "Ligand") {
-           simpleCmp(x.iLigandName, y.iLigandName)
-         } else if (colName == "Species") {
-           simpleCmp(x.iLigandSpecies, y.iLigandSpecies)
-         } else if (colName == "Action") {
-           simpleCmp(x.iLigandAction, y.iLigandAction)
-         } else if (colName == "Affinity") {
-           simpleCmp(x.iLigandAffinity, y.iLigandAffinity)
-         } else if (colName == "Parameter") {
-           simpleCmp(
-             x.iLigandAffinity.affinityUnits,
-             y.iLigandAffinity.affinityUnits)
-         } else {
-           0
-         }
-      }
       fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
-      DataTable.makeTable(cols, interactions, comparator, sortMessage)
 
+      DataTable.makeTable(cols, interactions, sortMessage)
     }
-    fun mkGatingInhibitorTable(interactions) {
-    }
+
+    (agonists = mkStandardInteractionTable(AgonistsTable, parsedInteractions.agonists),
+     antagonists = mkStandardInteractionTable(AntagonistsTable, parsedInteractions.antagonists),
+     allostericModulators =
+       mkStandardInteractionTable(AllostericModulatorsTable,
+         parsedInteractions.allostericModulators),
+     activators =
+       mkActivatorTable(ActivatorsTable, parsedInteractions.activators),
+     inhibitors =
+       mkActivatorTable(InhibitorsTable, parsedInteractions.inhibitors),
+     channelBlockers =
+       mkActivatorTable(ChannelBlockersTable, parsedInteractions.channelBlockers),
+     gatingInhibitors =
+       mkActivatorTable(GatingInhibitorsTable, parsedInteractions.gatingInhibitors),
+     subunitSpecific =
+       mkStandardInteractionTable(SubunitSpecificTable, parsedInteractions.subunitSpecific))
   }
 
   fun transformPDB(rawPDB) {
