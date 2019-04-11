@@ -94,7 +94,7 @@ typename Interaction = (
     iLigandRadioactive: Bool,
     iLigandSpecies: SpeciesID,
     iLigandAction: String,
-    iLigandAffinity: Float,
+    iLigandAffinity: InteractionAffinity,
     iLigandSelectivity: String,
     iLigandReferences: [ReferenceID],
     iLigandDetailedAffinity: [(String, ReferenceID)]
@@ -385,9 +385,7 @@ fun getInitialModel(objectId) {
     # Columns are slightly different based on the type of interaction.
     # Agonists / antagonists / channel blockers / allosteric modulators:
     #  ligand, data cols, species, action, affinity, parameter, references
-    # Activators / inhibitors (I guess?)
-    #  ligand, data cols, species
-    # Gating inhibitors:
+    # Activators / Inhibitors / Gating inhibitors:
     #  ligand, data cols, species, action, affinity, parameter, holding voltage, reference
 
     fun mkDataCols(i) {
@@ -398,19 +396,58 @@ fun getInitialModel(objectId) {
         ("Ligand", true),
         ("", false), ("", false), ("", false), ("", false), ("", false),
         ("Species", true), ("Action", true), ("Affinity", true),
-        ("Parameter", true), ("Holding voltage", true), ("References", false)
+        ("Parameter", true), ("References", false)
       ];
 
-      fun comparator(colName, x) {
+      fun comparator(colName, x, y) {
         (if (colName == "Ligand") {
+           simpleCmp(x.iLigandName, y.iLigandName)
          } else if (colName == "Species") {
-         } else if (colName == )
+           simpleCmp(x.iLigandSpecies, y.iLigandSpecies)
+         } else if (colName == "Action") {
+           simpleCmp(x.iLigandAction, y.iLigandAction)
+         } else if (colName == "Affinity") {
+           simpleCmp(x.iLigandAffinity, y.iLigandAffinity)
+         } else if (colName == "Parameter") {
+           simpleCmp(x.iLigandAffinity.affinityUnits,
+               y.iLigandAffinity.affinityUnits)
+         } else {
+           0
+         }
       }
       fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
       DataTable.makeTable(cols, interactions, comparator, sortMessage)
     }
 
     fun mkActivatorTable(interactions) {
+      var cols = [
+        ("Ligand", true),
+        ("", false), ("", false), ("", false), ("", false), ("", false),
+        ("Species", true), ("Affinity", true), ("Parameter", true),
+        ("Concentration range (M)", true), ("Holding voltage (mV)", true),
+        ("References", false)
+      ];
+
+      fun comparator(colName, x, y) {
+        (if (colName == "Ligand") {
+           simpleCmp(x.iLigandName, y.iLigandName)
+         } else if (colName == "Species") {
+           simpleCmp(x.iLigandSpecies, y.iLigandSpecies)
+         } else if (colName == "Action") {
+           simpleCmp(x.iLigandAction, y.iLigandAction)
+         } else if (colName == "Affinity") {
+           simpleCmp(x.iLigandAffinity, y.iLigandAffinity)
+         } else if (colName == "Parameter") {
+           simpleCmp(
+             x.iLigandAffinity.affinityUnits,
+             y.iLigandAffinity.affinityUnits)
+         } else {
+           0
+         }
+      }
+      fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
+      DataTable.makeTable(cols, interactions, comparator, sortMessage)
+
     }
     fun mkGatingInhibitorTable(interactions) {
     }

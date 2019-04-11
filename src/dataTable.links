@@ -8,23 +8,23 @@ typename ColumnName = String;
 typename SortDirection = [| Ascending | Descending |];
 typename SortStatus = [| Unsorted | Sorted:(ColumnName, SortDirection) |];
 
+typename ColumnSpec(a) =
+  [| NotSortable | Sortable:((a, a) {}~> Int) |];
+
 typename SortableTable(data, msg) =
-  ( tableColumns: [(ColumnName, Bool)], # Bool: is sortable
+  ( tableColumns: [(ColumnName, ColumnSpec(data))],
     tableSortStatus: SortStatus,
     tableRows: [data],
-    tableSortKey : (ColumnName, data, data) {}~> Int,
     tableSortMsg: (ColumnName, SortDirection) {}~> msg );
 
 sig makeTable : (
-    [(ColumnName, Bool)],
+    [(ColumnName, ColumnSpec(data))],
     [data],
-    (ColumnName, data, data) {}~> Int,
     (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
-fun makeTable(cols, data, sortKey, sortMsg) {
+fun makeTable(cols, data, sortMsg) {
   (tableColumns = cols,
    tableSortStatus = Unsorted,
    tableRows = data,
-   tableSortKey = sortKey,
    tableSortMsg = sortMsg)
 }
 
@@ -34,16 +34,27 @@ sig renderTable :
 fun renderTable(tbl, renderRow) {
   var a0 = MvuAttrs.empty;
   var sortedData = {
+    fun sortByCol(colName) {
+      switch (lookup(colName, tbl.tableColumns)) {
+        case Nothing -> tbl.tableRows
+        case Just(NotSortable) -> tbl.tableRows
+        case Just(Sortable(comparator)) ->
+          cmpSort(fun(x, y) { comparator(x, y) }, tbl.tableRows)
+      }
+    }
+
     switch(tbl.tableSortStatus) {
       case Unsorted -> tbl.tableRows
       case Sorted(name, Ascending) ->
-        cmpSort(fun(x, y) { tbl.tableSortKey(name, x, y) }, tbl.tableRows)
+        sortByCol(name)
       case Sorted(name, Descending) ->
-        reverse(cmpSort(fun(x, y) { tbl.tableSortKey(name, x, y) }, tbl.tableRows))
+        reverse(sortByCol(name))
     }
   };
 
-  fun renderHeader((name, sortable)) {
+  fun renderHeader((name, colSpec)) {
+    var sortable = colSpec <> NotSortable;
+
     if (sortable) {
       var sortMsg =
         if (tbl.tableSortStatus == Sorted(name, Ascending)) {

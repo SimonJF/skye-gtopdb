@@ -284,15 +284,10 @@ fun getModel(diseaseId) {
 
         var interactionsTable =
           DataTable.makeTable(
-              [("Ligand", true),
-               ("", false), ("", false), ("", false), # Needed for icon display
-               ("Comments", true)],
+              [("Ligand", Sortable(fun(x, y) { simpleCmp(x.itLigandRawName, y.itLigandRawName) })),
+               ("", NotSortable), ("", NotSortable), ("", NotSortable), # Needed for icon display
+               ("Comments", Sortable(fun(x, y) { simpleCmp(x.itLigandRawComments, y.itLigandRawComments)} ))],
               immunoInteractions,
-              fun (colName, x, y) {
-                if (colName == "Ligand") { simpleCmp(x.itLigandRawName, y.itLigandRawName) }
-                else if (colName == "Comments") { simpleCmp(x.itLigandRawComments, y.itLigandRawComments) }
-                else { 0 }
-              },
               fun (col, dir) { SortImmunoTargetInteractions(x.id, col, dir) });
 
         var res =
@@ -342,14 +337,10 @@ fun getModel(diseaseId) {
     }, ([], []), rawResult.ligands);
 
     var ligandsTable = DataTable.makeTable(
-        [("Ligand", true), ("", false), ("", false), ("References", false),
-         ("Clinical and Disease Comments", false)],
+        [("Ligand", Sortable(fun(x, y) { simpleCmp(x.ligandRawName, y.ligandRawName)})),
+          ("", NotSortable), ("", NotSortable), ("References", NotSortable),
+          ("Clinical and Disease Comments", NotSortable)],
         ligands,
-        fun (cn, x, y) {
-          if (cn == "Ligand") {
-            simpleCmp(x.ligandRawName, y.ligandRawName)
-          } else { 0 }
-        },
         fun (cn, dir) { SortLigands(cn, dir) }
     );
 
