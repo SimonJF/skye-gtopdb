@@ -227,15 +227,6 @@ fun getInitialModel(objectId) {
                     for (iar <-- Tables.interaction_affinity_refs)
                       where (iar.interaction_id == i.interaction_id)
                       [iar.reference_id])],
-        transductionMechanisms =
-          for (t <-- Tables.transduction)
-            where (t.object_id == objectId)
-              [(id = t.transduction_id, secondary = t.secondary,
-                comments = t.comments,
-                references =
-                  for (tr <-- Tables.transduction_refs)
-                    where (tr.transduction_id == t.transduction_id)
-                    [tr.reference_id])],
         tissueDistribution =
           for (td <-- Tables.tissue_distribution)
             where (td.object_id == objectId)
@@ -364,6 +355,10 @@ fun getInitialModel(objectId) {
       RenderMarkup.collectIds(res.pdbLigandDescription);
     var allRefs = refs ++ description_refs;
     ((res with pdbReferences = allRefs), allRefs, description_ligands)
+  }
+
+  fun transformTransductionMechanisms(rawTMs) {
+    () # Requires some thought.
   }
 
   ()
