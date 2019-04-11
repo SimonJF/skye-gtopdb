@@ -1,6 +1,7 @@
 open MvuHTML;
 open MvuAttrs;
 open MvuEvents;
+open Utility;
 
 # A generic sortable table.
 typename ColumnName = String;
@@ -11,13 +12,13 @@ typename SortableTable(data, msg) =
   ( tableColumns: [(ColumnName, Bool)], # Bool: is sortable
     tableSortStatus: SortStatus,
     tableRows: [data],
-    tableSortKey : (ColumnName, data) {}~> String,
+    tableSortKey : (ColumnName, data, data) {}~> Int,
     tableSortMsg: (ColumnName, SortDirection) {}~> msg );
 
 sig makeTable : (
     [(ColumnName, Bool)],
     [data],
-    (ColumnName, data) {}~> String,
+    (ColumnName, data, data) {}~> Int,
     (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
 fun makeTable(cols, data, sortKey, sortMsg) {
   (tableColumns = cols,
@@ -36,9 +37,9 @@ fun renderTable(tbl, renderRow) {
     switch(tbl.tableSortStatus) {
       case Unsorted -> tbl.tableRows
       case Sorted(name, Ascending) ->
-        sortBy(fun(x) { tbl.tableSortKey(name, x) }, tbl.tableRows)
+        cmpSort(fun(x, y) { tbl.tableSortKey(name, x, y) }, tbl.tableRows)
       case Sorted(name, Descending) ->
-        reverse(sortBy(fun(x) { tbl.tableSortKey(name, x) }, tbl.tableRows))
+        reverse(cmpSort(fun(x, y) { tbl.tableSortKey(name, x, y) }, tbl.tableRows))
     }
   };
 

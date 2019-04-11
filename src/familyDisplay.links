@@ -8,7 +8,7 @@ open Template;
 open RenderMarkup;
 open Parser;
 open Utility;
-open InteractionUtilites;
+open InteractionUtilities;
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;

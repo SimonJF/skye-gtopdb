@@ -1,6 +1,9 @@
 # Ooft, the one I've been dreading.
 # Detailed information about objects (i.e., ligand targets: receptors,
 # ion channels, etc.)
+
+# TODO: Voltage dependence field for VGICs.
+# Functional characteristics
 open Parser;
 open RenderMarkup;
 open Reference;
@@ -9,7 +12,13 @@ open Contributor;
 open InteractionUtilities;
 open Transduction;
 
-typename Message = ();
+typename InteractionTable = [|
+    AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
+  | ActivatorsTable       | InhibitorsTable  | ChannelBlockersTable
+  | GatingInhibitorsTable | SubunitSpecificTable
+|];
+
+typename Message = [| SortInteractionTable(InteractionTable, SortDirection) |];
 
 typename Family = (familyId: Int, familyName: Markup);
 typename AnnotationStatus = Int; # TODO: More meaningful datatype here
@@ -75,18 +84,7 @@ typename Phenotype = (
 
 typename LigandSize = [| Small | Peptide | OtherSize |];
 
-typename ChannelBlockers = (
-    channelLigandName: Markup,
-    channelLigandSize: LigandSize,
-    channelLigandApproved: Bool,
-    channelLigandHasPDB: Bool,
-    channelLigandSpecies: SpeciesID,
-    channelLigandUseDependent: Bool,
-    channelLigandVoltageDependent: Bool,
-    channelLigandComments: Markup
-);
-
-
+# TODO: Selectivity
 typename Interaction = (
     iLigandName: Markup,
     iLigandSize: LigandSize,
@@ -97,9 +95,20 @@ typename Interaction = (
     iLigandSpecies: SpeciesID,
     iLigandAction: String,
     iLigandAffinity: Float,
+    iLigandSelectivity: String,
     iLigandReferences: [ReferenceID],
     iLigandDetailedAffinity: [(String, ReferenceID)]
 );
+
+typename SortedInteractions = (
+  agonists: SortableTable(Interaction, Message),
+  antagonists: SortableTable(Interaction, Message),
+  allostericModulators: SortableTable(Interaction, Message),
+  activators: SortableTable(Interaction, Message),
+  inhibitors: SortableTable(Interaction, Message),
+  channelBlockers: SortableTable(Interaction, Message),
+  gatingInhibitors: SortableTable(Interaction, Message),
+  subunitSpecific: SortableTable(Interaction, Message));
 
 typename Variant = (
     vId: Int,
@@ -142,11 +151,7 @@ typename ObjectInfo = (
     objectEndogenousLigands: [EndogenousLigandSummary],
     # TODO: Potency order(!?)
     objectPotencyOrder: (),
-    objectAgonists: SortableTable(Interaction, Message),
-    objectAntagonists: SortableTable(Interaction, Message),
-    objectAllostericModulators: SortableTable(Interaction, Message),
-    objectChannelInfo: SortableTable(ChannelBlockers, Message),
-    objectOtherBindingLigands: SortableTable(Interaction, Message),
+    objectSortedInteractions: SortedInteractions,
     objectImmunoComments: Markup,
     objectTransductionMechanisms: [TransductionMechanism],
     objectTissueDistribution: [TissueDistribution],
@@ -163,7 +168,6 @@ typename ObjectInfo = (
 
 
 typename Model = Maybe(ObjectInfo);
-
 
 fun getInitialModel(objectId) {
   # Each object should have at most one `receptor_basic` entry.
@@ -370,6 +374,48 @@ fun getInitialModel(objectId) {
     }, emptyResult, rawInteractions)
   }
 
+  fun mkInteractionTables(parsedInteractions) {
+   #sig makeTable : (
+   #    [(ColumnName, Bool)],
+   #    [data],
+   #    (ColumnName, data, data) {}~> Int,
+   #    (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
+   #  }
+
+    # Columns are slightly different based on the type of interaction.
+    # Agonists / antagonists / channel blockers / allosteric modulators:
+    #  ligand, data cols, species, action, affinity, parameter, references
+    # Activators / inhibitors (I guess?)
+    #  ligand, data cols, species
+    # Gating inhibitors:
+    #  ligand, data cols, species, action, affinity, parameter, holding voltage, reference
+
+    fun mkDataCols(i) {
+    }
+
+    fun mkStandardInteractionTable(tableTy, interactions) {
+      var cols = [
+        ("Ligand", true),
+        ("", false), ("", false), ("", false), ("", false), ("", false),
+        ("Species", true), ("Action", true), ("Affinity", true),
+        ("Parameter", true), ("Holding voltage", true), ("References", false)
+      ];
+
+      fun comparator(colName, x) {
+        (if (colName == "Ligand") {
+         } else if (colName == "Species") {
+         } else if (colName == )
+      }
+      fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
+      DataTable.makeTable(cols, interactions, comparator, sortMessage)
+    }
+
+    fun mkActivatorTable(interactions) {
+    }
+    fun mkGatingInhibitorTable(interactions) {
+    }
+  }
+
   fun transformPDB(rawPDB) {
     var pdb = rawPDB.pdb;
     var ligand = rawPDB.ligand;
@@ -403,26 +449,6 @@ fun getInitialModel(objectId) {
   }
 
 
- #typename ReceptorComments = (
- #  listComments: Markup,
- #  associatedProteinsComments: Markup,
- #  functionalAssayComments: Markup,
- #  tissueDistributionComments: Markup,
- #  functionsComments: Markup,
- #  alteredExpressionComments: Markup,
- #  expressionPathophysiologyComments: Markup,
- #  mutationsPathophysiologyComments: Markup,
- #  variantsComments: Markup,
- #  xenobioticExpressionComments: Markup,
- #  antibodyComments: Markup,
- #  agonistsComments: Markup,
- #  antagonistsComments: Markup,
- #  allostericModulatorsComments: Markup,
- #  activatorsComments: Markup,
- #  inhibitorsComments: Markup,
- #  channelBlockersComments: Markup,
- #  gatingInhibitorsComments: Markup
- #)
   fun transformReceptorComments(rb) {
     var res = (
       listComments = parseOrError(rb.list_comments),

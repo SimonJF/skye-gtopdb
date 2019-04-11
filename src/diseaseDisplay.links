@@ -288,10 +288,10 @@ fun getModel(diseaseId) {
                ("", false), ("", false), ("", false), # Needed for icon display
                ("Comments", true)],
               immunoInteractions,
-              fun (colName, x) {
-                if (colName == "Ligand") { x.itLigandRawName }
-                else if (colName == "Comments") { x.itLigandRawComments }
-                else { "" }
+              fun (colName, x, y) {
+                if (colName == "Ligand") { simpleCmp(x.itLigandRawName, y.itLigandRawName) }
+                else if (colName == "Comments") { simpleCmp(x.itLigandRawComments, y.itLigandRawComments) }
+                else { 0 }
               },
               fun (col, dir) { SortImmunoTargetInteractions(x.id, col, dir) });
 
@@ -345,10 +345,10 @@ fun getModel(diseaseId) {
         [("Ligand", true), ("", false), ("", false), ("References", false),
          ("Clinical and Disease Comments", false)],
         ligands,
-        fun (cn, x) {
+        fun (cn, x, y) {
           if (cn == "Ligand") {
-            x.ligandRawName
-          } else { "" }
+            simpleCmp(x.ligandRawName, y.ligandRawName)
+          } else { 0 }
         },
         fun (cn, dir) { SortLigands(cn, dir) }
     );

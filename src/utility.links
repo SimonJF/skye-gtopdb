@@ -126,3 +126,27 @@ fun partition(pred, xs) {
 }
 
 
+# This only works because we have arbitrary polymorphic comparisons.
+sig simpleCmp : forall a . (a, a) ~%~> Int
+fun simpleCmp(s1, s2) {
+  if (s1 < s2) {
+    (-1)
+  } else if (s1 == s2) {
+    0
+  } else {
+    1
+  }
+}
+
+sig cmpSort : ((a, a) ~b~> Int, [a]) ~b~> [a]
+fun cmpSort(comparator, l) {
+  # TBD: rename this 'sortOn' to follow Haskell usage?
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {comparator(y, x) < 0 }, xs);
+      var ge = filter (fun (y) {comparator(y, x) >= 0 }, xs);
+      cmpSort(comparator, lt) ++ [x] ++ cmpSort(comparator, ge)
+    }
+  }
+}
