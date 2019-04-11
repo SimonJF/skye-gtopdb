@@ -3,16 +3,18 @@ open Tables;
 open RenderMarkup;
 open Reference;
 
+typename LigandID = Int;
+typename ObjectID = Int;
+
 typename TransductionMechanism = (
     tTransducers: [Markup],
     tEffectors: [Markup],
     tSecondary: Bool,
     tComments: Markup,
-    tReferences: [ReferenceID],
-    tLigandIDs: [Int]
+    tReferences: [ReferenceID]
 );
 
-sig transductionsForObject : (Int) ~%~> [TransductionMechanism]
+sig transductionsForObject : (ObjectID) ~%~> ([TransductionMechanism], [ReferenceID], [LigandID])
 fun transductionsForObject(objectId){
   var rawResults = query {
     for (t <-- Tables.transduction)
@@ -24,42 +26,44 @@ fun transductionsForObject(objectId){
               [tr.reference_id])]
   };
 
-  map(fun(transduction) {
-    var t = transduction.transduction;
-    var refs = transduction.references;
+  var (refs, ligands, transductions_rev) =
+    fold_left(fun((refs, ligands, transductions), transduction) {
+      var t = transduction.transduction;
+      var tRefs = transduction.references;
 
-    fun b2l(b, x) { if(b) { [parseOrError(x)] } else { [] } }
+      fun b2l(b, x) { if(b) { [parseOrError(x)] } else { [] } }
 
-    var transducers = concat([
-        b2l(t.t01, "G<sub>s</sub> family"),
-        b2l(t.t02, "G<sub>i</sub>/G<sub>o</sub> family"),
-        b2l(t.t03, "G<sub>q</sub>/G<sub>11</sub> family"),
-        b2l(t.t04, "G<sub>12</sub>/G<sub>13</sub> family"),
-        b2l(t.t05, "G protein independent mechanism"),
-        b2l(t.t06, "G protein (identity unknown)")]
-    );
+      var transducers = concat([
+          b2l(t.t01, "G<sub>s</sub> family"),
+          b2l(t.t02, "G<sub>i</sub>/G<sub>o</sub> family"),
+          b2l(t.t03, "G<sub>q</sub>/G<sub>11</sub> family"),
+          b2l(t.t04, "G<sub>12</sub>/G<sub>13</sub> family"),
+          b2l(t.t05, "G protein independent mechanism"),
+          b2l(t.t06, "G protein (identity unknown)")]
+      );
 
-    var effectors = concat([
-        b2l(t.e01, "Adenylate cyclase stimulation"),
-        b2l(t.e02, "Adenylate cyclase inhibition"),
-        b2l(t.e03, "Guanylate cyclase stimulation"),
-        b2l(t.e04, "Phospholipase C stimulation"),
-        b2l(t.e05, "Potassium channel"),
-        b2l(t.e06, "Calcium channel"),
-        b2l(t.e07, "Phospholipase A<sub>2</sub> stimulation"),
-        b2l(t.e08, "Phospholipase D stimulation"),
-        b2l(t.e09, "Other - See Comments")]
-    );
+      var effectors = concat([
+          b2l(t.e01, "Adenylate cyclase stimulation"),
+          b2l(t.e02, "Adenylate cyclase inhibition"),
+          b2l(t.e03, "Guanylate cyclase stimulation"),
+          b2l(t.e04, "Phospholipase C stimulation"),
+          b2l(t.e05, "Potassium channel"),
+          b2l(t.e06, "Calcium channel"),
+          b2l(t.e07, "Phospholipase A<sub>2</sub> stimulation"),
+          b2l(t.e08, "Phospholipase D stimulation"),
+          b2l(t.e09, "Other - See Comments")]
+      );
 
-    var comments = parseOrError(t.comments);
-    var (cRefs, cLigands) = RenderMarkup.collectIds(comments);
+      var comments = parseOrError(t.comments);
+      var (cRefs, cLigands) = RenderMarkup.collectIds(comments);
 
 
-    (tTransducers = transducers,
-     tEffectors = effectors,
-     tSecondary = t.secondary,
-     tComments = parseOrError(t.comments),
-     tReferences = refs ++ cRefs,
-     tLigandIDs = cLigands)
-  }, rawResults)
+      (cRefs ++ tRefs ++ refs, cLigands ++ ligands,
+        (tTransducers = transducers,
+         tEffectors = effectors,
+         tSecondary = t.secondary,
+         tComments = parseOrError(t.comments),
+         tReferences = tRefs ++ cRefs) :: transductions)
+    }, ([], [], []), rawResults);
+  (reverse(transductions_rev), refs, ligands)
 }

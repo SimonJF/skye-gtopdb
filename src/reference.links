@@ -1,5 +1,3 @@
-# I wonder whether all of this is necessary, or whether we can
-# just use the generated DB records directly?
 open MvuHTML;
 open MvuAttrs;
 open Utility;
