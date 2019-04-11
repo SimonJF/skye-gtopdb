@@ -7,6 +7,7 @@ open Reference;
 open DataTable;
 open Contributor;
 open InteractionUtilities;
+open Transduction;
 
 typename Message = ();
 
@@ -37,12 +38,6 @@ typename PDBData = (
 
 typename EndogenousLigandSummary =
   (elsName: Markup, elsSpeciesID: SpeciesID, elsLigandID: LigandID);
-
-typename TransductionMechanisms = (
-    transductionMechanisms: [(transducerName: Markup, transducerResponse: Markup)],
-    transductionComments: Markup,
-    transductionReferences: [ReferenceID]
-);
 
 typename TissueDistribution = (
     tdDescription: Markup,
@@ -106,6 +101,14 @@ typename Interaction = (
     iLigandDetailedAffinity: [(String, ReferenceID)]
 );
 
+typename Variant = (
+    vId: Int,
+    vType: String,
+    vSpecies: SpeciesID,
+    vDescription: Markup,
+    vReferences: [ReferenceID]
+);
+
 typename ObjectInfo = (
     objectId: Int,
     objectName: Markup,
@@ -126,13 +129,14 @@ typename ObjectInfo = (
     objectChannelInfo: SortableTable(ChannelBlockers, Message),
     objectOtherBindingLigands: SortableTable(Interaction, Message),
     objectImmunoComments: Markup,
-    objectTransductionMechanisms: TransductionMechanisms,
+    objectTransductionMechanisms: [TransductionMechanism],
     objectTissueDistribution: [TissueDistribution],
     # TODO: Expression dataset(!?)
     objectExpressionDataset: (),
     objectFunctionalAssays: [FunctionalAssay],
     objectPhysiologicalFunctions: [PhysiologicalFunction],
     objectPhenotypes: SortableTable(Phenotype, Message),
+    objectVariants: [Variant],
     objectGeneralComments: Markup,
     objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))],
     objectContributors: [Contributor.Contributor]
@@ -252,6 +256,14 @@ fun getInitialModel(objectId) {
                     where (pfRef.physiological_function_id == pf.physiological_function_id)
                     [(pfRef.reference_id)])],
         alleles = (), # Getting this is a faff, requiring structural info, etc. Leaving for now.
+        variants =
+          for (v <-- Tables.variant)
+            where (v.object_id == objectId)
+              [(v=v,
+                refs =
+                  for (vRef <-- Tables.variant_refs)
+                    where (vRef.variant_id == v.variant_id)
+                    [vRef.reference_id])],
         contributors =
           for (c2o <-- Tables.contributor2object)
             where (c2o.object_id == objectId)
@@ -351,14 +363,24 @@ fun getInitialModel(objectId) {
        pdbSpeciesId = pdb.species_id,
        pdbReferences = [],
        pdbResolution = pdb.resolution);
-    var (description_refs, description_ligands) =
+    var (descriptionRefs, descriptionLigands) =
       RenderMarkup.collectIds(res.pdbLigandDescription);
-    var allRefs = refs ++ description_refs;
-    ((res with pdbReferences = allRefs), allRefs, description_ligands)
+    var allRefs = refs ++ descriptionRefs;
+    ((res with pdbReferences = allRefs), allRefs, descriptionLigands)
   }
 
-  fun transformTransductionMechanisms(rawTMs) {
-    () # Requires some thought.
+  fun transformVariants(rawV) {
+    var v = rawV.v;
+    var desc = parseOrError(rawV.description);
+    var (refIDs, ligandIDs) = collectIds(desc);
+    var res =
+      (vId = v.variant_id,
+       vType = v.type,
+       vSpecies = v.species_id,
+       vDescription = desc,
+       vReferences = rawV.refs
+      );
+    (res, refIDs ++ res.vReferences, ligandIDs)
   }
 
   ()
