@@ -2,6 +2,12 @@
 # Detailed information about objects (i.e., ligand targets: receptors,
 # ion channels, etc.)
 
+# Next up:
+#  1. Tie comments to the model
+#  2. Ligand lookup table query, and add to the model
+#  3. Begin getting some of the basics rendered
+#  4. Gradually add commented things back in
+
 # TODO: Voltage dependence field for VGICs.
 # Functional characteristics
 open Parser;
@@ -12,6 +18,10 @@ open Contributor;
 open InteractionUtilities;
 open Transduction;
 open Utility;
+open MvuHTML;
+open MvuAttrs;
+open Mvu;
+open Template;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -85,7 +95,6 @@ typename Phenotype = (
 
 typename LigandSize = [| Small | Peptide | OtherSize |];
 
-# TODO: Selectivity
 typename Interaction = (
     iLigandName: Markup,
     iLigandRawName: String,
@@ -172,420 +181,442 @@ typename ObjectInfo = (
 
 typename Model = Maybe(ObjectInfo);
 
-sig getInitialModel : (Int) ~%~> Maybe(ObjectInfo)
-fun getInitialModel(objectId) {
-  # Each object should have at most one `receptor_basic` entry.
-  # If there aren't any, we need to (manually) create a dummy one.
-  fun rbOrDefault(rbs) {
-    switch(rbs) {
-      case [] ->
-        (object_id=objectId,
-         list_comments="",
-         associated_proteins_comments="",
-         functional_assay_comments="",
-         tissue_distribution_comments="",
-         functions_comments="",
-         altered_expression_comments="",
-         expression_pathophysiology_comments="",
-         mutations_pathophysiology_comments="",
-         variants_comments="",
-         xenobiotic_expression_comments="",
-         antibody_comments="",
-         agonists_comments="",
-         antagonists_comments="",
-         allosteric_modulators_comments="",
-         activators_comments="",
-         inhibitors_comments="",
-         channel_blockers_comments="",
-         gating_inhibitors_comments="")
-      case x :: _ -> x
-    }
-  }
-
+sig getInitialModel : () ~%~> Maybe(ObjectInfo)
+fun getInitialModel() {
   # TODO: We also need to traverse this record to transform everything to markup and
   # get the referenced ligands and references.
 
-  var raw = query {
-    for (o <-- Tables.object)
-      where (o.object_id == objectId)
-       [(id = objectId,
-        name = o.name,
-        comments = o.comments,
-        grac_comments = o.grac_comments,
-        immuno_comments = o.gtip_comment,
-        malaria_comments = o.gtmp_comment,
-        synonyms =
-          for (s <-- Tables.synonym)
-            where (s.object_id == objectId)
-            [(synonym=s.synonym, order=s.display_order)],
-        family =
-          for (r2f <-- Tables.receptor2family)
-            where (r2f.object_id == o.object_id)
-              for (f <-- Tables.family)
-                where (f.family_id == r2f.family_id)
-                [(id=f.family_id, name=f.name)],
-        annotationStatus = o.annotation_status,
-        generalComments = o.comments,
-        geneInformation =
-          for (si <-- Tables.structural_info)
-            where (si.object_id == objectId)
-            [(si=si,
-              refs =
-                for (siRef <-- Tables.structural_info_refs)
-                  where (siRef.structural_info_id == si.structural_info_id)
-                  [siRef.reference_id])],
-        databaseLinks = (), # FIXME: FILL ME IN
-        pdbData =
-          for (pdb <-- Tables.pdb_structure)
-            where (pdb.object_id == objectId)
-            for (l <-- Tables.ligand)
-              where (l.ligand_id == pdb.ligand_id)
-              [(pdb = pdb,
-                ligand = l,
+  sig getObjectInfo : (Int) ~%~> Maybe(ObjectInfo)
+  fun getObjectInfo(objectId) {
+    # Each object should have at most one `receptor_basic` entry.
+    # If there aren't any, we need to (manually) create a dummy one.
+    fun rbOrDefault(rbs) {
+      switch(rbs) {
+        case [] ->
+          (object_id=objectId,
+           list_comments="",
+           associated_proteins_comments="",
+           functional_assay_comments="",
+           tissue_distribution_comments="",
+           functions_comments="",
+           altered_expression_comments="",
+           expression_pathophysiology_comments="",
+           mutations_pathophysiology_comments="",
+           variants_comments="",
+           xenobiotic_expression_comments="",
+           antibody_comments="",
+           agonists_comments="",
+           antagonists_comments="",
+           allosteric_modulators_comments="",
+           activators_comments="",
+           inhibitors_comments="",
+           channel_blockers_comments="",
+           gating_inhibitors_comments="")
+        case x :: _ -> x
+      }
+    }
+
+    var raw = query {
+      for (o <-- Tables.object)
+        where (o.object_id == objectId)
+         [(id = objectId,
+          name = o.name,
+          comments = o.comments,
+          grac_comments = o.grac_comments,
+          immuno_comments = o.gtip_comment,
+          malaria_comments = o.gtmp_comment,
+          synonyms =
+            for (s <-- Tables.synonym)
+              where (s.object_id == objectId)
+              [(synonym=s.synonym, order=s.display_order)],
+          family =
+            for (r2f <-- Tables.receptor2family)
+              where (r2f.object_id == o.object_id)
+                for (f <-- Tables.family)
+                  where (f.family_id == r2f.family_id)
+                  [(id=f.family_id, name=f.name)],
+          annotationStatus = o.annotation_status,
+          generalComments = o.comments,
+          geneInformation =
+            for (si <-- Tables.structural_info)
+              where (si.object_id == objectId)
+              [(si=si,
                 refs =
-                  for (pdbR <-- Tables.pdb_structure_refs)
-                    where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
-                    [pdbR.reference_id])],
-        potencyOrder = (), # FIXME: FILL ME IN
-        receptorBasic =
-          rbOrDefault(
-            for(rb <-- Tables.receptor_basic)
-              where (rb.object_id == objectId)
-              [rb]),
-        interactions =
-          for (i <-- Tables.interaction)
-            where (o.object_id == objectId)
+                  for (siRef <-- Tables.structural_info_refs)
+                    where (siRef.structural_info_id == si.structural_info_id)
+                    [siRef.reference_id])],
+          databaseLinks = (), # FIXME: FILL ME IN
+          pdbData =
+            for (pdb <-- Tables.pdb_structure)
+              where (pdb.object_id == objectId)
               for (l <-- Tables.ligand)
-                [(interaction = i,
+                where (l.ligand_id == pdb.ligand_id)
+                [(pdb = pdb,
                   ligand = l,
                   refs =
-                    for (iar <-- Tables.interaction_affinity_refs)
-                      where (iar.interaction_id == i.interaction_id)
-                      [iar.reference_id])],
-        tissueDistribution =
-          for (td <-- Tables.tissue_distribution)
-            where (td.object_id == objectId)
-              [(td = td,
-                refs =
-                  for (r <-- Tables.tissue_distribution_refs)
-                    where (r.tissue_distribution_id == td.tissue_distribution_id)
-                    [r.reference_id])],
-        expressionDataset = (), # FIXME: FILL ME IN
-        functionalAssays =
-          for (fa <-- Tables.functional_assay)
-            where (fa.object_id == objectId)
-              [(fa=fa, refs=
-                  for (faRef <-- Tables.functional_assay_refs)
-                    where (faRef.functional_assay_id == fa.functional_assay_id)
-                    [faRef.reference_id])],
-        physiologicalFunctions =
-          for (pf <-- Tables.physiological_function)
-            where (pf.object_id == objectId)
-              [(pf = pf,
-                refs =
-                  for (pfRef <-- Tables.physiological_function_refs)
-                    where (pfRef.physiological_function_id == pf.physiological_function_id)
-                    [(pfRef.reference_id)])],
-        alleles = (), # Getting this is a faff, requiring structural info, etc. Leaving for now.
-        variants =
-          for (v <-- Tables.variant)
-            where (v.object_id == objectId)
-              [(v=v,
-                refs =
-                  for (vRef <-- Tables.variant_refs)
-                    where (vRef.variant_id == v.variant_id)
-                    [vRef.reference_id])],
-        contributors =
-          for (c2o <-- Tables.contributor2object)
-            where (c2o.object_id == objectId)
-              for (c <-- Tables.contributor)
-                where (c.contributor_id == c2o.contributor_id)
-                [(c = c, order=c2o.display_order)]
-        )]
-  };
+                    for (pdbR <-- Tables.pdb_structure_refs)
+                      where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
+                      [pdbR.reference_id])],
+          potencyOrder = (), # FIXME: FILL ME IN
+          receptorBasic =
+            rbOrDefault(
+              for(rb <-- Tables.receptor_basic)
+                where (rb.object_id == objectId)
+                [rb]),
+          interactions =
+            for (i <-- Tables.interaction)
+              where (o.object_id == objectId)
+                for (l <-- Tables.ligand)
+                  [(interaction = i,
+                    ligand = l,
+                    refs =
+                      for (iar <-- Tables.interaction_affinity_refs)
+                        where (iar.interaction_id == i.interaction_id)
+                        [iar.reference_id])],
+          tissueDistribution =
+            for (td <-- Tables.tissue_distribution)
+              where (td.object_id == objectId)
+                [(td = td,
+                  refs =
+                    for (r <-- Tables.tissue_distribution_refs)
+                      where (r.tissue_distribution_id == td.tissue_distribution_id)
+                      [r.reference_id])],
+          expressionDataset = (), # FIXME: FILL ME IN
+          functionalAssays =
+            for (fa <-- Tables.functional_assay)
+              where (fa.object_id == objectId)
+                [(fa=fa, refs=
+                    for (faRef <-- Tables.functional_assay_refs)
+                      where (faRef.functional_assay_id == fa.functional_assay_id)
+                      [faRef.reference_id])],
+          physiologicalFunctions =
+            for (pf <-- Tables.physiological_function)
+              where (pf.object_id == objectId)
+                [(pf = pf,
+                  refs =
+                    for (pfRef <-- Tables.physiological_function_refs)
+                      where (pfRef.physiological_function_id == pf.physiological_function_id)
+                      [(pfRef.reference_id)])],
+          alleles = (), # Getting this is a faff, requiring structural info, etc. Leaving for now.
+          variants =
+            for (v <-- Tables.variant)
+              where (v.object_id == objectId)
+                [(v=v,
+                  refs =
+                    for (vRef <-- Tables.variant_refs)
+                      where (vRef.variant_id == v.variant_id)
+                      [vRef.reference_id])],
+          contributors =
+            for (c2o <-- Tables.contributor2object)
+              where (c2o.object_id == objectId)
+                for (c <-- Tables.contributor)
+                  where (c.contributor_id == c2o.contributor_id)
+                  [(c = c, order=c2o.display_order)]
+          )]
+    };
 
-  fun mkModel(raw) {
+    fun mkModel(raw) {
 
-    # OK, first parse interactions. Given the interactions field from the raw
-    # data, this should get us a record of:
-    # (agonists: [Interaction],
-    #  antagonists: [Interaction],
-    #  allostericModulators: [Interaction],
-    #  activators: [Interaction],
-    #  inhibitors: [Interaction],
-    #  channelBlockers: [Interaction],
-    #  gatingInhibitors: [Interaction],
-    #  subunitSpecific: [Interaction],
-    #  references: [ReferenceID])
-    fun transformInteractions(rawInteractions) {
-      var emptyResult =
-        (agonists = [], antagonists = [], allostericModulators = [],
-         activators = [], inhibitors = [], channelBlockers = [],
-         gatingInhibitors = [], subunitSpecific = [], references = []);
+      # OK, first parse interactions. Given the interactions field from the raw
+      # data, this should get us a record of:
+      # (agonists: [Interaction],
+      #  antagonists: [Interaction],
+      #  allostericModulators: [Interaction],
+      #  activators: [Interaction],
+      #  inhibitors: [Interaction],
+      #  channelBlockers: [Interaction],
+      #  gatingInhibitors: [Interaction],
+      #  subunitSpecific: [Interaction],
+      #  references: [ReferenceID])
+      fun transformInteractions(rawInteractions) {
+        var emptyResult =
+          (agonists = [], antagonists = [], allostericModulators = [],
+           activators = [], inhibitors = [], channelBlockers = [],
+           gatingInhibitors = [], subunitSpecific = [], references = []);
 
-      fold_left(fun(acc, x) {
-        var i = x.interaction;
-        var l = x.ligand;
-        var refs = x.refs;
-        var size = {
-          if (l.type == "Peptide" || l.type == "Antibody") {
-            Peptide
-          } else if (l.type == "Metabolite"
-              || l.type == "Synthetic organic" || l.type == "Natural product") {
-            Small
-          } else {
-            OtherSize
-          }
-        };
-
-        var interaction_aff = (
-            affinityUnits = i.affinity_units,
-            affinityLow = i.affinity_low,
-            affinityMedian = i.affinity_median,
-            affinityHigh = i.affinity_high
-          );
-
-        var parsed = (
-          iLigandName = parseOrError(l.name),
-          iLigandRawName = l.name,
-          iLigandSize = size,
-          iLigandPrimary = i.primary_target,
-          iLigandEndogenous = i.endogenous,
-          iLigandLabelled = l.labelled,
-          iLigandRadioactive = l.radioactive,
-          iLigandSpecies = i.species_id,
-          iLigandAction = i.action,
-          iLigandAffinity = interaction_aff,
-          iLigandReferences = refs,
-          iLigandSelectivity = i.selectivity,
-          iLigandDetailedAffinity = []
-        );
-
-        var acc =
-          if (i.type == "Agonist") {
-            (acc with agonists = ( parsed :: acc.agonists ))
-          } else if (i.type == "Antagonist") {
-            (acc with antagonists = ( parsed :: acc.antagonists ))
-          } else if (i.type == "Allosteric modulator") {
-            (acc with allostericModulators = ( parsed :: acc.allostericModulators ))
-          } else if (i.type == "Activator") {
-            (acc with activators = ( parsed :: acc.activators ))
-          } else if (i.type == "Inhibitor") {
-            (acc with inhibitors = ( parsed :: acc.inhibitors ))
-          } else if (i.type == "Channel blocker") {
-            (acc with channelBlockers = ( parsed :: acc.channelBlockers ))
-          } else if (i.type == "Gating inhibitor") {
-            (acc with gatingInhibitors = ( parsed :: acc.gatingInhibitors ))
-          } else if (i.type == "Subunit-specific") {
-            (acc with subunitSpecific = ( parsed :: acc.subunitSpecific ))
-          } else {
-            acc
+        fold_left(fun(acc, x) {
+          var i = x.interaction;
+          var l = x.ligand;
+          var refs = x.refs;
+          var size = {
+            if (l.type == "Peptide" || l.type == "Antibody") {
+              Peptide
+            } else if (l.type == "Metabolite"
+                || l.type == "Synthetic organic" || l.type == "Natural product") {
+              Small
+            } else {
+              OtherSize
+            }
           };
 
-        (acc with references = (refs ++ acc.references))
-      }, emptyResult, rawInteractions)
-    }
-
-    fun mkInteractionTables(parsedInteractions) {
-      # Columns are slightly different based on the type of interaction.
-      # Agonists / antagonists / channel blockers / allosteric modulators:
-      #  ligand, data cols, species, action, affinity, parameter, references
-      # Activators / Inhibitors / Gating inhibitors:
-      #  ligand, data cols, species, action, affinity, parameter, holding voltage, reference
-
-      fun mkStandardInteractionTable(tableTy, interactions) {
-        var cols = [
-          ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
-          ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
-          ("", NotSortable),
-          ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
-          ("Action", Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) })),
-          # TODO: Some will have affinity ranges. We'll need to be more careful
-          # about how we compare these -- this is a hack ATM.
-          ("Affinity", Sortable(fun(x, y) {
-              simpleCmp(x.iLigandAffinity.affinityMedian,
-                  y.iLigandAffinity.affinityMedian) })),
-          ("Parameter", Sortable(fun(x, y) {
-              simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
-          ("References", NotSortable)
-        ];
-        fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
-        DataTable.makeTable(cols, interactions, sortMessage)
-      }
-
-      fun mkActivatorTable(tableTy, interactions) {
-        var cols = [
-          ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
-          ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
-          ("", NotSortable),
-          ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
-          ("Affinity", Sortable(fun(x, y) {
-              simpleCmp(x.iLigandAffinity.affinityMedian,
-                  y.iLigandAffinity.affinityMedian) })),
-          ("Parameter", Sortable(fun(x, y) {
-              simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
-           # FIXME: Need to fix these up when we have the right details in the model
-          ("Concentration range (M)", NotSortable), ("Holding voltage (mV)", NotSortable),
-          ("References", NotSortable)
-        ];
-
-        fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
-
-        DataTable.makeTable(cols, interactions, sortMessage)
-      }
-
-      (agonists = mkStandardInteractionTable(AgonistsTable, parsedInteractions.agonists),
-       antagonists = mkStandardInteractionTable(AntagonistsTable, parsedInteractions.antagonists),
-       allostericModulators =
-         mkStandardInteractionTable(AllostericModulatorsTable,
-           parsedInteractions.allostericModulators),
-       activators =
-         mkActivatorTable(ActivatorsTable, parsedInteractions.activators),
-       inhibitors =
-         mkActivatorTable(InhibitorsTable, parsedInteractions.inhibitors),
-       channelBlockers =
-         mkActivatorTable(ChannelBlockersTable, parsedInteractions.channelBlockers),
-       gatingInhibitors =
-         mkActivatorTable(GatingInhibitorsTable, parsedInteractions.gatingInhibitors),
-       subunitSpecific =
-         mkStandardInteractionTable(SubunitSpecificTable, parsedInteractions.subunitSpecific))
-    }
-
-    fun transformPDBs(rawPDBs) {
-      fun transformPDB(rawPDB) {
-        var pdb = rawPDB.pdb;
-        var ligand = rawPDB.ligand;
-        var refs = rawPDB.refs;
-        var res =
-          (pdbCode = pdb.pdb_code,
-           pdbLigandId = ligand.ligand_id,
-           pdbLigandName = parseOrError(ligand.name),
-           pdbLigandDescription = parseOrError(pdb.description),
-           pdbSpeciesId = pdb.species_id,
-           pdbReferences = [],
-           pdbResolution = pdb.resolution);
-        var (descriptionRefs, descriptionLigands) =
-          RenderMarkup.collectIds(res.pdbLigandDescription);
-        var allRefs = refs ++ descriptionRefs;
-        ((res with pdbReferences = allRefs), allRefs, descriptionLigands)
-      }
-
-      var (pdbsRev, pdbRefs, pdbLigands) =
-        fold_left(fun((pdbs, pdbRefs, pdbLigands), pdb) {
-            var (pdb, refs, ligands) = transformPDB(pdb);
-            (pdb :: pdbs, refs ++ pdbRefs, ligands ++ pdbLigands)
-        }, ([], [], []), rawPDBs);
-      (reverse(pdbsRev), pdbRefs, pdbLigands)
-    }
-
-    fun transformVariants(rawVs) {
-      var (variantsRev, vRefs, vLigands) =
-        fold_left(fun((variants, vRefs, vLigands), rawV) {
-          var v = rawV.v;
-          var desc = parseOrError(v.description);
-          var (refIDs, ligandIDs) = collectIds(desc);
-          var res =
-            (vId = v.variant_id,
-             vType = v.type,
-             vSpecies = v.species_id,
-             vDescription = desc,
-             vReferences = rawV.refs
+          var interaction_aff = (
+              affinityUnits = i.affinity_units,
+              affinityLow = i.affinity_low,
+              affinityMedian = i.affinity_median,
+              affinityHigh = i.affinity_high
             );
-          (res :: variants, refIDs ++ res.vReferences, ligandIDs)
-        }, ([], [], []), rawVs);
-      (reverse(variantsRev), vRefs, vLigands)
-    }
 
+          var parsed = (
+            iLigandName = parseOrError(l.name),
+            iLigandRawName = l.name,
+            iLigandSize = size,
+            iLigandPrimary = i.primary_target,
+            iLigandEndogenous = i.endogenous,
+            iLigandLabelled = l.labelled,
+            iLigandRadioactive = l.radioactive,
+            iLigandSpecies = i.species_id,
+            iLigandAction = i.action,
+            iLigandAffinity = interaction_aff,
+            iLigandReferences = refs,
+            iLigandSelectivity = i.selectivity,
+            iLigandDetailedAffinity = []
+          );
 
-    fun transformReceptorComments(rb) {
-      var res = (
-        listComments = parseOrError(rb.list_comments),
-        associatedProteinsComments = parseOrError(rb.associated_proteins_comments),
-        functionalAssayComments = parseOrError(rb.functional_assay_comments),
-        tissueDistributionComments = parseOrError(rb.tissue_distribution_comments),
-        functionsComments = parseOrError(rb.functions_comments),
-        alteredExpressionComments = parseOrError(rb.altered_expression_comments),
-        expressionPathophysiologyComments = parseOrError(rb.expression_pathophysiology_comments),
-        mutationsPathophysiologyComments = parseOrError(rb.mutations_pathophysiology_comments),
-        variantsComments = parseOrError(rb.variants_comments),
-        xenobioticExpressionComments = parseOrError(rb.xenobiotic_expression_comments),
-        antibodyComments = parseOrError(rb.antibody_comments),
-        agonistsComments = parseOrError(rb.agonists_comments),
-        antagonistsComments = parseOrError(rb.antagonists_comments),
-        allostericModulatorsComments = parseOrError(rb.allosteric_modulators_comments),
-        activatorsComments = parseOrError(rb.activators_comments),
-        inhibitorsComments = parseOrError(rb.inhibitors_comments),
-        channelBlockersComments = parseOrError(rb.channel_blockers_comments),
-        gatingInhibitorsComments = parseOrError(rb.gating_inhibitors_comments));
+          var acc =
+            if (i.type == "Agonist") {
+              (acc with agonists = ( parsed :: acc.agonists ))
+            } else if (i.type == "Antagonist") {
+              (acc with antagonists = ( parsed :: acc.antagonists ))
+            } else if (i.type == "Allosteric modulator") {
+              (acc with allostericModulators = ( parsed :: acc.allostericModulators ))
+            } else if (i.type == "Activator") {
+              (acc with activators = ( parsed :: acc.activators ))
+            } else if (i.type == "Inhibitor") {
+              (acc with inhibitors = ( parsed :: acc.inhibitors ))
+            } else if (i.type == "Channel blocker") {
+              (acc with channelBlockers = ( parsed :: acc.channelBlockers ))
+            } else if (i.type == "Gating inhibitor") {
+              (acc with gatingInhibitors = ( parsed :: acc.gatingInhibitors ))
+            } else if (i.type == "Subunit-specific") {
+              (acc with subunitSpecific = ( parsed :: acc.subunitSpecific ))
+            } else {
+              acc
+            };
 
-
-      var (commentRefs, commentLigands) = collectAllIds(
-        [res.listComments, res.associatedProteinsComments,
-          res.functionalAssayComments, res.tissueDistributionComments,
-          res.functionsComments, res.alteredExpressionComments,
-          res.expressionPathophysiologyComments,
-          res.mutationsPathophysiologyComments, res.variantsComments,
-          res.xenobioticExpressionComments, res.antibodyComments,
-          res.agonistsComments, res.antagonistsComments,
-          res.allostericModulatorsComments, res.activatorsComments,
-          res.inhibitorsComments, res.channelBlockersComments,
-          res.gatingInhibitorsComments]);
-      (res, commentRefs, commentLigands)
-    }
-
-    fun transformSynonyms(synonyms) {
-      map(fun(s) {parseOrError(s.synonym) },
-          sortBy(fun(s) { s.order }, synonyms))
-    }
-
-    fun transformFamily(fs) {
-      switch(fs) {
-        case [] -> (familyId = (-1), familyName = MarkupEmpty)
-        case f :: _ -> (familyId = f.id, familyName = parseOrError(f.name))
+          (acc with references = (refs ++ acc.references))
+        }, emptyResult, rawInteractions)
       }
+
+      fun mkInteractionTables(parsedInteractions) {
+        # Columns are slightly different based on the type of interaction.
+        # Agonists / antagonists / channel blockers / allosteric modulators:
+        #  ligand, data cols, species, action, affinity, parameter, references
+        # Activators / Inhibitors / Gating inhibitors:
+        #  ligand, data cols, species, action, affinity, parameter, holding voltage, reference
+
+        fun mkStandardInteractionTable(tableTy, interactions) {
+          var cols = [
+            ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
+            ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
+            ("", NotSortable),
+            ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
+            ("Action", Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) })),
+            # TODO: Some will have affinity ranges. We'll need to be more careful
+            # about how we compare these -- this is a hack ATM.
+            ("Affinity", Sortable(fun(x, y) {
+                simpleCmp(x.iLigandAffinity.affinityMedian,
+                    y.iLigandAffinity.affinityMedian) })),
+            ("Parameter", Sortable(fun(x, y) {
+                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
+            ("References", NotSortable)
+          ];
+          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
+          DataTable.makeTable(cols, interactions, sortMessage)
+        }
+
+        fun mkActivatorTable(tableTy, interactions) {
+          var cols = [
+            ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
+            ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
+            ("", NotSortable),
+            ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
+            ("Affinity", Sortable(fun(x, y) {
+                simpleCmp(x.iLigandAffinity.affinityMedian,
+                    y.iLigandAffinity.affinityMedian) })),
+            ("Parameter", Sortable(fun(x, y) {
+                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
+             # FIXME: Need to fix these up when we have the right details in the model
+            ("Concentration range (M)", NotSortable), ("Holding voltage (mV)", NotSortable),
+            ("References", NotSortable)
+          ];
+
+          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
+
+          DataTable.makeTable(cols, interactions, sortMessage)
+        }
+
+        (agonists = mkStandardInteractionTable(AgonistsTable, parsedInteractions.agonists),
+         antagonists = mkStandardInteractionTable(AntagonistsTable, parsedInteractions.antagonists),
+         allostericModulators =
+           mkStandardInteractionTable(AllostericModulatorsTable,
+             parsedInteractions.allostericModulators),
+         activators =
+           mkActivatorTable(ActivatorsTable, parsedInteractions.activators),
+         inhibitors =
+           mkActivatorTable(InhibitorsTable, parsedInteractions.inhibitors),
+         channelBlockers =
+           mkActivatorTable(ChannelBlockersTable, parsedInteractions.channelBlockers),
+         gatingInhibitors =
+           mkActivatorTable(GatingInhibitorsTable, parsedInteractions.gatingInhibitors),
+         subunitSpecific =
+           mkStandardInteractionTable(SubunitSpecificTable, parsedInteractions.subunitSpecific))
+      }
+
+      fun transformPDBs(rawPDBs) {
+        fun transformPDB(rawPDB) {
+          var pdb = rawPDB.pdb;
+          var ligand = rawPDB.ligand;
+          var refs = rawPDB.refs;
+          var res =
+            (pdbCode = pdb.pdb_code,
+             pdbLigandId = ligand.ligand_id,
+             pdbLigandName = parseOrError(ligand.name),
+             pdbLigandDescription = parseOrError(pdb.description),
+             pdbSpeciesId = pdb.species_id,
+             pdbReferences = [],
+             pdbResolution = pdb.resolution);
+          var (descriptionRefs, descriptionLigands) =
+            RenderMarkup.collectIds(res.pdbLigandDescription);
+          var allRefs = refs ++ descriptionRefs;
+          ((res with pdbReferences = allRefs), allRefs, descriptionLigands)
+        }
+
+        var (pdbsRev, pdbRefs, pdbLigands) =
+          fold_left(fun((pdbs, pdbRefs, pdbLigands), pdb) {
+              var (pdb, refs, ligands) = transformPDB(pdb);
+              (pdb :: pdbs, refs ++ pdbRefs, ligands ++ pdbLigands)
+          }, ([], [], []), rawPDBs);
+        (reverse(pdbsRev), pdbRefs, pdbLigands)
+      }
+
+      fun transformVariants(rawVs) {
+        var (variantsRev, vRefs, vLigands) =
+          fold_left(fun((variants, vRefs, vLigands), rawV) {
+            var v = rawV.v;
+            var desc = parseOrError(v.description);
+            var (refIDs, ligandIDs) = collectIds(desc);
+            var res =
+              (vId = v.variant_id,
+               vType = v.type,
+               vSpecies = v.species_id,
+               vDescription = desc,
+               vReferences = rawV.refs
+              );
+            (res :: variants, refIDs ++ res.vReferences, ligandIDs)
+          }, ([], [], []), rawVs);
+        (reverse(variantsRev), vRefs, vLigands)
+      }
+
+
+      fun transformReceptorComments(rb) {
+        var res = (
+          listComments = parseOrError(rb.list_comments),
+          associatedProteinsComments = parseOrError(rb.associated_proteins_comments),
+          functionalAssayComments = parseOrError(rb.functional_assay_comments),
+          tissueDistributionComments = parseOrError(rb.tissue_distribution_comments),
+          functionsComments = parseOrError(rb.functions_comments),
+          alteredExpressionComments = parseOrError(rb.altered_expression_comments),
+          expressionPathophysiologyComments = parseOrError(rb.expression_pathophysiology_comments),
+          mutationsPathophysiologyComments = parseOrError(rb.mutations_pathophysiology_comments),
+          variantsComments = parseOrError(rb.variants_comments),
+          xenobioticExpressionComments = parseOrError(rb.xenobiotic_expression_comments),
+          antibodyComments = parseOrError(rb.antibody_comments),
+          agonistsComments = parseOrError(rb.agonists_comments),
+          antagonistsComments = parseOrError(rb.antagonists_comments),
+          allostericModulatorsComments = parseOrError(rb.allosteric_modulators_comments),
+          activatorsComments = parseOrError(rb.activators_comments),
+          inhibitorsComments = parseOrError(rb.inhibitors_comments),
+          channelBlockersComments = parseOrError(rb.channel_blockers_comments),
+          gatingInhibitorsComments = parseOrError(rb.gating_inhibitors_comments));
+
+
+        var (commentRefs, commentLigands) = collectAllIds(
+          [res.listComments, res.associatedProteinsComments,
+            res.functionalAssayComments, res.tissueDistributionComments,
+            res.functionsComments, res.alteredExpressionComments,
+            res.expressionPathophysiologyComments,
+            res.mutationsPathophysiologyComments, res.variantsComments,
+            res.xenobioticExpressionComments, res.antibodyComments,
+            res.agonistsComments, res.antagonistsComments,
+            res.allostericModulatorsComments, res.activatorsComments,
+            res.inhibitorsComments, res.channelBlockersComments,
+            res.gatingInhibitorsComments]);
+        (res, commentRefs, commentLigands)
+      }
+
+      fun transformSynonyms(synonyms) {
+        map(fun(s) {parseOrError(s.synonym) },
+            sortBy(fun(s) { s.order }, synonyms))
+      }
+
+      fun transformFamily(fs) {
+        switch(fs) {
+          case [] -> (familyId = (-1), familyName = MarkupEmpty)
+          case f :: _ -> (familyId = f.id, familyName = parseOrError(f.name))
+        }
+      }
+
+      var (variants, variantRefs, variantLigands) =
+        transformVariants(raw.variants);
+
+      var (pdbData, pdbRefs, pdbLigands) = transformPDBs(raw.pdbData);
+      var interactions = transformInteractions(raw.interactions);
+      var sortedInteractions = mkInteractionTables(interactions);
+      var interactionRefs = interactions.references;
+
+      var (transductions, transductionRefs, transductionLigands) =
+        Transduction.transductionsForObject(objectId);
+
+      # TODO: We need to handle grac, immuno, and malaria comments here too
+      var generalComments = parseOrError(raw.comments);
+      var (commentRefs, commentLigands) =
+        RenderMarkup.collectIds(generalComments);
+
+      var refIDs =
+        uniquify(variantRefs ++ interactionRefs ++
+            transductionRefs ++ commentRefs);
+
+      var ligandIDs =
+        uniquify(variantLigands ++ pdbLigands ++ transductionLigands ++
+            commentLigands);
+
+      var refs = Reference.mkReferenceData(Reference.queryReferences(refIDs));
+
+      (objectId = objectId,
+       objectName = parseOrError(raw.name),
+       objectSynonyms = transformSynonyms(raw.synonyms),
+       objectFamily = transformFamily(raw.family),
+       objectAnnotationStatus = raw.annotationStatus,
+       objectPDBData = pdbData,
+       objectSortedInteractions = sortedInteractions,
+       objectTransductionMechanisms = transductions,
+       objectVariants = variants,
+       objectGeneralComments = generalComments,
+       objectReferences = refs)
     }
 
-    var (variants, variantRefs, variantLigands) =
-      transformVariants(raw.variants);
-
-    var (pdbData, pdbRefs, pdbLigands) = transformPDBs(raw.pdbData);
-    var interactions = transformInteractions(raw.interactions);
-    var sortedInteractions = mkInteractionTables(interactions);
-    var interactionRefs = interactions.references;
-
-    var (transductions, transductionRefs, transductionLigands) =
-      Transduction.transductionsForObject(objectId);
-
-    # TODO: We need to handle grac, immuno, and malaria comments here too
-    var generalComments = parseOrError(raw.comments);
-    var (commentRefs, commentLigands) =
-      RenderMarkup.collectIds(generalComments);
-
-    var refIDs =
-      uniquify(variantRefs ++ interactionRefs ++
-          transductionRefs ++ commentRefs);
-
-    var ligandIDs =
-      uniquify(variantLigands ++ pdbLigands ++ transductionLigands ++
-          commentLigands);
-
-    var refs = Reference.mkReferenceData(Reference.queryReferences(refIDs));
-
-    (objectId = objectId,
-     objectName = parseOrError(raw.name),
-     objectSynonyms = transformSynonyms(raw.synonyms),
-     objectFamily = transformFamily(raw.family),
-     objectAnnotationStatus = raw.annotationStatus,
-     objectPDBData = pdbData,
-     objectSortedInteractions = sortedInteractions,
-     objectTransductionMechanisms = transductions,
-     objectVariants = variants,
-     objectGeneralComments = generalComments,
-     objectReferences = refs)
+    switch(raw) {
+      case [] -> Nothing
+      case x :: _ -> Just(mkModel(x))
+    }
   }
 
-  switch(raw) {
-    case [] -> Nothing
-    case x :: _ -> Just(mkModel(x))
+  switch(lookup("familyId", environment())) {
+    case Just(id) -> getObjectInfo(stringToInt(id))
+    case Nothing -> Nothing
   }
+}
+
+fun view(model) {
+  MvuHTML.empty
+}
+
+fun updt(msg, model) {
+  model
+}
+
+fun mainPage() {
+  var initialModel = getInitialModel();
+  runSimple("vdom_placeholder", initialModel, view, updt);
+  template("Object Display")
 }
