@@ -8,6 +8,7 @@ open TargetsDisplay;
 open LigandList;
 open DiseaseList;
 open DiseaseDisplay;
+open ObjectDisplay;
 
 # Main routing table.
 fun main() {
@@ -20,6 +21,7 @@ fun main() {
   addRoute("/targetsDisplay", fun(_) { TargetsDisplay.mainPage() });
   addRoute("/diseaseList", fun(_) { DiseaseList.mainPage() });
   addRoute("/diseaseDisplay", fun(_) { DiseaseDisplay.mainPage() });
+  addRoute("/objectDisplay", fun(_) { ObjectDisplay.mainPage() });
   addRoute("/", fun(_) { Home.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);

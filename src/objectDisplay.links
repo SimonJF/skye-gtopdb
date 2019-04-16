@@ -22,6 +22,7 @@ open MvuHTML;
 open MvuAttrs;
 open Mvu;
 open Template;
+open Ligand;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -157,6 +158,8 @@ typename ObjectInfo = (
     objectSynonyms: [Markup],
     objectFamily: Family,
     objectAnnotationStatus: AnnotationStatus,
+    # TODO: Suss this out and add it in
+    # objectQuaternaryStructure: (),
    # objectGeneInformation: SortableTable(GeneProteinInfo, Message),
    # objectDatabaseLinks: (), # for now
     objectPDBData: [PDBData],
@@ -174,14 +177,15 @@ typename ObjectInfo = (
    # objectPhenotypes: SortableTable(Phenotype, Message),
     objectVariants: [Variant],
     objectGeneralComments: Markup,
-    objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))]
+    objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))],
+    objectLigandNames: [(LigandId, LigandName)]
    # objectContributors: [Contributor.Contributor]
 );
 
 
 typename Model = Maybe(ObjectInfo);
 
-sig getInitialModel : () ~%~> Maybe(ObjectInfo)
+sig getInitialModel : () ~%~> Model
 fun getInitialModel() {
   # TODO: We also need to traverse this record to transform everything to markup and
   # get the referenced ligands and references.
@@ -580,6 +584,8 @@ fun getInitialModel() {
         uniquify(variantLigands ++ pdbLigands ++ transductionLigands ++
             commentLigands);
 
+      var ligandNames = Ligand.queryLigands(ligandIDs);
+
       var refs = Reference.mkReferenceData(Reference.queryReferences(refIDs));
 
       (objectId = objectId,
@@ -592,6 +598,7 @@ fun getInitialModel() {
        objectTransductionMechanisms = transductions,
        objectVariants = variants,
        objectGeneralComments = generalComments,
+       objectLigandNames = ligandNames,
        objectReferences = refs)
     }
 
@@ -607,10 +614,82 @@ fun getInitialModel() {
   }
 }
 
+sig view : (Model) ~%~> HTML(Message)
 fun view(model) {
-  MvuHTML.empty
+  sig viewModel : (ObjectInfo) ~%~> HTML(Message)
+  fun viewModel(objectInfo) {
+    var a0 = MvuAttrs.empty;
+    var h0 = MvuHTML.empty;
+
+    sig renderM : (Markup) ~%~> HTML(Message)
+    fun renderM(m) {
+      RenderMarkup.renderMarkup(m,
+          objectInfo.objectReferences,
+          objectInfo.objectLigandNames)
+    }
+
+    var infoBox = {
+    div(class("grid_16 alpha"),
+      a(name("top"), MvuHTML.empty) +*
+      h4(a0, renderM(objectInfo.objectName)) +*
+      div(class("contentboxfullhelp"),
+        div(class("textmiddle"),
+          p(a0, b(a0, textNode("Target id: ")) +*
+            textNode(intToString(objectInfo.objectId))) +*
+          p(a0,
+            b(a0, textNode("Nomenclature: ")) +*
+            renderM(objectInfo.objectName)) +*
+          p(a0,
+            b(a0, textNode("Family: ")) +*
+            a(href("/familyDisplay?familyId=" ^^ intToString(objectInfo.objectFamily.familyId)),
+              renderM(objectInfo.objectFamily.familyName))) +*
+          p(a0,
+            b(a0, textNode("Annotation status: ")) +*
+            textNode("Not implemented yet.")))))
+    };
+##  <div class="grid_16 alpha">
+##      <a name="top"></a>
+##      <h4>CGRP receptor</h4>
+##      <div class="contentboxfullhelp">
+##          <div class="imageleft">
+##              <a style="color:white;" href="JavaScript:callRef('helpPagePopup.jsp#targetName', 800, 400)" title="Click here for help"><img id="logo" style="vertical-align:baseline;" src="images/help_blue_small.png" alt="Click here for help" /></a>
+##          </div>
+##          <div class="textright_float">
+##              <p>
+##                  Target <b>not</b> currently curated in GtoImmuPdb
+##                  <br/>
+##                  <br/>
+##                  <button class="button_gtoimmupdb_off" onClick='window.location.href="http://www.guidetoimmunopharmacology.org/GRAC/ObjectDisplayForward?objectId=48"; return false;'>GtoImmuPdb View OFF</button>
+##              </p>
+##          </div>
+##          <div class="textmiddle">
+##              <p>
+##                  <b>Target id:</b>&nbsp;48
+##              </p>
+##              <p>
+##                  <b>Nomenclature:</b>&nbsp;CGRP receptor
+##              </p>
+##              <p>
+##                  <b>Family:</b>&nbsp;<a href="FamilyDisplayForward?familyId=11">Calcitonin receptors</a></li>
+##              </p>
+##              <p><b>Annotation status:</b>&nbsp;
+##                  <img src="images/greencircle.png" alt="image of a green circle" width="10px" height="10px" style="vertical-align:baseline" /> Annotated and expert reviewed. Please contact us if you can help with updates.&nbsp; &#187; <a href="revealEmail.jsp" onclick="window.open('revealEmail.jsp', '', 'toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=550,height=300'); return false;" title="Reveal this e-mail address">Email us</a>
+##              </p>
+##          </div>
+##      </div>
+##  </div>
+    div(class("grid_12"),
+        infoBox)
+  }
+
+  switch(model) {
+    case Just(objectInfo) -> viewModel(objectInfo)
+    case Nothing -> textNode("Invalid object ID.")
+  }
 }
 
+# TODO
+sig updt : (Message, Model) ~%~> Model
 fun updt(msg, model) {
   model
 }

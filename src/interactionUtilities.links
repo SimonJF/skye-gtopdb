@@ -1,0 +1,6 @@
+# Functionality for dealing with ligand<->object interactions.
+# This will grow as I abstract more out.
+
+typename InteractionAffinity =
+  (affinityUnits: String, affinityLow: Float,
+   affinityMedian: Float, affinityHigh: Float);

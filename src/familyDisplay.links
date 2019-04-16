@@ -9,11 +9,10 @@ open RenderMarkup;
 open Parser;
 open Utility;
 open InteractionUtilities;
+open Ligand;
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
-typename LigandId = Int;
-typename LigandName = Markup;
 typename SpeciesId = Int;
 typename SpeciesShortName = String;
 typename SpeciesLongName = String;
@@ -700,13 +699,6 @@ fun getInitialModel() {
         var refs = uniquify(oRefs ++ cRefs ++ objectReferences);
         var ligands = uniquify(oLigands ++ cLigands);
 
-        # `contains` allows us to construct a (tame) predicate which checks
-        # list membership and can be efficiently compiled to the DB. It can
-        # be thought of as building up a series of "OR" clauses in a type-safe
-        # way.
-        var containsReference = contains(refs);
-        var containsLigand = contains(ligands);
-
         var references = queryReferences(refs);
 
 
@@ -714,15 +706,7 @@ fun getInitialModel() {
         # This constructs a map from reference IDs to pairs of reference
         # numbers and references.
         var referenceData = mkReferenceData(references);
-
-        var ligands = query {
-            for (l <-- ligand)
-              where (containsLigand(l.ligand_id))
-              [ (l.ligand_id, l.name) ]
-          };
-        # Ensure that ligand names are parsed so they can be rendered
-        # correctly
-        var ligands = map(fun((id, name)) { (id, parseOrError(name)) }, ligands);
+        var ligands = Ligand.queryLigands(ligands);
 
         # Species mapping is simple enough for us to just do in memory
         # and saves us the faff of doing joins.
@@ -742,8 +726,7 @@ fun getInitialModel() {
            references=(boxName="References", boxVisible=true, contents=referenceData),
            contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
            ligandNames = ligands,
-           speciesShortNames=speciesMap
-           ))
+           speciesShortNames=speciesMap))
     }
   }
 
