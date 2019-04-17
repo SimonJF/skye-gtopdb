@@ -148,7 +148,10 @@ typename ReceptorComments = (
   activatorsComments: Markup,
   inhibitorsComments: Markup,
   channelBlockersComments: Markup,
-  gatingInhibitorsComments: Markup
+  gatingInhibitorsComments: Markup,
+  generalComments: Markup,
+  immunoComments: Markup,
+  malariaComments: Markup
 );
 
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
@@ -167,7 +170,6 @@ typename ObjectInfo = (
     # TODO: Potency order(!?)
   # objectPotencyOrder: (),
     objectSortedInteractions: SortedInteractions,
-   # objectImmunoComments: Markup,
     objectTransductionMechanisms: [TransductionMechanism],
    # objectTissueDistribution: [TissueDistribution],
     # TODO: Expression dataset(!?)
@@ -176,7 +178,7 @@ typename ObjectInfo = (
    # objectPhysiologicalFunctions: [PhysiologicalFunction],
    # objectPhenotypes: SortableTable(Phenotype, Message),
     objectVariants: [Variant],
-    objectGeneralComments: Markup,
+    objectComments: ReceptorComments,
     objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))],
     objectLigandNames: [(LigandId, LigandName)]
    # objectContributors: [Contributor.Contributor]
@@ -225,8 +227,8 @@ fun getInitialModel() {
     var raw = query {
       for (o <-- Tables.object)
         where (o.object_id == objectId)
-        # for (rb <-- Tables.receptor_basic)
-        #   where (rb.object_id == objectId)
+        for (rb <-- Tables.receptor_basic)
+          where (rb.object_id == objectId)
             [(id = objectId,
              name = o.name,
              comments = o.comments,
@@ -266,7 +268,7 @@ fun getInitialModel() {
                          where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
                          [pdbR.reference_id])],
              potencyOrder = (), # FIXME: FILL ME IN
-             receptorBasic = defaultRB,
+             receptorBasic = rb,
              interactions =
                for (i <-- Tables.interaction)
                  where (i.object_id == objectId)
@@ -512,7 +514,7 @@ fun getInitialModel() {
       }
 
 
-      fun transformReceptorComments(rb) {
+      fun transformReceptorComments(rb, general, immuno, malaria) {
         var res = (
           listComments = parseOrError(rb.list_comments),
           associatedProteinsComments = parseOrError(rb.associated_proteins_comments),
@@ -530,7 +532,10 @@ fun getInitialModel() {
           activatorsComments = parseOrError(rb.activators_comments),
           inhibitorsComments = parseOrError(rb.inhibitors_comments),
           channelBlockersComments = parseOrError(rb.channel_blockers_comments),
-          gatingInhibitorsComments = parseOrError(rb.gating_inhibitors_comments));
+          gatingInhibitorsComments = parseOrError(rb.gating_inhibitors_comments),
+          generalComments = parseOrError(general),
+          immunoComments = parseOrError(immuno),
+          malariaComments = parseOrError(malaria));
 
 
         var (commentRefs, commentLigands) = collectAllIds(
@@ -543,7 +548,8 @@ fun getInitialModel() {
             res.agonistsComments, res.antagonistsComments,
             res.allostericModulatorsComments, res.activatorsComments,
             res.inhibitorsComments, res.channelBlockersComments,
-            res.gatingInhibitorsComments]);
+            res.gatingInhibitorsComments, res.generalComments,
+            res.immunoComments, res.malariaComments]);
         (res, commentRefs, commentLigands)
       }
 
@@ -571,10 +577,11 @@ fun getInitialModel() {
       var (transductions, transductionRefs, transductionLigands) =
         Transduction.transductionsForObject(objectId);
 
-      # TODO: We need to handle grac, immuno, and malaria comments here too
-      var generalComments = parseOrError(raw.comments);
-      var (commentRefs, commentLigands) =
-        RenderMarkup.collectIds(generalComments);
+      # TODO: A few more comment fields (grac_comments, structural_info_comments, quanternary_structure_comments)
+      # still to be handled
+      var (receptorComments, commentRefs, commentLigands) =
+        transformReceptorComments(raw.receptorBasic, raw.comments,
+            raw.immuno_comments, raw.malaria_comments);
 
       var refIDs =
         uniquify(variantRefs ++ interactionRefs ++
@@ -597,7 +604,7 @@ fun getInitialModel() {
        objectSortedInteractions = sortedInteractions,
        objectTransductionMechanisms = transductions,
        objectVariants = variants,
-       objectGeneralComments = generalComments,
+       objectComments = receptorComments,
        objectLigandNames = ligandNames,
        objectReferences = refs)
     }
@@ -647,39 +654,71 @@ fun view(model) {
             b(a0, textNode("Annotation status: ")) +*
             textNode("Not implemented yet.")))))
     };
-##  <div class="grid_16 alpha">
-##      <a name="top"></a>
-##      <h4>CGRP receptor</h4>
-##      <div class="contentboxfullhelp">
-##          <div class="imageleft">
-##              <a style="color:white;" href="JavaScript:callRef('helpPagePopup.jsp#targetName', 800, 400)" title="Click here for help"><img id="logo" style="vertical-align:baseline;" src="images/help_blue_small.png" alt="Click here for help" /></a>
-##          </div>
-##          <div class="textright_float">
-##              <p>
-##                  Target <b>not</b> currently curated in GtoImmuPdb
-##                  <br/>
-##                  <br/>
-##                  <button class="button_gtoimmupdb_off" onClick='window.location.href="http://www.guidetoimmunopharmacology.org/GRAC/ObjectDisplayForward?objectId=48"; return false;'>GtoImmuPdb View OFF</button>
-##              </p>
-##          </div>
-##          <div class="textmiddle">
-##              <p>
-##                  <b>Target id:</b>&nbsp;48
-##              </p>
-##              <p>
-##                  <b>Nomenclature:</b>&nbsp;CGRP receptor
-##              </p>
-##              <p>
-##                  <b>Family:</b>&nbsp;<a href="FamilyDisplayForward?familyId=11">Calcitonin receptors</a></li>
-##              </p>
-##              <p><b>Annotation status:</b>&nbsp;
-##                  <img src="images/greencircle.png" alt="image of a green circle" width="10px" height="10px" style="vertical-align:baseline" /> Annotated and expert reviewed. Please contact us if you can help with updates.&nbsp; &#187; <a href="revealEmail.jsp" onclick="window.open('revealEmail.jsp', '', 'toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=550,height=300'); return false;" title="Reveal this e-mail address">Email us</a>
-##              </p>
-##          </div>
-##      </div>
-##  </div>
+
+    fun dataTextBox(header, markup) {
+      if (Parser.markupEmpty(markup)) {
+        MvuHTML.empty
+      } else {
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(name("hotspot") +@ class("hotspot"),
+              td(class("info category"),
+                textNode(header)))) +*
+          tbody(name("toggle"),
+            tr(a0,
+              td(class("info"),
+                renderM(markup)))))
+      }
+    }
+
+    var comments = objectInfo.objectComments;
+
+    var geneProteinInfoBox = MvuHTML.empty;
+    var synonymsBox = MvuHTML.empty;
+    var dbLinksBox = MvuHTML.empty;
+    var pdbStructureBox = MvuHTML.empty;
+    var endogenousLigandsBox = MvuHTML.empty;
+    var potencyOrderBox = MvuHTML.empty;
+    var interactionsTables = MvuHTML.empty;
+    var immunoCommentsBox =
+      dataTextBox("Immunopharmacology Comments", comments.immunoComments);
+    var malariaCommentsBox =
+      dataTextBox("Malaria Comments", comments.malariaComments);
+    var transductionMechanismsBox = MvuHTML.empty;
+    var tissueDistributionBox = MvuHTML.empty;
+    var functionalAssaysBox = MvuHTML.empty;
+    var physiologicalFunctionsBox = MvuHTML.empty;
+    var physiologicalConsequencesBox = MvuHTML.empty;
+    var phenotypesBox = MvuHTML.empty;
+    var generalCommentsBox =
+      dataTextBox("General Comments", comments.generalComments);
+    var contributorsBox = MvuHTML.empty;
+
+    var dataBox =
+      div(class("grid_16 alpha"),
+        div(class("contentboxfullhelp"),
+          div(class("data_tables_container"),
+            geneProteinInfoBox +*
+            synonymsBox +*
+            dbLinksBox +*
+            pdbStructureBox +*
+            endogenousLigandsBox +*
+            potencyOrderBox +*
+            interactionsTables +*
+            immunoCommentsBox +*
+            malariaCommentsBox +*
+            transductionMechanismsBox +*
+            tissueDistributionBox +*
+            functionalAssaysBox +*
+            physiologicalFunctionsBox +*
+            physiologicalConsequencesBox +*
+            phenotypesBox +*
+            generalCommentsBox)));
+
     div(class("grid_12"),
-        infoBox)
+        infoBox +*
+        dataBox +*
+        contributorsBox)
   }
 
   switch(model) {

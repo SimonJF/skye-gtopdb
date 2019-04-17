@@ -136,6 +136,10 @@ fun parseOrError(str) {
   }
 }
 
+fun markupEmpty(m) {
+  (m == MarkupEmpty) || (m == MarkupText(""))
+}
+
 var testStr =
   "<a href=\"FamilyDisplayForward?familyId=78#show_object_507\">TRPV1</a>) and <a href=\"FamilyDisplayForward?familyId=86\">PPARs</a> <Reference id=13694/><Reference id=2031/>. There is evidence for an allosteric site on the CB<sub>1</sub> receptor <Reference id=13695/>. All of the compounds listed as antagonists behave as inverse agonists in some bioassay systems <Reference id=14916/>. For some cannabinoid receptor ligands, additional pharmacological targets that include GPR55 and GPR119 have been
   identified <Reference id=14916/>. Moreover, <a href= \"FamilyDisplayForward?familyId=114\">GPR18, GPR55 and GPR119</a>, although showing little structural similarity to CB<sub>1</sub> and CB<sub>2 </sub>receptors, respond to endogenous agents that are structurally similar to the endogenous cannabinoid ligands <Reference id=14916/>.";
