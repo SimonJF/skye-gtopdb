@@ -241,7 +241,7 @@ fun getInitialModel() {
              malaria_comments = o.gtmp_comment,
              synonyms =
                for (s <-- Tables.synonym)
-                 where (s.object_id == objectId)
+                 where (s.object_id == objectId && s.display)
                  [(synonym=s.synonym, order=s.display_order)],
              family =
                for (r2f <-- Tables.receptor2family)
@@ -660,35 +660,47 @@ fun view(model) {
             textNode("Not implemented yet.")))))
     };
 
-    fun dataTextBox(header, markup) {
+    fun dataTextBox(header, contents) {
+      table_(class("receptor_data_tables fullwidth"),
+        thead(a0,
+          tr(name("hotspot") +@ class("hotspot"),
+            td(class("info category"),
+              textNode(header)))) +*
+        tbody(name("toggle"),
+          tr(a0,
+            td(class("info"),
+              contents))))
+    }
+
+    fun commentsBox(header, markup) {
       if (Parser.markupEmpty(markup)) {
         MvuHTML.empty
       } else {
-        table_(class("receptor_data_tables fullwidth"),
-          thead(a0,
-            tr(name("hotspot") +@ class("hotspot"),
-              td(class("info category"),
-                textNode(header)))) +*
-          tbody(name("toggle"),
-            tr(a0,
-              td(class("info"),
-                renderM(markup)))))
+        dataTextBox(header, renderM(markup))
       }
     }
 
     var comments = objectInfo.objectComments;
 
     var geneProteinInfoBox = MvuHTML.empty;
-    var synonymsBox = MvuHTML.empty;
+
+    var synonymsBox = {
+      if (objectInfo.objectSynonyms == []) { MvuHTML.empty } else {
+        var renderedSynonyms = map(fun(m) { [renderM(m)] }, objectInfo.objectSynonyms);
+        var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], renderedSynonyms));
+        dataTextBox("Previous and Unofficial Names", separatedSynonyms)
+      }
+    };
+
     var dbLinksBox = MvuHTML.empty;
     var pdbStructureBox = MvuHTML.empty;
     var endogenousLigandsBox = MvuHTML.empty;
     var potencyOrderBox = MvuHTML.empty;
     var interactionsTables = MvuHTML.empty;
     var immunoCommentsBox =
-      dataTextBox("Immunopharmacology Comments", comments.immunoComments);
+      commentsBox("Immunopharmacology Comments", comments.immunoComments);
     var malariaCommentsBox =
-      dataTextBox("Malaria Comments", comments.malariaComments);
+      commentsBox("Malaria Comments", comments.malariaComments);
     var transductionMechanismsBox = MvuHTML.empty;
     var tissueDistributionBox = MvuHTML.empty;
     var functionalAssaysBox = MvuHTML.empty;
@@ -696,7 +708,7 @@ fun view(model) {
     var physiologicalConsequencesBox = MvuHTML.empty;
     var phenotypesBox = MvuHTML.empty;
     var generalCommentsBox =
-      dataTextBox("General Comments", comments.generalComments);
+      commentsBox("General Comments", comments.generalComments);
     var contributorsBox = MvuHTML.empty;
 
     var dataBox =
