@@ -30,7 +30,10 @@ typename InteractionTable = [|
   | GatingInhibitorsTable | SubunitSpecificTable
 |];
 
-typename Message = [| SortInteractionTable:(InteractionTable, SortDirection) |];
+typename Message = [|
+    SortInteractionTable:(InteractionTable, SortDirection)
+  | ToggleReferences
+|];
 
 typename Family = (familyId: Int, familyName: Markup);
 typename AnnotationStatus = Int; # TODO: More meaningful datatype here
@@ -179,6 +182,7 @@ typename ObjectInfo = (
    # objectPhenotypes: SortableTable(Phenotype, Message),
     objectVariants: [Variant],
     objectComments: ReceptorComments,
+    objectShowReferences: Bool,
     objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))],
     objectLigandNames: [(LigandId, LigandName)]
    # objectContributors: [Contributor.Contributor]
@@ -606,6 +610,7 @@ fun getInitialModel() {
        objectVariants = variants,
        objectComments = receptorComments,
        objectLigandNames = ligandNames,
+       objectShowReferences = false,
        objectReferences = refs)
     }
 
@@ -715,9 +720,16 @@ fun view(model) {
             phenotypesBox +*
             generalCommentsBox)));
 
+    var referencesBox =
+      Reference.renderReferencesBox(
+          objectInfo.objectShowReferences,
+          objectInfo.objectReferences,
+          fun() { ToggleReferences });
+
     div(class("grid_12"),
         infoBox +*
         dataBox +*
+        referencesBox +*
         contributorsBox)
   }
 
@@ -730,7 +742,19 @@ fun view(model) {
 # TODO
 sig updt : (Message, Model) ~%~> Model
 fun updt(msg, model) {
-  model
+  fun updtOI(objectInfo) {
+    switch(msg) {
+      case ToggleReferences ->
+        (objectInfo with
+          objectShowReferences=not(objectInfo.objectShowReferences))
+      case _ -> objectInfo
+    }
+  }
+
+  switch(model) {
+    case Just(objectInfo) -> Just(updtOI(objectInfo))
+    case Nothing -> Nothing
+  }
 }
 
 fun mainPage() {

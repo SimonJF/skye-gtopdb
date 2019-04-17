@@ -94,7 +94,8 @@ typename Model =
          objects: ContentBox([ObjectSummary]),
          comments: ContentBox(Markup),
          furtherReading: ContentBox([Reference]),
-         references: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
+         showReferences: Bool,
+         references: [(ReferenceId, (ReferenceNumber, Reference))],
          contributors: ContentBox(Contributors),
          ligandNames: [(LigandId, LigandName)],
          speciesNames: [(SpeciesId, (SpeciesShortName, SpeciesLongName))]
@@ -130,7 +131,7 @@ fun setBoxVisibilities(visible, model) {
     objects=sbv(model.objects),
     comments=sbv(model.comments),
     furtherReading=sbv(model.furtherReading),
-    references=sbv(model.references),
+    showReferences=visible,
     contributors=sbv(model.contributors))
 }
 
@@ -160,7 +161,7 @@ fun updt(msg, model) {
         case ToggleFurtherReading ->
           (model with furtherReading=toggleBox(model.furtherReading))
         case ToggleReferences ->
-          (model with references=toggleBox(model.references))
+          (model with showReferences=not(model.showReferences))
         case ToggleContributors ->
           (model with contributors=toggleBox(model.contributors))
         case SetAllVisibilities(vis) -> setBoxVisibilities(vis, model)
@@ -177,7 +178,7 @@ fun view(model) {
   fun viewModel(model) {
     fun renderM(markup) {
         RenderMarkup.renderMarkup(markup,
-          model.references.contents, model.ligandNames)
+          model.references, model.ligandNames)
     }
 
     # showBox: Generic content box, supporting show/hide functionality.
@@ -337,7 +338,7 @@ fun view(model) {
           var citationsNode =
             textNode(" ") +*
             renderCitationList(i.interactionReferences,
-                model.references.contents);
+                model.references);
 
 
           a(href("ligandDisplay?ligandId=" ^^
@@ -381,7 +382,7 @@ fun view(model) {
                 var citationNode =
                   if (length(x.synonymReferences) > 0) {
                     textNode(" ") +* renderCitationList(x.synonymReferences,
-                        model.references.contents)
+                        model.references)
                   } else { MvuHTML.empty };
                 [renderM(x.synonymName) +* citationNode]
             }, synonyms);
@@ -479,13 +480,19 @@ fun view(model) {
               otherContributors)))))
     }
 
+    var referencesBox =
+      Reference.renderReferencesBox(
+          model.showReferences,
+          model.references,
+          fun() { ToggleReferences });
+
     # (boxName: String,  boxVisible: Bool, contents: a);
     headerBox +*
     showBox(model.overview, ToggleOverview, displayOverview) +*
     showBox(model.objects, ToggleObjects, displayObjects) +*
     showBox(model.comments, ToggleComments, displayComments) +*
     showBox(model.furtherReading, ToggleFurtherReading, displayFurtherReading) +*
-    showBox(model.references, ToggleReferences, displayReferences) +*
+    referencesBox +*
     showBox(model.contributors, ToggleContributors, displayContributors)
   }
 
@@ -723,7 +730,8 @@ fun getInitialModel() {
            comments=(boxName="Comments", boxVisible=true, contents=commentsMarkup),
            furtherReading=(boxName="Further Reading", boxVisible=true,
              contents=furtherReading),
-           references=(boxName="References", boxVisible=true, contents=referenceData),
+           showReferences=true,
+           references=referenceData,
            contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
            ligandNames = ligands,
            speciesShortNames=speciesMap))

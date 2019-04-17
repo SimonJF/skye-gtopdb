@@ -170,3 +170,31 @@ fun mkReferenceData(refList) {
   mapi(fun(ref, i) { (ref.referenceId, (i, ref)) },
     sortBy(fun(ref) { ref.authors }, refList))
 }
+
+fun renderReferencesBox(showRefs, refs, toggleMsg) {
+  var a0 = MvuAttrs.empty;
+  var inner = displayReferences(refs);
+  var showHideLink =
+    if(showRefs) {
+      a(id("hide_overview") +@ onClick(toggleMsg),
+        small(a0, textNode("Hide")))
+    } else {
+      a(id("show_overview") +@ onClick(toggleMsg),
+        small(a0, textNode("Show")))
+    };
+
+  var innerSection =
+    if(showRefs) {
+      div(class("visibleSection"), inner)
+    } else {
+      MvuHTML.empty
+    };
+
+  div(class("grid_16 alpha"),
+    h4(a0, textNode("References")) +*
+    div(class("contentboxfullhelp"),
+      div(class("imageleft"), textNode("?")) +*
+      div(class("textright"),
+        p(class("split_para"), showHideLink) +*
+        innerSection)))
+}
