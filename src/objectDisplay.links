@@ -660,23 +660,23 @@ fun view(model) {
             textNode("Not implemented yet.")))))
     };
 
-    fun dataTextBox(header, contents) {
+    fun dataBox(header, contents) {
       table_(class("receptor_data_tables fullwidth"),
         thead(a0,
           tr(name("hotspot") +@ class("hotspot"),
             td(class("info category"),
               textNode(header)))) +*
-        tbody(name("toggle"),
-          tr(a0,
-            td(class("info"),
-              contents))))
+        tbody(name("toggle"), contents))
     }
 
     fun commentsBox(header, markup) {
       if (Parser.markupEmpty(markup)) {
         MvuHTML.empty
       } else {
-        dataTextBox(header, renderM(markup))
+        dataBox(header,
+          tr(a0,
+          td(class("info"),
+            renderM(markup))))
       }
     }
 
@@ -688,7 +688,7 @@ fun view(model) {
       if (objectInfo.objectSynonyms == []) { MvuHTML.empty } else {
         var renderedSynonyms = map(fun(m) { [renderM(m)] }, objectInfo.objectSynonyms);
         var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], renderedSynonyms));
-        dataTextBox("Previous and Unofficial Names", separatedSynonyms)
+        dataBox("Previous and Unofficial Names", separatedSynonyms)
       }
     };
 
@@ -701,7 +701,50 @@ fun view(model) {
       commentsBox("Immunopharmacology Comments", comments.immunoComments);
     var malariaCommentsBox =
       commentsBox("Malaria Comments", comments.malariaComments);
-    var transductionMechanismsBox = MvuHTML.empty;
+
+    var transductionMechanismsBoxes = {
+      var tms = objectInfo.objectTransductionMechanisms;
+      if (tms == []) {
+        MvuHTML.empty
+      } else {
+        var (primary, secondary) = partition(fun(t) { not(t.tSecondary) }, tms);
+        fun renderTransduction(t) {
+          fun renderMarkups(ms) {
+            MvuHTML.concat(map(fun(m) { p(a0, renderM(m)) }, ms))
+          }
+          var commentsRow =
+            if (Parser.markupEmpty(t.tComments)) { MvuHTML.empty } else {
+              tr(a0,
+                td(attr("colSpan", "2"), renderM(t.tComments)))
+            };
+          var referencesRow =
+            if (t.tReferences == []) { MvuHTML.empty } else {
+              Reference.renderCitationList(t.tReferences, objectInfo.objectReferences)
+            };
+
+          tr(a0,
+            td(class("info"),
+              renderMarkups(t.tTransducers)) +*
+            td(class("info"),
+              renderMarkups(t.tEffectors))) +*
+          commentsRow +*
+          referencesRow
+        }
+
+        var primaryBox = if (primary == []) { MvuHTML.empty } else {
+          dataBox("Primary Transduction Mechanisms",
+              MvuHTML.concat(map(renderTransduction, primary)))
+        };
+
+        var secondaryBox = if (secondary == []) { MvuHTML.empty } else {
+          dataBox("Secondary Transduction Mechanisms",
+              MvuHTML.concat(map(renderTransduction, secondary)))
+        };
+
+        primaryBox +* secondaryBox
+      }
+    };
+
     var tissueDistributionBox = MvuHTML.empty;
     var functionalAssaysBox = MvuHTML.empty;
     var physiologicalFunctionsBox = MvuHTML.empty;
@@ -711,7 +754,7 @@ fun view(model) {
       commentsBox("General Comments", comments.generalComments);
     var contributorsBox = MvuHTML.empty;
 
-    var dataBox =
+    var dataBoxes =
       div(class("grid_16 alpha"),
         div(class("contentboxfullhelp"),
           div(class("data_tables_container"),
@@ -724,7 +767,7 @@ fun view(model) {
             interactionsTables +*
             immunoCommentsBox +*
             malariaCommentsBox +*
-            transductionMechanismsBox +*
+            transductionMechanismsBoxes +*
             tissueDistributionBox +*
             functionalAssaysBox +*
             physiologicalFunctionsBox +*
@@ -740,7 +783,7 @@ fun view(model) {
 
     div(class("grid_12"),
         infoBox +*
-        dataBox +*
+        dataBoxes +*
         referencesBox +*
         contributorsBox)
   }
