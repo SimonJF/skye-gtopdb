@@ -98,6 +98,7 @@ fun renderCitationList(ids, refs) {
 }
 
 fun queryReferences(refIds) {
+  if (refIds == []) { [] } else {
   var containsReference = contains(refIds);
   query {
   for (ref <-- Tables.reference)
@@ -110,6 +111,7 @@ fun queryReferences(refIds) {
              ref.isbn, ref.authors, false))
       ]
     }
+  }
 }
 
 

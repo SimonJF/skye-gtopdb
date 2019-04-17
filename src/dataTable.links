@@ -85,10 +85,15 @@ fun renderTable(tbl, renderRow) {
   var headers = MvuHTML.concat(map(renderHeader, tbl.tableColumns));
   var renderedRows = MvuHTML.concat(map(renderRow, sortedData));
 
-  table_(class("tablesorter inner_receptor_data_tables"),
+  if (tbl.tableRows == []) {
+    MvuHTML.empty
+  } else {
+    table_(class("tablesorter inner_receptor_data_tables"),
       thead(a0,
         tr(class("info heading"), headers)) +*
       tbody(a0, renderedRows))
+
+  }
 }
 
 sig updateSortStatus: (SortableTable(d, m), ColumnName, SortDirection) {}~> SortableTable(d, m)

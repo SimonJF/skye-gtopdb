@@ -192,30 +192,32 @@ fun getInitialModel() {
 
   sig getObjectInfo : (Int) ~%~> Maybe(ObjectInfo)
   fun getObjectInfo(objectId) {
+    var defaultRB =
+      (object_id=objectId,
+       list_comments="",
+       associated_proteins_comments="",
+       functional_assay_comments="",
+       tissue_distribution_comments="",
+       functions_comments="",
+       altered_expression_comments="",
+       expression_pathophysiology_comments="",
+       mutations_pathophysiology_comments="",
+       variants_comments="",
+       xenobiotic_expression_comments="",
+       antibody_comments="",
+       agonists_comments="",
+       antagonists_comments="",
+       allosteric_modulators_comments="",
+       activators_comments="",
+       inhibitors_comments="",
+       channel_blockers_comments="",
+       gating_inhibitors_comments="");
+
     # Each object should have at most one `receptor_basic` entry.
     # If there aren't any, we need to (manually) create a dummy one.
     fun rbOrDefault(rbs) {
       switch(rbs) {
-        case [] ->
-          (object_id=objectId,
-           list_comments="",
-           associated_proteins_comments="",
-           functional_assay_comments="",
-           tissue_distribution_comments="",
-           functions_comments="",
-           altered_expression_comments="",
-           expression_pathophysiology_comments="",
-           mutations_pathophysiology_comments="",
-           variants_comments="",
-           xenobiotic_expression_comments="",
-           antibody_comments="",
-           agonists_comments="",
-           antagonists_comments="",
-           allosteric_modulators_comments="",
-           activators_comments="",
-           inhibitors_comments="",
-           channel_blockers_comments="",
-           gating_inhibitors_comments="")
+        case [] -> defaultRB
         case x :: _ -> x
       }
     }
@@ -223,104 +225,102 @@ fun getInitialModel() {
     var raw = query {
       for (o <-- Tables.object)
         where (o.object_id == objectId)
-         [(id = objectId,
-          name = o.name,
-          comments = o.comments,
-          grac_comments = o.grac_comments,
-          immuno_comments = o.gtip_comment,
-          malaria_comments = o.gtmp_comment,
-          synonyms =
-            for (s <-- Tables.synonym)
-              where (s.object_id == objectId)
-              [(synonym=s.synonym, order=s.display_order)],
-          family =
-            for (r2f <-- Tables.receptor2family)
-              where (r2f.object_id == o.object_id)
-                for (f <-- Tables.family)
-                  where (f.family_id == r2f.family_id)
-                  [(id=f.family_id, name=f.name)],
-          annotationStatus = o.annotation_status,
-          generalComments = o.comments,
-          geneInformation =
-            for (si <-- Tables.structural_info)
-              where (si.object_id == objectId)
-              [(si=si,
-                refs =
-                  for (siRef <-- Tables.structural_info_refs)
-                    where (siRef.structural_info_id == si.structural_info_id)
-                    [siRef.reference_id])],
-          databaseLinks = (), # FIXME: FILL ME IN
-          pdbData =
-            for (pdb <-- Tables.pdb_structure)
-              where (pdb.object_id == objectId)
-              for (l <-- Tables.ligand)
-                where (l.ligand_id == pdb.ligand_id)
-                [(pdb = pdb,
-                  ligand = l,
-                  refs =
-                    for (pdbR <-- Tables.pdb_structure_refs)
-                      where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
-                      [pdbR.reference_id])],
-          potencyOrder = (), # FIXME: FILL ME IN
-          receptorBasic =
-            rbOrDefault(
-              for(rb <-- Tables.receptor_basic)
-                where (rb.object_id == objectId)
-                [rb]),
-          interactions =
-            for (i <-- Tables.interaction)
-              where (o.object_id == objectId)
-                for (l <-- Tables.ligand)
-                  [(interaction = i,
-                    ligand = l,
-                    refs =
-                      for (iar <-- Tables.interaction_affinity_refs)
-                        where (iar.interaction_id == i.interaction_id)
-                        [iar.reference_id])],
-          tissueDistribution =
-            for (td <-- Tables.tissue_distribution)
-              where (td.object_id == objectId)
-                [(td = td,
-                  refs =
-                    for (r <-- Tables.tissue_distribution_refs)
-                      where (r.tissue_distribution_id == td.tissue_distribution_id)
-                      [r.reference_id])],
-          expressionDataset = (), # FIXME: FILL ME IN
-          functionalAssays =
-            for (fa <-- Tables.functional_assay)
-              where (fa.object_id == objectId)
-                [(fa=fa, refs=
-                    for (faRef <-- Tables.functional_assay_refs)
-                      where (faRef.functional_assay_id == fa.functional_assay_id)
-                      [faRef.reference_id])],
-          physiologicalFunctions =
-            for (pf <-- Tables.physiological_function)
-              where (pf.object_id == objectId)
-                [(pf = pf,
-                  refs =
-                    for (pfRef <-- Tables.physiological_function_refs)
-                      where (pfRef.physiological_function_id == pf.physiological_function_id)
-                      [(pfRef.reference_id)])],
-          alleles = (), # Getting this is a faff, requiring structural info, etc. Leaving for now.
-          variants =
-            for (v <-- Tables.variant)
-              where (v.object_id == objectId)
-                [(v=v,
-                  refs =
-                    for (vRef <-- Tables.variant_refs)
-                      where (vRef.variant_id == v.variant_id)
-                      [vRef.reference_id])],
-          contributors =
-            for (c2o <-- Tables.contributor2object)
-              where (c2o.object_id == objectId)
-                for (c <-- Tables.contributor)
-                  where (c.contributor_id == c2o.contributor_id)
-                  [(c = c, order=c2o.display_order)]
-          )]
+        # for (rb <-- Tables.receptor_basic)
+        #   where (rb.object_id == objectId)
+            [(id = objectId,
+             name = o.name,
+             comments = o.comments,
+             grac_comments = o.grac_comments,
+             immuno_comments = o.gtip_comment,
+             malaria_comments = o.gtmp_comment,
+             synonyms =
+               for (s <-- Tables.synonym)
+                 where (s.object_id == objectId)
+                 [(synonym=s.synonym, order=s.display_order)],
+             family =
+               for (r2f <-- Tables.receptor2family)
+                 where (r2f.object_id == o.object_id)
+                   for (f <-- Tables.family)
+                     where (f.family_id == r2f.family_id)
+                     [(id=f.family_id, name=f.name)],
+             annotationStatus = o.annotation_status,
+             generalComments = o.comments,
+             geneInformation =
+               for (si <-- Tables.structural_info)
+                 where (si.object_id == objectId)
+                 [(si=si,
+                   refs =
+                     for (siRef <-- Tables.structural_info_refs)
+                       where (siRef.structural_info_id == si.structural_info_id)
+                       [siRef.reference_id])],
+             databaseLinks = (), # FIXME: FILL ME IN
+             pdbData =
+               for (pdb <-- Tables.pdb_structure)
+                 where (pdb.object_id == objectId)
+                 for (l <-- Tables.ligand)
+                   where (l.ligand_id == pdb.ligand_id)
+                   [(pdb = pdb,
+                     ligand = l,
+                     refs =
+                       for (pdbR <-- Tables.pdb_structure_refs)
+                         where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
+                         [pdbR.reference_id])],
+             potencyOrder = (), # FIXME: FILL ME IN
+             receptorBasic = defaultRB,
+             interactions =
+               for (i <-- Tables.interaction)
+                 where (i.object_id == objectId)
+                   for (l <-- Tables.ligand)
+                     where (l.ligand_id == i.ligand_id)
+                     [(interaction = i,
+                       ligand = l,
+                       refs =
+                         for (iar <-- Tables.interaction_affinity_refs)
+                           where (iar.interaction_id == i.interaction_id)
+                           [iar.reference_id])],
+             tissueDistribution =
+               for (td <-- Tables.tissue_distribution)
+                 where (td.object_id == objectId)
+                   [(td = td,
+                     refs =
+                       for (r <-- Tables.tissue_distribution_refs)
+                         where (r.tissue_distribution_id == td.tissue_distribution_id)
+                         [r.reference_id])],
+             expressionDataset = (), # FIXME: FILL ME IN
+             functionalAssays =
+               for (fa <-- Tables.functional_assay)
+                 where (fa.object_id == objectId)
+                   [(fa=fa, refs=
+                       for (faRef <-- Tables.functional_assay_refs)
+                         where (faRef.functional_assay_id == fa.functional_assay_id)
+                         [faRef.reference_id])],
+             physiologicalFunctions =
+               for (pf <-- Tables.physiological_function)
+                 where (pf.object_id == objectId)
+                   [(pf = pf,
+                     refs =
+                       for (pfRef <-- Tables.physiological_function_refs)
+                         where (pfRef.physiological_function_id == pf.physiological_function_id)
+                         [pfRef.reference_id])],
+             alleles = (), # Getting this is a faff, requiring structural info, etc. Leaving for now.
+             variants =
+               for (v <-- Tables.variant)
+                 where (v.object_id == objectId)
+                   [(v=v,
+                     refs =
+                       for (vRef <-- Tables.variant_refs)
+                         where (vRef.variant_id == v.variant_id)
+                         [vRef.reference_id])],
+             contributors =
+               for (c2o <-- Tables.contributor2object)
+                 where (c2o.object_id == objectId)
+                   for (c <-- Tables.contributor)
+                     where (c.contributor_id == c2o.contributor_id)
+                     [(c = c, order=c2o.display_order)]
+             )]
     };
 
     fun mkModel(raw) {
-
       # OK, first parse interactions. Given the interactions field from the raw
       # data, this should get us a record of:
       # (agonists: [Interaction],
@@ -523,8 +523,7 @@ fun getInitialModel() {
           expressionPathophysiologyComments = parseOrError(rb.expression_pathophysiology_comments),
           mutationsPathophysiologyComments = parseOrError(rb.mutations_pathophysiology_comments),
           variantsComments = parseOrError(rb.variants_comments),
-          xenobioticExpressionComments = parseOrError(rb.xenobiotic_expression_comments),
-          antibodyComments = parseOrError(rb.antibody_comments),
+          xenobioticExpressionComments = parseOrError(rb.xenobiotic_expression_comments), antibodyComments = parseOrError(rb.antibody_comments),
           agonistsComments = parseOrError(rb.agonists_comments),
           antagonistsComments = parseOrError(rb.antagonists_comments),
           allostericModulatorsComments = parseOrError(rb.allosteric_modulators_comments),
@@ -564,6 +563,7 @@ fun getInitialModel() {
         transformVariants(raw.variants);
 
       var (pdbData, pdbRefs, pdbLigands) = transformPDBs(raw.pdbData);
+
       var interactions = transformInteractions(raw.interactions);
       var sortedInteractions = mkInteractionTables(interactions);
       var interactionRefs = interactions.references;
@@ -608,7 +608,7 @@ fun getInitialModel() {
     }
   }
 
-  switch(lookup("familyId", environment())) {
+  switch(lookup("objectId", environment())) {
     case Just(id) -> getObjectInfo(stringToInt(id))
     case Nothing -> Nothing
   }

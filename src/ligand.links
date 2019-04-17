@@ -8,14 +8,16 @@ typename LigandId = Int;
 
 sig queryLigands : ([LigandId]) ~%~> [(LigandId, LigandName)]
 fun queryLigands(ligandIds) {
-  var containsLigand = contains(ligandIds);
-  var ligands =
-    query {
-      for (l <-- Tables.ligand)
-        where (containsLigand(l.ligand_id))
-        [ (l.ligand_id, l.name) ]
-    };
-  # Ensure that ligand names are parsed so they can be rendered
-  # correctly
-  map(fun((id, name)) { (id, parseOrError(name)) }, ligands)
+  if (ligandIds == []) { [] } else {
+    var containsLigand = contains(ligandIds);
+    var ligands =
+      query {
+        for (l <-- Tables.ligand)
+          where (containsLigand(l.ligand_id))
+          [ (l.ligand_id, l.name) ]
+      };
+    # Ensure that ligand names are parsed so they can be rendered
+    # correctly
+    map(fun((id, name)) { (id, parseOrError(name)) }, ligands)
+  }
 }
