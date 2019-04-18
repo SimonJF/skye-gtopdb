@@ -150,3 +150,7 @@ fun cmpSort(comparator, l) {
     }
   }
 }
+
+fun colSpan(n) {
+  MvuAttrs.attr("colSpan", intToString(n))
+}

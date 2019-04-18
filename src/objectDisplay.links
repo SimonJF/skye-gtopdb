@@ -660,11 +660,11 @@ fun view(model) {
             textNode("Not implemented yet.")))))
     };
 
-    fun dataBox(header, contents) {
+    fun dataBox(header, cols, contents) {
       table_(class("receptor_data_tables fullwidth"),
         thead(a0,
           tr(name("hotspot") +@ class("hotspot"),
-            td(class("info category"),
+            td(class("info category") +@ colSpan(cols),
               textNode(header)))) +*
         tbody(name("toggle"), contents))
     }
@@ -673,7 +673,7 @@ fun view(model) {
       if (Parser.markupEmpty(markup)) {
         MvuHTML.empty
       } else {
-        dataBox(header,
+        dataBox(header, 1,
           tr(a0,
           td(class("info"),
             renderM(markup))))
@@ -688,7 +688,8 @@ fun view(model) {
       if (objectInfo.objectSynonyms == []) { MvuHTML.empty } else {
         var renderedSynonyms = map(fun(m) { [renderM(m)] }, objectInfo.objectSynonyms);
         var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], renderedSynonyms));
-        dataBox("Previous and Unofficial Names", separatedSynonyms)
+        var row = tr(a0, td(class("info"), separatedSynonyms));
+        dataBox("Previous and Unofficial Names", 1, row)
       }
     };
 
@@ -715,11 +716,16 @@ fun view(model) {
           var commentsRow =
             if (Parser.markupEmpty(t.tComments)) { MvuHTML.empty } else {
               tr(a0,
-                td(attr("colSpan", "2"), renderM(t.tComments)))
+                td(colSpan(2) +@ class("info"),
+                  textNode("Comments: ") +*
+                  renderM(t.tComments)))
             };
           var referencesRow =
             if (t.tReferences == []) { MvuHTML.empty } else {
-              Reference.renderCitationList(t.tReferences, objectInfo.objectReferences)
+              tr(a0,
+                td(colSpan(2) +@ class("info"),
+                  textNode("References: ") +*
+                  Reference.renderCitationList(t.tReferences, objectInfo.objectReferences)))
             };
 
           tr(a0,
@@ -732,12 +738,12 @@ fun view(model) {
         }
 
         var primaryBox = if (primary == []) { MvuHTML.empty } else {
-          dataBox("Primary Transduction Mechanisms",
+          dataBox("Primary Transduction Mechanisms", 2,
               MvuHTML.concat(map(renderTransduction, primary)))
         };
 
         var secondaryBox = if (secondary == []) { MvuHTML.empty } else {
-          dataBox("Secondary Transduction Mechanisms",
+          dataBox("Secondary Transduction Mechanisms", 2,
               MvuHTML.concat(map(renderTransduction, secondary)))
         };
 
