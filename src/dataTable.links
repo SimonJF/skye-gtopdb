@@ -12,13 +12,13 @@ typename ColumnSpec(a) =
   [| NotSortable | Sortable:((a, a) {}~> Int) |];
 
 typename SortableTable(data, msg) =
-  ( tableColumns: [(ColumnName, ColumnSpec(data))],
+  ( tableColumns: [(ColumnName, (String, ColumnSpec(data)))],
     tableSortStatus: SortStatus,
     tableRows: [data],
     tableSortMsg: (ColumnName, SortDirection) {}~> msg );
 
 sig makeTable : (
-    [(ColumnName, ColumnSpec(data))],
+    [(ColumnName, (String, ColumnSpec(data)))],
     [data],
     (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
 fun makeTable(cols, data, sortMsg) {
@@ -37,8 +37,8 @@ fun renderTable(tbl, renderRow) {
     fun sortByCol(colName) {
       switch (lookup(colName, tbl.tableColumns)) {
         case Nothing -> tbl.tableRows
-        case Just(NotSortable) -> tbl.tableRows
-        case Just(Sortable(comparator)) ->
+        case Just((_, NotSortable)) -> tbl.tableRows
+        case Just((_, Sortable(comparator))) ->
           cmpSort(fun(x, y) { comparator(x, y) }, tbl.tableRows)
       }
     }
@@ -52,7 +52,7 @@ fun renderTable(tbl, renderRow) {
     }
   };
 
-  fun renderHeader((name, colSpec)) {
+  fun renderHeader((name, (colClass, colSpec))) {
     var sortable = colSpec <> NotSortable;
 
     if (sortable) {
@@ -71,7 +71,7 @@ fun renderTable(tbl, renderRow) {
           ""
         };
 
-      th(class("ligand_header header tablesorter-header " ^^ sorterClass)
+      th(class(colClass ^^ " header tablesorter-header " ^^ sorterClass)
           +@ style("border-style:solid solid solid solid;")
           +@ onClick(fun() { sortMsg }),
           textNode(name))

@@ -301,7 +301,7 @@ fun view(model) {
             };
 
           var affinityNode = {
-            InteractionUtilities.displayAffinity(i.interactionAffinity)
+            InteractionUtilities.displayAffinity(i.interactionAffinity, true)
           };
 
           var citationsNode =

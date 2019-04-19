@@ -30,8 +30,11 @@ fun sortAffinity(a1, a2) {
   }
 }
 
-sig displayAffinity : (InteractionAffinity) ~%~> HTML(a)
-fun displayAffinity(af) {
+sig displayAffinity : (InteractionAffinity, Bool) ~%~> HTML(a)
+fun displayAffinity(af, showUnits) {
+  var units =
+    if (showUnits) { textNode(" " ^^ af.affinityUnits) } else { MvuHTML.empty };
+
   # Some interactions do not have affinity data.
   # Others have a range. Others have a median.
   if ((af.affinityLow == 0.0) && (af.affinityMedian == 0.0) && (af.affinityHigh == 0.0)) {
@@ -39,11 +42,13 @@ fun displayAffinity(af) {
     MvuHTML.empty
   } else if ((af.affinityLow == 0.0) && (af.affinityHigh == 0.0)) {
     # Only a median.
-    textNode(" " ^^ af.affinityUnits ^^ " ") +*
+    units +*
+    textNode(" ") +*
     textNode(floatToString(af.affinityMedian))
   } else {
     # Range.
-    textNode(" " ^^ af.affinityUnits ^^ " ") +*
+    units +*
+    textNode(" ") +*
     textNode(floatToString(af.affinityLow) ^^
         " - " ^^ floatToString(af.affinityHigh))
   }

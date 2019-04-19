@@ -439,14 +439,19 @@ fun getInitialModel() {
 
         fun mkStandardInteractionTable(tableTy, interactions) {
           var cols = [
-            ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
-            ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
-            ("", NotSortable),
-            ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
-            ("Action", Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) })),
-            ("Affinity", Sortable(fun(x, y) {
-                InteractionUtilities.sortAffinity(x.iLigandAffinity, y.iLigandAffinity)})),
-            ("References", NotSortable)
+            ("Ligand", ("", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) }))),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("Sp.", ("keybox_header",
+              Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) }))),
+            ("Action", ("action_header",
+              Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) }))),
+            ("Affinity", ("affinity_header", Sortable(fun(x, y) {
+                InteractionUtilities.sortAffinity(x.iLigandAffinity, y.iLigandAffinity)}))),
+            ("Affinity Units", ("units_header", Sortable(fun(x, y) {
+                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits) }))),
+            ("References", ("reference_header", NotSortable))
           ];
           fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
           DataTable.makeTable(cols, interactions, sortMessage)
@@ -454,22 +459,23 @@ fun getInitialModel() {
 
         fun mkActivatorTable(tableTy, interactions) {
           var cols = [
-            ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
-            ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
-            ("", NotSortable),
-            ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
-            ("Affinity", Sortable(fun(x, y) {
+            ("Ligand", ("", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) }))),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("Species", ("keybox_header",
+              Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) }))),
+            ("Affinity", ("affinity_header", Sortable(fun(x, y) {
                 simpleCmp(x.iLigandAffinity.affinityMedian,
-                    y.iLigandAffinity.affinityMedian) })),
-            ("Parameter", Sortable(fun(x, y) {
-                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
+                    y.iLigandAffinity.affinityMedian) }))),
+            ("Parameter", ("units_header", Sortable(fun(x, y) {
+                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)}))),
              # FIXME: Need to fix these up when we have the right details in the model
-            ("Concentration range (M)", NotSortable), ("Holding voltage (mV)", NotSortable),
-            ("References", NotSortable)
+            ("Concentration range (M)", ("", NotSortable)), ("Holding voltage (mV)", ("", NotSortable)),
+            ("References", ("reference_header", NotSortable))
           ];
 
           fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
-
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
@@ -693,7 +699,8 @@ fun view(model) {
           tr(name("hotspot") +@ class("hotspot"),
             td(class("info category") +@ colSpan(cols),
               textNode(header)))) +*
-        tbody(name("toggle"), contents))
+        tbody(name("toggle"),
+          tr(a0, contents)))
     }
 
     fun commentsBox(header, markup) {
@@ -731,7 +738,7 @@ fun view(model) {
           var sizeCol = {
             switch(i.iLigandSize) {
               case Small ->
-                boolImage(("/images/benzine.gif", true,
+                boolImage(("/images/benzene.gif", true,
                       "Small molecule or natural product"))
               case Peptide ->
                 boolImage(("/images/peptide_cartoon.png", true,
@@ -762,12 +769,70 @@ fun view(model) {
               labelled, radioactive, hasPDB, immuno])
         };
 
-        var renderedName =
-          a(href("/ligandDisplay?ligandId=" ^^ intToString(i.iLigandId)), renderM(i.iLigandName));
-        MvuHTML.empty
+        var nameCol =
+          td(a0,
+            a(href("/ligandDisplay?ligandId=" ^^ intToString(i.iLigandId)), renderM(i.iLigandName)));
+
+        var speciesCol =
+          td(a0, textNode(speciesShortName(i.iLigandSpecies)));
+
+        var actionCol =
+          td(a0, textNode(i.iLigandAction));
+
+        var affinityCol =
+          td(a0, InteractionUtilities.displayAffinity(i.iLigandAffinity, false));
+
+        var parameterCol =
+          td(a0, textNode(i.iLigandAffinity.affinityUnits));
+
+        var referenceCol =
+          td(a0, Reference.renderCitationList(i.iLigandReferences, objectInfo.objectReferences));
+
+        tr(class("info"),
+          nameCol +*
+          imgCols +*
+          speciesCol +*
+          actionCol +*
+          affinityCol +*
+          parameterCol +*
+          referenceCol)
+
       }
 
-      MvuHTML.empty
+      fun renderReceptorTable((tbl, label, commentsHeader, comments)) {
+        dataBox(label, 1,
+          a(name(label), h0) +*
+          tr(a0, td(a0,
+          DataTable.renderTable(tbl, renderRow)))) +*
+        commentsBox(commentsHeader, comments)
+      }
+
+      fun renderChannelTable((tbl, label, commentsHeader, comments)) {
+        MvuHTML.empty # For now.
+      }
+
+      var si = objectInfo.objectSortedInteractions;
+      var oc = objectInfo.objectComments;
+      var receptorTables = [
+        (si.agonists, "Agonists", "Agonist Comments", oc.agonistsComments),
+        (si.antagonists, "Antagonists", "Antagonist Comments", oc.antagonistsComments),
+        (si.allostericModulators, "Allosteric Modulators",
+         "Allosteric Modulator Comments", oc.allostericModulatorsComments),
+        (si.subunitSpecific, "Subunit-specific",
+         "Subunit-specific Comments", MarkupEmpty)
+      ];
+
+      var channelTables = [
+        (si.activators, "Activators", "Activator Comments", oc.activatorsComments),
+        (si.inhibitors, "Inhibitors", "Inhibitor Comments", oc.inhibitorsComments),
+        (si.channelBlockers, "Channel Blockers", "Channel Blocker Comments", oc.channelBlockersComments),
+        (si.gatingInhibitors, "Gating Inhibitors",
+         "Gating Inhibitor Comments", oc.gatingInhibitorsComments)
+      ];
+
+      MvuHTML.concat(map(renderReceptorTable, receptorTables)) +*
+      MvuHTML.concat(map(renderChannelTable, channelTables))
+
     };
 
  #       fun mkStandardInteractionTable(tableTy, interactions) {
