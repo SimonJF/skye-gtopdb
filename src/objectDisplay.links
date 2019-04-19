@@ -31,8 +31,10 @@ typename InteractionTable = [|
   | GatingInhibitorsTable | SubunitSpecificTable
 |];
 
+typename ColumnName = String;
+
 typename Message = [|
-    SortInteractionTable:(InteractionTable, SortDirection)
+    SortInteractionTable:(InteractionTable, ColumnName, SortDirection)
   | ToggleReferences
 |];
 
@@ -453,7 +455,7 @@ fun getInitialModel() {
                 simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits) }))),
             ("References", ("reference_header", NotSortable))
           ];
-          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
+          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, colName, sortDir) }
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
@@ -475,7 +477,7 @@ fun getInitialModel() {
             ("References", ("reference_header", NotSortable))
           ];
 
-          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
+          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, colName, sortDir) }
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
@@ -1042,6 +1044,32 @@ fun updt(msg, model) {
       case ToggleReferences ->
         (objectInfo with
           objectShowReferences=not(objectInfo.objectShowReferences))
+      case SortInteractionTable(tableTy, colName, dir) ->
+        var osi = objectInfo.objectSortedInteractions;
+        (objectInfo with
+          objectSortedInteractions =
+            switch(tableTy) {
+              case AgonistsTable ->
+                (osi with agonists = DataTable.updateSortStatus(osi.agonists, colName, dir))
+              case AntagonistsTable ->
+                (osi with antagonists = DataTable.updateSortStatus(osi.antagonists, colName, dir))
+              case AllostericModulatorsTable ->
+                (osi with allostericModulators =
+                   DataTable.updateSortStatus(osi.allostericModulators, colName, dir))
+              case ActivatorsTable ->
+                (osi with activators = DataTable.updateSortStatus(osi.activators, colName, dir))
+              case InhibitorsTable ->
+                (osi with inhibitors = DataTable.updateSortStatus(osi.inhibitors, colName, dir))
+              case ChannelBlockersTable ->
+                (osi with channelBlockers =
+                   DataTable.updateSortStatus(osi.channelBlockers, colName, dir))
+              case GatingInhibitorsTable ->
+                (osi with gatingInhibitors =
+                   DataTable.updateSortStatus(osi.gatingInhibitors, colName, dir))
+              case SubunitSpecificTable ->
+                (osi with subunitSpecific =
+                   DataTable.updateSortStatus(osi.subunitSpecific, colName, dir))
+            })
       case _ -> objectInfo
     }
   }
