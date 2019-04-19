@@ -429,13 +429,8 @@ fun getInitialModel() {
             ("", NotSortable),
             ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
             ("Action", Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) })),
-            # TODO: Some will have affinity ranges. We'll need to be more careful
-            # about how we compare these -- this is a hack ATM.
             ("Affinity", Sortable(fun(x, y) {
-                simpleCmp(x.iLigandAffinity.affinityMedian,
-                    y.iLigandAffinity.affinityMedian) })),
-            ("Parameter", Sortable(fun(x, y) {
-                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
+                InteractionUtilities.sortAffinity(x.iLigandAffinity, y.iLigandAffinity)})),
             ("References", NotSortable)
           ];
           fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }

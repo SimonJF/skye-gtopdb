@@ -1,6 +1,51 @@
 # Functionality for dealing with ligand<->object interactions.
 # This will grow as I abstract more out.
+open MvuHTML;
 
 typename InteractionAffinity =
   (affinityUnits: String, affinityLow: Float,
    affinityMedian: Float, affinityHigh: Float);
+
+fun sortAffinity(a1, a2) {
+  var a1Key =
+    if (a1.affinityLow <> 0.0) {
+      a1.affinityLow
+    } else {
+      a1.affinityMedian
+    };
+
+  var a2Key =
+    if (a2.affinityLow <> 0.0) {
+      a2.affinityLow
+    } else {
+      a2.affinityMedian
+    };
+
+  if (a1Key < a2Key) {
+    (-1)
+  } else if (a1Key == a2Key) {
+    0
+  } else {
+    1
+  }
+}
+
+sig displayAffinity : (InteractionAffinity) ~%~> HTML(a)
+fun displayAffinity(af) {
+  # Some interactions do not have affinity data.
+  # Others have a range. Others have a median.
+  if ((af.affinityLow == 0.0) && (af.affinityMedian == 0.0) && (af.affinityHigh == 0.0)) {
+    # No information.
+    MvuHTML.empty
+  } else if ((af.affinityLow == 0.0) && (af.affinityHigh == 0.0)) {
+    # Only a median.
+    textNode(" " ^^ af.affinityUnits ^^ " ") +*
+    textNode(floatToString(af.affinityMedian))
+  } else {
+    # Range.
+    textNode(" " ^^ af.affinityUnits ^^ " ") +*
+    textNode(floatToString(af.affinityLow) ^^
+        " - " ^^ floatToString(af.affinityHigh))
+  }
+}
+
