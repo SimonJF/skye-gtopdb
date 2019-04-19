@@ -101,9 +101,11 @@ typename Phenotype = (
 typename LigandSize = [| Small | Peptide | OtherSize |];
 
 typename Interaction = (
+    iLigandId: Int,
     iLigandName: Markup,
     iLigandRawName: String,
     iLigandSize: LigandSize,
+    iLigandApproved: Bool,
     iLigandPrimary: Bool,
     iLigandEndogenous: Bool,
     iLigandLabelled: Bool,
@@ -111,8 +113,11 @@ typename Interaction = (
     iLigandSpecies: SpeciesID,
     iLigandAction: String,
     iLigandAffinity: InteractionAffinity,
-    iLigandSelectivity: String,
     iLigandReferences: [ReferenceID],
+    iLigandImmuno: Bool,
+    iLigandSelective: Bool,
+    iLigandSelectivity: String,
+    iLigandPDB: Bool,
     iLigandDetailedAffinity: [(String, ReferenceID)]
 );
 
@@ -288,6 +293,11 @@ fun getInitialModel() {
                      where (l.ligand_id == i.ligand_id)
                      [(interaction = i,
                        ligand = l,
+                       hasPDB =
+                        length(
+                          for (pdb <-- Tables.pdb_structure)
+                            where (pdb.object_id == objectId && pdb.ligand_id == l.ligand_id)
+                            [pdb]) > 0,
                        refs =
                          for (iar <-- Tables.interaction_affinity_refs)
                            where (iar.interaction_id == i.interaction_id)
@@ -375,9 +385,11 @@ fun getInitialModel() {
             );
 
           var parsed = (
+            iLigandId = l.ligand_id,
             iLigandName = parseOrError(l.name),
             iLigandRawName = l.name,
             iLigandSize = size,
+            iLigandApproved = l.approved,
             iLigandPrimary = i.primary_target,
             iLigandEndogenous = i.endogenous,
             iLigandLabelled = l.labelled,
@@ -386,7 +398,10 @@ fun getInitialModel() {
             iLigandAction = i.action,
             iLigandAffinity = interaction_aff,
             iLigandReferences = refs,
+            iLigandImmuno = l.in_gtip,
+            iLigandSelective = i.selective,
             iLigandSelectivity = i.selectivity,
+            iLigandPDB = x.hasPDB,
             iLigandDetailedAffinity = []
           );
 
@@ -709,7 +724,84 @@ fun view(model) {
     var pdbStructureBox = MvuHTML.empty;
     var endogenousLigandsBox = MvuHTML.empty;
     var potencyOrderBox = MvuHTML.empty;
-    var interactionsTables = MvuHTML.empty;
+
+    var interactionsTables = {
+      fun renderRow(i) {
+        var imgCols = {
+          var sizeCol = {
+            switch(i.iLigandSize) {
+              case Small ->
+                boolImage(("/images/benzine.gif", true,
+                      "Small molecule or natural product"))
+              case Peptide ->
+                boolImage(("/images/peptide_cartoon.png", true,
+                      "Peptide or antibody"))
+              case OtherSize ->
+                boolImage(("", false, ""))
+            }
+          };
+
+          var approvedCol = boolImage(("/images/approved.png", i.iLigandApproved, "Approved ligand"));
+          var primaryCol = boolImage(("/images/primary.png", i.iLigandPrimary, "Primary interaction"));
+          var selectiveCol =
+            boolCol(i.iLigandSelective,
+              a(href("/ligandInteractions?ligandId=" ^^
+                  intToString(i.iLigandId) ^^ "&speciesId=" ^^ intToString(i.iLigandSpecies)), h0) +*
+              img(src("/images/select.gif") +@ alt("Click here for species-specific selectivity table"), h0));
+          var endogenousCol =
+            boolImage(("/images/endogenous.gif", i.iLigandEndogenous,
+                  "Ligand is endogenous in the given species"));
+          var labelled = boolImage(("/images/probe.png", i.iLigandEndogenous, "Ligand is labelled"));
+          var radioactive = boolImage(("/images/rad.gif", i.iLigandRadioactive, "Ligand is radioactive"));
+          var hasPDB =
+            boolImage(("/images/protein_structure_icon.png", i.iLigandPDB, "Ligand has a PDB structure"));
+          var immuno =
+            boolImage(("/images/immuno_ligand.png", i.iLigandImmuno, "Immunopharmacology Ligand"));
+
+          MvuHTML.concat([sizeCol, approvedCol, primaryCol, selectiveCol, endogenousCol,
+              labelled, radioactive, hasPDB, immuno])
+        };
+
+        var renderedName =
+          a(href("/ligandDisplay?ligandId=" ^^ intToString(i.iLigandId)), renderM(i.iLigandName));
+        MvuHTML.empty
+      }
+
+      MvuHTML.empty
+    };
+
+ #       fun mkStandardInteractionTable(tableTy, interactions) {
+ #         var cols = [
+ #           ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
+ #           ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
+ #           ("", NotSortable),
+ #           ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
+ #           ("Action", Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) })),
+ #           ("Affinity", Sortable(fun(x, y) {
+ #               InteractionUtilities.sortAffinity(x.iLigandAffinity, y.iLigandAffinity)})),
+ #           ("References", NotSortable)
+ #         ];
+ #         fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
+ #         DataTable.makeTable(cols, interactions, sortMessage)
+ #       }
+ #
+ #       fun mkActivatorTable(tableTy, interactions) {
+ #         var cols = [
+ #           ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
+ #           ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
+ #           ("", NotSortable),
+ #           ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
+ #           ("Affinity", Sortable(fun(x, y) {
+ #               simpleCmp(x.iLigandAffinity.affinityMedian,
+ #                   y.iLigandAffinity.affinityMedian) })),
+ #           ("Parameter", Sortable(fun(x, y) {
+ #               simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
+ #            # FIXME: Need to fix these up when we have the right details in the model
+ #           ("Concentration range (M)", NotSortable), ("Holding voltage (mV)", NotSortable),
+ #           ("References", NotSortable)
+ #         ];
+#   }
+
     var immunoCommentsBox =
       commentsBox("Immunopharmacology Comments", comments.immunoComments);
     var malariaCommentsBox =

@@ -95,18 +95,23 @@ fun alphabetise(getString, transform, xs) {
 fun src(s) { MvuAttrs.attr("src", s) }
 fun alt(s) { MvuAttrs.attr("alt", s) }
 
-fun boolImage((imgSrc, enabled, altText)) {
+fun boolCol(enabled, html) {
   if (enabled) {
     td(class("info") +@
        style("border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
-      a(style("color:white") +@ title(altText),
-        img(src(imgSrc) +@ width("16") +@ height("16") +@ alt(altText), MvuHTML.empty)))
+       html)
   } else {
     td(class("info") +@
        style("border-style: solid none solid none;padding:1px;text-align:center;vertical-align: middle;"),
        MvuHTML.empty
     )
   }
+}
+
+fun boolImage((imgSrc, enabled, altText)) {
+  boolCol(enabled,
+    a(style("color:white") +@ title(altText),
+      img(src(imgSrc) +@ width("16") +@ height("16") +@ alt(altText), MvuHTML.empty)))
 }
 
 sig partition : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
