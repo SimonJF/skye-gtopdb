@@ -154,3 +154,15 @@ fun cmpSort(comparator, l) {
 fun colSpan(n) {
   MvuAttrs.attr("colSpan", intToString(n))
 }
+
+fun align(val) {
+  MvuAttrs.attr("align", val)
+}
+
+fun valign(val) {
+  MvuAttrs.attr("align", val)
+}
+
+fun target(val) {
+  MvuAttrs.attr("target", val)
+}

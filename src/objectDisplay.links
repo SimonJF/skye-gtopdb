@@ -23,6 +23,7 @@ open MvuAttrs;
 open Mvu;
 open Template;
 open Ligand;
+open Species;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -177,17 +178,24 @@ typename ObjectInfo = (
    # objectTissueDistribution: [TissueDistribution],
     # TODO: Expression dataset(!?)
    # objectExpressionDataset: (),
-   # objectFunctionalAssays: [FunctionalAssay],
+    #objectFunctionalAssays: [FunctionalAssay],
    # objectPhysiologicalFunctions: [PhysiologicalFunction],
    # objectPhenotypes: SortableTable(Phenotype, Message),
     objectVariants: [Variant],
     objectComments: ReceptorComments,
     objectShowReferences: Bool,
     objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))],
-    objectLigandNames: [(LigandId, LigandName)]
+    objectLigandNames: [(LigandId, LigandName)],
+    objectSpeciesMap: SpeciesMap
    # objectContributors: [Contributor.Contributor]
 );
 
+typename DataTableBox = (
+  boxName: String,
+  boxComment: Markup,
+  boxData: [(String, Markup)],
+  boxReferences: [ReferenceID]
+);
 
 typename Model = Maybe(ObjectInfo);
 
@@ -588,7 +596,7 @@ fun getInitialModel() {
             raw.immuno_comments, raw.malaria_comments);
 
       var refIDs =
-        uniquify(variantRefs ++ interactionRefs ++
+        uniquify(variantRefs ++ interactionRefs ++ pdbRefs ++
             transductionRefs ++ commentRefs);
 
       var ligandIDs =
@@ -611,7 +619,8 @@ fun getInitialModel() {
        objectComments = receptorComments,
        objectLigandNames = ligandNames,
        objectShowReferences = false,
-       objectReferences = refs)
+       objectReferences = refs,
+       objectSpeciesMap = Species.getSpeciesMap())
     }
 
     switch(raw) {
@@ -632,6 +641,14 @@ fun view(model) {
   fun viewModel(objectInfo) {
     var a0 = MvuAttrs.empty;
     var h0 = MvuHTML.empty;
+
+    fun speciesLongName(speciesId) {
+      Species.resolveSpeciesLongName(speciesId, objectInfo.objectSpeciesMap)
+    }
+
+    fun speciesShortName(speciesId) {
+      Species.resolveSpeciesShortName(speciesId, objectInfo.objectSpeciesMap)
+    }
 
     sig renderM : (Markup) ~%~> HTML(Message)
     fun renderM(m) {
@@ -759,6 +776,71 @@ fun view(model) {
     var generalCommentsBox =
       commentsBox("General Comments", comments.generalComments);
     var contributorsBox = MvuHTML.empty;
+
+    var pdbStructureBox = {
+      fun renderPDBRow(pdb) {
+
+        fun renderPDBDataRow(propName, html) {
+          tr(a0,
+            td(class("key") +@ style("width:100px;"), textNode(propName)) +*
+            td(class("value"), html))
+        }
+        var descRow =
+          renderPDBDataRow("Description:", renderM(pdb.pdbLigandDescription));
+
+        var pdbIDRow =
+          renderPDBDataRow("PDB Id:",
+              a(href("http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=" ^^ pdb.pdbCode) +@
+                title("RCSB PDB: an information portal to biological macromolecular structures"),
+                textNode(pdb.pdbCode)));
+
+        var ligandRow =
+          renderPDBDataRow("Ligand:",
+              a(href("/ligandDisplay?ligandId=" ^^ intToString(pdb.pdbLigandId)),
+                renderM(pdb.pdbLigandName)));
+
+        var resolutionRow =
+          renderPDBDataRow("Resolution:", textNode(floatToString(pdb.pdbResolution)));
+
+        var speciesRow =
+          renderPDBDataRow("Species:", textNode(speciesLongName(pdb.pdbSpeciesId)));
+
+        var referencesRow =
+          renderPDBDataRow("References:",
+              Reference.renderCitationList(pdb.pdbReferences,
+                objectInfo.objectReferences));
+
+        tr(a0,
+          td(class("info") +@ align("center") +@ valign("center"),
+            a(style("color:white;") +@
+              href("http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=" ^^ pdb.pdbCode) +@
+              title("Image of receptor 3D structure from RCSB PDB") +@ target("_blank"),
+            img(src("http://www.rcsb.org/pdb/images/" ^^ pdb.pdbCode ^^ "_bio_r_500.jpg") +@
+              height("200") +@ width("200") +@ alt("Image of receptor 3D structure from RCSB PDB"), h0))) +*
+          td(class("info") +@ valign("top"),
+            table_(class("inner_receptor_data_tables"),
+              descRow +*
+              pdbIDRow +*
+              ligandRow +*
+              resolutionRow +*
+              speciesRow +*
+              referencesRow)))
+      }
+
+      var pdbRows = MvuHTML.concat(map(renderPDBRow, objectInfo.objectPDBData));
+
+      if (objectInfo.objectPDBData == []) {
+        MvuHTML.empty
+      } else {
+        a(name("PDBStructures"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(name("hotspot") +@ class("hotspot"),
+              td(class("info category") +@ colSpan(2),
+                textNode("Selected 3D Structures")))) +*
+          tbody(name("toggle"), pdbRows))
+      }
+    };
 
     var dataBoxes =
       div(class("grid_16 alpha"),

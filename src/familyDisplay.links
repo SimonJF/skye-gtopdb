@@ -10,12 +10,10 @@ open Parser;
 open Utility;
 open InteractionUtilities;
 open Ligand;
+open Species;
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
-typename SpeciesId = Int;
-typename SpeciesShortName = String;
-typename SpeciesLongName = String;
 
 
 typename ExternalRef = (
@@ -32,7 +30,7 @@ typename Interaction = (
   interactionAction: String,
   interactionSelective: Bool,
   interactionLabelled: Bool,
-  interactionSpeciesId: String,
+  interactionSpeciesID: String,
   interactionReferences: [Int],
   interactionAffinity: InteractionAffinity
 );
@@ -44,7 +42,7 @@ fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, s
    interactionSelective=(selectivity == "Selective"),
    interactionLabelled=labelled,
    interactionEndogenous=endogenous,
-   interactionSpeciesId=speciesId,
+   interactionSpeciesID=speciesId,
    interactionReferences=references,
    interactionAffinity=affinity
   )
@@ -54,7 +52,7 @@ typename Synonym = (synonymName: Markup, synonymOrder: Int, synonymReferences: [
 
 var emptyER = (refId="", refSpeciesName="", refUrl="");
 
-typename GeneRef = (geneName: String, geneSpeciesId: Int); # TODO: URL
+typename GeneRef = (geneName: String, geneSpeciesID: Int); # TODO: URL
 
 typename ObjectSummary = (
    objectId: Int,
@@ -98,7 +96,7 @@ typename Model =
          references: [(ReferenceId, (ReferenceNumber, Reference))],
          contributors: ContentBox(Contributors),
          ligandNames: [(LigandId, LigandName)],
-         speciesNames: [(SpeciesId, (SpeciesShortName, SpeciesLongName))]
+         speciesMap: SpeciesMap
         ));
 
 typename Message = [|
@@ -250,20 +248,6 @@ fun view(model) {
               td(class("grac_info_simple"), contents)))
         }
 
-        fun resolveSpeciesShortName(speciesId) {
-          switch (lookup(speciesId, model.speciesShortNames)) {
-            case Just((name, _)) -> name
-            case Nothing -> "?"
-          }
-        }
-
-        fun resolveSpeciesLongName(speciesId) {
-          switch (lookup(speciesId, model.speciesShortNames)) {
-            case Just((_, name)) -> name
-            case Nothing -> "?"
-          }
-        }
-
         # In the case that an interaction is with a labelled ligand, it is
         # only classed as labelled. Similarly, if the interaction is endogenous,
         # it is only classed as endogenous.
@@ -308,7 +292,7 @@ fun view(model) {
                   || i.interactionAction == "Antagonist")) {
               textNode(" (" ^^ i.interactionAction ^^ ")")
             } else { MvuHTML.empty };
-          var speciesName = resolveSpeciesLongName(i.interactionSpeciesId);
+          var speciesName = resolveSpeciesLongName(i.interactionSpeciesID, model.speciesMap);
           var speciesNode =
             if (speciesName <> "Human") {
               textNode(" - " ^^ speciesName)
@@ -388,7 +372,7 @@ fun view(model) {
             }, synonyms);
             var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
             var genes = map(fun((name, id)) {
-              [renderM(name) +* textNode("(" ^^ resolveSpeciesShortName(id) ^^ ")")]
+              [renderM(name) +* textNode("(" ^^ resolveSpeciesShortName(id, model.speciesMap) ^^ ")")]
               }, summary.objectGenes);
             var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
@@ -717,11 +701,7 @@ fun getInitialModel() {
 
         # Species mapping is simple enough for us to just do in memory
         # and saves us the faff of doing joins.
-        var speciesMap = query {
-          for (s <-- Tables.species)
-            [(s.species_id, (s.short_name, s.name))]
-        };
-
+        var speciesMap = Species.getSpeciesMap();
         var objectName = formatObjectName(type);
 
         Just((familyId=familyId, familyName=name, familyType=type,
@@ -734,7 +714,7 @@ fun getInitialModel() {
            references=referenceData,
            contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
            ligandNames = ligands,
-           speciesShortNames=speciesMap))
+           speciesMap=speciesMap))
     }
   }
 
