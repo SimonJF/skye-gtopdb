@@ -1079,42 +1079,6 @@ fun view(model) {
       }
     };
 
-
-
-#       <tbody name="toggle">
-#           <tr>
-#               <td class="info">
-#                   <table class="inner_receptor_data_tables">
-#                       <tr>
-#                           <td class="description">Drug discrimination (also primates and pigeons)</td>
-#                       </tr>
-#                       <tr>
-#                           <td>
-#                               <table class="inner_receptor_data_tables">
-#                                   <tr>
-#                                       <td class="key">Species:&nbsp;</td>
-#                                       <td class="value">Rat</td>
-#                                   </tr>
-#                                   <tr>
-#                                       <td class="key">Tissue:&nbsp;</td>
-#                                       <td class="value"><i>In vivo</i></td>
-#                                   </tr>
-#                                   <tr>
-#                                       <td class="key">Response measured:&nbsp;</td>
-#                                       <td class="value">Drug discrimination</td>
-#                                   </tr>
-#                                   <tr>
-#                                       <td class="key">References:&nbsp;</td>
-#                                       <td class="value"><a href='javascript:callRef("ReferenceDisplayForward?referenceId=1915&displayId=36", 960, 600)' title="36. Howlett AC, Barth F, Bonner TI, Cabral G, Casellas P, Devane WA, Felder CC, Herkenham M, Mackie K, Martin BR, Mechoulam R, Pertwee RG. (2002) Pharmacol. Rev. 54: 161-202">36</a></td>
-#                                   </tr>
-#                               </table>
-#                           </td>
-#                       </tr>
-#                   </table>
-#               </td>
-#           </tr>
-
-
     fun renderDataBox(box) {
       fun renderDataRow(row) {
 
