@@ -45,8 +45,8 @@ typename SpeciesID = Int;
 typename PDBID = String;
 
 typename GeneProteinInfo = (
-    gpiSpecies: String,
-    gpiName: String,
+    gpiSpeciesID: Int,
+    gpiName: Markup,
     gpiTransmembraneDomains: Int,
     gpiAminoAcids: Int,
     gpiReferences: [ReferenceID],
@@ -183,6 +183,8 @@ typename ObjectInfo = (
     objectSynonyms: [Markup],
     objectFamily: Family,
     objectAnnotationStatus: AnnotationStatus,
+    objectGeneProteinInfo:
+      (giComments: Markup, giEntries: [GeneProteinInfo]),
     # TODO: Suss this out and add it in
     # objectQuaternaryStructure: (),
    # objectGeneInformation: SortableTable(GeneProteinInfo, Message),
@@ -271,6 +273,10 @@ fun getInitialModel() {
                      [(id=f.family_id, name=f.name)],
              annotationStatus = o.annotation_status,
              generalComments = o.comments,
+             gpcrComments =
+               for (gpcr <-- Tables.gpcr)
+                where (gpcr.object_id == objectId)
+                  [gpcr.class],
              geneInformation =
                for (si <-- Tables.structural_info)
                  where (si.object_id == objectId)
@@ -609,6 +615,35 @@ fun getInitialModel() {
         }
       }
 
+      fun transformGeneProteinInfo(gpcrComments, gis) {
+        var (gisRev, giRefs) =
+          fold_left(fun((gis_rev, refs), gi) {
+            var references = gi.refs;
+            var gi = gi.si;
+            var res = (
+              gpiSpeciesID = gi.species_id,
+              gpiName = parseOrError(gi.gene_name),
+              gpiTransmembraneDomains = gi.transmembrane_domains,
+              gpiAminoAcids = gi.amino_acids,
+              gpiReferences = references,
+              gpiChromosomalLocation = gi.genomic_location
+            );
+            (res :: gis_rev, references ++ refs)
+          }, ([], []), gis);
+
+        var (comment, commentRefs, commentLigands) =
+          fold_right(fun(gc, (comment, commentRefs, commentLigands)) {
+            var parsedComment = parseOrError(gc);
+            var (refIDs, ligandIDs) = RenderMarkup.collectIds(parsedComment);
+            (MarkupAppend(parsedComment, comment),
+             refIDs ++ commentRefs,
+             ligandIDs ++ commentLigands)
+          }, (MarkupEmpty, [], []), gpcrComments);
+
+        ((giComments = comment, giEntries = reverse(gisRev)),
+           giRefs ++ commentRefs, commentLigands)
+      }
+
       sig mkDataTableBox : (String, [DataTableEntry]) ~%~> DataTableBox
       fun mkDataTableBox(name, rows) {
         (boxName = name, boxRows = rows)
@@ -690,6 +725,9 @@ fun getInitialModel() {
       var (physiologicalConsequences, pcRefs, pcLigands) =
         transformPhysiologicalConsequences(raw.alteredExpressions);
 
+      var (geneProteinInfo, gpiRefs, gpiLigands) =
+        transformGeneProteinInfo(raw.gpcrComments, raw.geneInformation);
+
       # TODO: A few more comment fields (grac_comments, structural_info_comments, quanternary_structure_comments)
       # still to be handled
       var (receptorComments, commentRefs, commentLigands) =
@@ -705,6 +743,7 @@ fun getInitialModel() {
           faRefs ++
           pfRefs ++
           pcRefs ++
+          gpiRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -715,6 +754,7 @@ fun getInitialModel() {
           faLigands ++
           pfLigands ++
           pcLigands ++
+          gpiLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -725,6 +765,7 @@ fun getInitialModel() {
        objectName = parseOrError(raw.name),
        objectSynonyms = transformSynonyms(raw.synonyms),
        objectFamily = transformFamily(raw.family),
+       objectGeneProteinInfo = geneProteinInfo,
        objectAnnotationStatus = raw.annotationStatus,
        objectPDBData = pdbData,
        objectSortedInteractions = sortedInteractions,
@@ -901,11 +942,15 @@ fun view(model) {
       }
 
       fun renderReceptorTable((tbl, label, commentsHeader, comments)) {
-        dataBox(label, 1,
-          a(name(label), h0) +*
-          tr(a0, td(a0,
-          DataTable.renderTable(tbl, renderRow)))) +*
-        commentsBox(commentsHeader, comments)
+        if (DataTable.getTableData(tbl) == []) {
+          MvuHTML.empty
+        } else {
+          dataBox(label, 1,
+            a(name(label), h0) +*
+            tr(a0, td(a0,
+            DataTable.renderTable(tbl, renderRow)))) +*
+          commentsBox(commentsHeader, comments)
+        }
       }
 
       fun renderChannelTable((tbl, label, commentsHeader, comments)) {
