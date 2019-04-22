@@ -161,6 +161,7 @@ typename DataTableBox = (
 typename URL = String;
 
 typename DatabaseLink = (
+  dbID: Int,
   dbName: String,
   dbURL: URL,
   dbSpecialist: Bool,
@@ -359,6 +360,8 @@ fun getInitialModel() {
 
     fun mkModel(raw) {
       var speciesMap = Species.getSpeciesMap();
+      fun speciesShortName(speciesID) { resolveSpeciesShortName(speciesID, speciesMap) }
+      fun speciesLongName(speciesID) { resolveSpeciesLongName(speciesID, speciesMap) }
       # OK, first parse interactions. Given the interactions field from the raw
       # data, this should get us a record of:
       # (agonists: [Interaction],
@@ -731,21 +734,60 @@ fun getInitialModel() {
         var groupedDBLs =
           groupBy(fun(dbl) { dbl.database_id }, dbls);
 
-        concatMap(fun((dbID, dbls)) {
-          switch (lookup(dbID, dbMap)) {
-            case Nothing ->
-              debug("Invalid DB ID: " ^^ intToString(dbID));
-              []
-            case Just(db) ->
-              var entries =
-                map(fun(dbl) { (dbl.species_id, dbl.placeholder,
-                      replacePlaceholder(db.url, dbl.placeholder)) }, dbls);
+        var baseLinks =
+          concatMap(fun((dbID, dbls)) {
+            switch (lookup(dbID, dbMap)) {
+              case Nothing ->
+                debug("Invalid DB ID: " ^^ intToString(dbID));
+                []
+              case Just(db) ->
+                var entries =
+                  map(fun(dbl) { (dbl.species_id, dbl.placeholder,
+                        replacePlaceholder(db.url, dbl.placeholder)) }, dbls);
 
-              [(dbName = db.name, dbURL = db.url, dbSpecialist = db.specialist,
-                 dbPrefix = db."prefix",
-                 dbEntries = entries)]
-          }
-        }, groupedDBLs)
+                [(dbID = db.database_id,
+                  dbName = db.name, dbURL = db.url, dbSpecialist = db.specialist,
+                  dbPrefix = db."prefix",
+                  dbEntries = entries)]
+            }
+          }, groupedDBLs);
+
+        # FIXME:::
+        # Each human entry in Ensembl Gene (ID 15) also has an entry in
+        # the Human Protein Atlas (with same code as for the Ensembl DB).
+        # Each entry in the Entrez Gene (ID 3) also has entries in the
+        # Kegg Gene database, with the following prefixes:
+        # Hs: hsa:XXX
+        # Mm: mmu:XXX
+        # Rn: rno:XXX
+        var extraLinks =
+          concatMap(fun(dbl) {
+            if (dbl.dbID == 15) {
+              []
+            } else if (dbl.dbID == 3) {
+              var dbURL = "https://www.genome.jp/dbget-bin/www_bget?$PLACEHOLDER";
+              var entries = map(fun((species, code, url)) {
+                var speciesShort = speciesShortName(species);
+                var codePrefix =
+                  if (speciesShort == "Hs") { "hsa:" }
+                  else if (speciesShort == "Mm") { "mmu:" }
+                  else if (speciesShort == "Rn") { "rno:" }
+                  else { "" };
+                var code = codePrefix ^^ code;
+                var url = replacePlaceholder(dbURL, code);
+                (species, code, url)
+              }, dbl.dbEntries);
+              [(dbID = (-1), # Hack
+               dbName = "Kegg Gene",
+               dbURL = "https://www.genome.jp/dbget-bin/www_bget?$PLACEHOLDER",
+               dbSpecialist = false,
+               dbPrefix = "",
+               dbEntries = entries)]
+            } else {
+              []
+            }
+          }, baseLinks);
+        baseLinks ++ extraLinks
       }
 
       var dbLinks = transformDBLinks(raw.databaseLinks);
