@@ -610,50 +610,86 @@ fun getInitialModel() {
         (entryComment = comment, entryData = data, entryReferences = references)
       }
 
-      fun transformFunctionalAssays(fas) {
-        var (rows_rev, refs, ligands) =
-          fold_left(fun((rows_rev, refs, ligands), fa) {
-              var references = fa.refs;
-              var fa = fa.fa;
-              var comment = parseOrError(fa.description);
-              var species =
-                parseOrError(resolveSpeciesLongName(fa.species_id, speciesMap));
-              var tissue = parseOrError(fa.tissue);
-              var response = parseOrError(fa.response_measured);
-              var (rowRefs, rowLigands) =
-                collectAllIds([comment, species, tissue, response]);
-              var row =
-                mkDataTableEntry(comment,
-                    [("Species", species), ("Tissue", tissue), ("Response measured", response)],
-                    references);
-              (row :: rows_rev, references ++ rowRefs ++ refs, rowLigands ++ ligands)
-          }, ([], [], []), fas);
+     #fun transformFunctionalAssays(fas) {
+     #  var (rows_rev, refs, ligands) =
+     #    fold_left(fun((rows_rev, refs, ligands), fa) {
+     #        var references = fa.refs;
+     #        var fa = fa.fa;
+     #        var comment = parseOrError(fa.description);
+     #        var species =
+     #          parseOrError(resolveSpeciesLongName(fa.species_id, speciesMap));
+     #        var tissue = parseOrError(fa.tissue);
+     #        var response = parseOrError(fa.response_measured);
+     #        var (rowRefs, rowLigands) =
+     #          collectAllIds([comment, species, tissue, response]);
+     #        var row =
+     #          mkDataTableEntry(comment,
+     #              [("Species", species), ("Tissue", tissue), ("Response measured", response)],
+     #              references);
+     #        (row :: rows_rev, references ++ rowRefs ++ refs, rowLigands ++ ligands)
+     #    }, ([], [], []), fas);
 
-        ((boxName = "Functional Assays", boxRows = reverse(rows_rev)),
-         refs, ligands)
+     #  ((boxName = "Functional Assays", boxRows = reverse(rows_rev)),
+     #   refs, ligands)
+     #}
+
+     #fun transformPhysiologicalFunctions(pfs) {
+     #  var (rows_rev, refs, ligands) =
+     #    fold_left(fun((rows_rev, refs, ligands), pf) {
+     #        var references = pf.refs;
+     #        var pf = pf.pf;
+     #        var comment = parseOrError(pf.description);
+     #        var species =
+     #          parseOrError(resolveSpeciesLongName(pf.species_id, speciesMap));
+     #        var tissue = parseOrError(pf.tissue);
+     #        var (rowRefs, rowLigands) =
+     #          collectAllIds([comment, species, tissue]);
+     #        var row =
+     #          mkDataTableEntry(comment,
+     #              [("Species", species), ("Tissue", tissue)], references);
+     #        (row :: rows_rev, references ++ rowRefs ++ refs, rowLigands ++ ligands)
+     #    }, ([], [], []), pfs);
+
+     #  ((boxName = "Physiological Functions", boxRows = reverse(rows_rev)),
+     #   refs, ligands)
+     #}
+
+      sig transformDataTableBox : forall a . (String, (a) ~%~> DataTableEntry, [a]) ~>
+        (DataTableBox, [ReferenceID], [LigandID])
+      fun transformDataTableBox(boxName, getRow, data) {
+        var (rows_rev, refs, ligands) =
+          fold_left(fun((rows_rev, refs, ligands), x) {
+            var row = getRow(x);
+            var (rowRefs, rowLigands) =
+              RenderMarkup.collectAllIds(map(second, row.entryData));
+            (row :: rows_rev, refs ++ rowRefs, ligands ++ rowLigands)
+          }, ([], [], []), data);
+        var box = (boxName = boxName, boxRows = reverse(rows_rev));
+        (box, refs, ligands)
+      }
+
+      fun transformFunctionalAssays(fas) {
+        transformDataTableBox("Functional Assays",
+          fun(fa) {
+            var references = fa.refs;
+            var fa = fa.fa;
+            mkDataTableEntry(parseOrError(fa.description),
+              [("Species", parseOrError(resolveSpeciesLongName(fa.species_id, speciesMap))),
+               ("Tissue", parseOrError(fa.tissue)),
+               ("Response measured", parseOrError(fa.response_measured))], references)
+          }, fas)
       }
 
       fun transformPhysiologicalFunctions(pfs) {
-        var (rows_rev, refs, ligands) =
-          fold_left(fun((rows_rev, refs, ligands), pf) {
-              var references = pf.refs;
-              var pf = pf.pf;
-              var comment = parseOrError(pf.description);
-              var species =
-                parseOrError(resolveSpeciesLongName(pf.species_id, speciesMap));
-              var tissue = parseOrError(pf.tissue);
-              var (rowRefs, rowLigands) =
-                collectAllIds([comment, species, tissue]);
-              var row =
-                mkDataTableEntry(comment,
-                    [("Species", species), ("Tissue", tissue)], references);
-              (row :: rows_rev, references ++ rowRefs ++ refs, rowLigands ++ ligands)
-          }, ([], [], []), pfs);
-
-        ((boxName = "Physiological Functions", boxRows = reverse(rows_rev)),
-         refs, ligands)
+        transformDataTableBox("Physiological Functions",
+          fun(pf) {
+            var references = pf.refs;
+            var pf = pf.pf;
+            mkDataTableEntry(parseOrError(pf.description),
+              [("Species", parseOrError(resolveSpeciesLongName(pf.species_id, speciesMap))),
+               ("Tissue", parseOrError(pf.tissue))], references)
+          }, pfs)
       }
-
       var (variants, variantRefs, variantLigands) =
         transformVariants(raw.variants);
 
@@ -668,6 +704,7 @@ fun getInitialModel() {
 
       var (functionalAssays, faRefs, faLigands) =
         transformFunctionalAssays(raw.functionalAssays);
+
       var (physiologicalFunctions, pfRefs, pfLigands) =
         transformPhysiologicalFunctions(raw.physiologicalFunctions);
 
