@@ -169,7 +169,6 @@ typename ObjectInfo = (
       (giComments: Markup, giEntries: [GeneProteinInfo]),
     # TODO: Suss this out and add it in
     # objectQuaternaryStructure: (),
-   # objectGeneInformation: SortableTable(GeneProteinInfo, Message),
    # objectDatabaseLinks: (), # for now
     objectPDBData: [PDBData],
     objectEndogenousLigands: [EndogenousLigandSummary],
@@ -177,7 +176,7 @@ typename ObjectInfo = (
   # objectPotencyOrder: (),
     objectSortedInteractions: SortedInteractions,
     objectTransductionMechanisms: [TransductionMechanism],
-   # objectTissueDistribution: [TissueDistribution],
+    objectTissueDistribution: DataTableBox,
     # TODO: Expression dataset(!?)
    # objectExpressionDataset: (),
     objectFunctionalAssays: DataTableBox,
@@ -699,6 +698,17 @@ fun getInitialModel() {
           }, aes)
       }
 
+      fun transformTissueDistribution(tds) {
+        transformDataTableBox("Tissue Distribution",
+          fun(td) {
+            var references = td.refs;
+            var td = td.td;
+            mkDataTableEntry(parseOrError(td.tissues),
+              [("Species", parseOrError(resolveSpeciesLongName(td.species_id, speciesMap))),
+               ("Technique", parseOrError(td.technique))], references)
+          }, tds)
+      }
+
       var (variants, variantRefs, variantLigands) =
         transformVariants(raw.variants);
 
@@ -722,6 +732,9 @@ fun getInitialModel() {
       var (physiologicalConsequences, pcRefs, pcLigands) =
         transformPhysiologicalConsequences(raw.alteredExpressions);
 
+      var (tissueDistribution, tdRefs, tdLigands) =
+        transformTissueDistribution(raw.tissueDistribution);
+
       var (geneProteinInfo, gpiRefs, gpiLigands) =
         transformGeneProteinInfo(raw.gpcrComments, raw.geneInformation);
 
@@ -741,6 +754,7 @@ fun getInitialModel() {
           pfRefs ++
           pcRefs ++
           gpiRefs ++
+          tdRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -752,6 +766,7 @@ fun getInitialModel() {
           pfLigands ++
           pcLigands ++
           gpiLigands ++
+          tdLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -776,6 +791,7 @@ fun getInitialModel() {
        objectFunctionalAssays = functionalAssays,
        objectPhysiologicalFunctions = physiologicalFunctions,
        objectPhysiologicalConsequences = physiologicalConsequences,
+       objectTissueDistribution = tissueDistribution,
        objectSpeciesMap = speciesMap)
     }
 
@@ -1096,7 +1112,8 @@ fun view(model) {
         tbody(name("toggle"), renderedRows))
     }
 
-    var tissueDistributionBox = MvuHTML.empty;
+    var tissueDistributionBox =
+      renderDataBox(objectInfo.objectTissueDistribution);
     var functionalAssaysBox =
       renderDataBox(objectInfo.objectFunctionalAssays);
     var physiologicalFunctionsBox =
