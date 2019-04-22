@@ -165,6 +165,17 @@ typename ReceptorComments = (
   malariaComments: Markup
 );
 
+typename DataTableEntry = (
+  entryComment: Markup,
+  entryData: [(String, Markup)],
+  entryReferences: [ReferenceID]
+);
+
+typename DataTableBox = (
+    boxName: String,
+    boxRows: [DataTableEntry]
+);
+
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
 typename ObjectInfo = (
     objectId: Int,
@@ -185,7 +196,7 @@ typename ObjectInfo = (
    # objectTissueDistribution: [TissueDistribution],
     # TODO: Expression dataset(!?)
    # objectExpressionDataset: (),
-    #objectFunctionalAssays: [FunctionalAssay],
+    objectFunctionalAssays: DataTableBox,
    # objectPhysiologicalFunctions: [PhysiologicalFunction],
    # objectPhenotypes: SortableTable(Phenotype, Message),
     objectVariants: [Variant],
@@ -195,13 +206,6 @@ typename ObjectInfo = (
     objectLigandNames: [(LigandId, LigandName)],
     objectSpeciesMap: SpeciesMap
    # objectContributors: [Contributor.Contributor]
-);
-
-typename DataTableBox = (
-  boxName: String,
-  boxComment: Markup,
-  boxData: [(String, Markup)],
-  boxReferences: [ReferenceID]
 );
 
 typename Model = Maybe(ObjectInfo);
@@ -347,6 +351,7 @@ fun getInitialModel() {
     };
 
     fun mkModel(raw) {
+      var speciesMap = Species.getSpeciesMap();
       # OK, first parse interactions. Given the interactions field from the raw
       # data, this should get us a record of:
       # (agonists: [Interaction],
@@ -595,6 +600,39 @@ fun getInitialModel() {
         }
       }
 
+      sig mkDataTableBox : (String, [DataTableEntry]) ~%~> DataTableBox
+      fun mkDataTableBox(name, rows) {
+        (boxName = name, boxRows = rows)
+      }
+
+      sig mkDataTableEntry : (Markup, [(String, Markup)], [ReferenceID]) ~%~> DataTableEntry
+      fun mkDataTableEntry(comment, data, references) {
+        (entryComment = comment, entryData = data, entryReferences = references)
+      }
+
+      fun transformFunctionalAssays(fas) {
+        var (rows_rev, refs, ligands) =
+          fold_left(fun((rows_rev, refs, ligands), fa) {
+              var references = fa.refs;
+              var fa = fa.fa;
+              var comment = parseOrError(fa.description);
+              var species =
+                parseOrError(resolveSpeciesLongName(fa.species_id, speciesMap));
+              var tissue = parseOrError(fa.tissue);
+              var response = parseOrError(fa.response_measured);
+              var (rowRefs, rowLigands) =
+                collectAllIds([comment, species, tissue, response]);
+              var row =
+                mkDataTableEntry(comment,
+                    [("Species", species), ("Tissue", tissue), ("Response measured", response)],
+                    references);
+              (row :: rows_rev, references ++ rowRefs ++ refs, rowLigands ++ ligands)
+          }, ([], [], []), fas);
+
+        ((boxName = "Functional Assays", boxRows = reverse(rows_rev)),
+         refs, ligands)
+      }
+
       var (variants, variantRefs, variantLigands) =
         transformVariants(raw.variants);
 
@@ -607,6 +645,9 @@ fun getInitialModel() {
       var (transductions, transductionRefs, transductionLigands) =
         Transduction.transductionsForObject(objectId);
 
+      var (functionalAssays, faRefs, faLigands) =
+        transformFunctionalAssays(raw.functionalAssays);
+
       # TODO: A few more comment fields (grac_comments, structural_info_comments, quanternary_structure_comments)
       # still to be handled
       var (receptorComments, commentRefs, commentLigands) =
@@ -614,12 +655,21 @@ fun getInitialModel() {
             raw.immuno_comments, raw.malaria_comments);
 
       var refIDs =
-        uniquify(variantRefs ++ interactionRefs ++ pdbRefs ++
-            transductionRefs ++ commentRefs);
+        uniquify(
+          variantRefs ++
+          interactionRefs ++
+          pdbRefs ++
+          transductionRefs ++
+          faRefs ++
+          commentRefs);
 
       var ligandIDs =
-        uniquify(variantLigands ++ pdbLigands ++ transductionLigands ++
-            commentLigands);
+        uniquify(
+          variantLigands ++
+          pdbLigands ++
+          transductionLigands ++
+          faLigands ++
+          commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
 
@@ -638,7 +688,8 @@ fun getInitialModel() {
        objectLigandNames = ligandNames,
        objectShowReferences = false,
        objectReferences = refs,
-       objectSpeciesMap = Species.getSpeciesMap())
+       objectFunctionalAssays = functionalAssays,
+       objectSpeciesMap = speciesMap)
     }
 
     switch(raw) {
@@ -837,38 +888,6 @@ fun view(model) {
 
     };
 
- #       fun mkStandardInteractionTable(tableTy, interactions) {
- #         var cols = [
- #           ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
- #           ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
- #           ("", NotSortable),
- #           ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
- #           ("Action", Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) })),
- #           ("Affinity", Sortable(fun(x, y) {
- #               InteractionUtilities.sortAffinity(x.iLigandAffinity, y.iLigandAffinity)})),
- #           ("References", NotSortable)
- #         ];
- #         fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, sortDir) }
- #         DataTable.makeTable(cols, interactions, sortMessage)
- #       }
- #
- #       fun mkActivatorTable(tableTy, interactions) {
- #         var cols = [
- #           ("Ligand", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) })),
- #           ("", NotSortable), ("", NotSortable), ("", NotSortable), ("", NotSortable),
- #           ("", NotSortable),
- #           ("Species", Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) })),
- #           ("Affinity", Sortable(fun(x, y) {
- #               simpleCmp(x.iLigandAffinity.affinityMedian,
- #                   y.iLigandAffinity.affinityMedian) })),
- #           ("Parameter", Sortable(fun(x, y) {
- #               simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)})),
- #            # FIXME: Need to fix these up when we have the right details in the model
- #           ("Concentration range (M)", NotSortable), ("Holding voltage (mV)", NotSortable),
- #           ("References", NotSortable)
- #         ];
-#   }
-
     var immunoCommentsBox =
       commentsBox("Immunopharmacology Comments", comments.immunoComments);
     var malariaCommentsBox =
@@ -922,8 +941,87 @@ fun view(model) {
       }
     };
 
+
+
+#       <tbody name="toggle">
+#           <tr>
+#               <td class="info">
+#                   <table class="inner_receptor_data_tables">
+#                       <tr>
+#                           <td class="description">Drug discrimination (also primates and pigeons)</td>
+#                       </tr>
+#                       <tr>
+#                           <td>
+#                               <table class="inner_receptor_data_tables">
+#                                   <tr>
+#                                       <td class="key">Species:&nbsp;</td>
+#                                       <td class="value">Rat</td>
+#                                   </tr>
+#                                   <tr>
+#                                       <td class="key">Tissue:&nbsp;</td>
+#                                       <td class="value"><i>In vivo</i></td>
+#                                   </tr>
+#                                   <tr>
+#                                       <td class="key">Response measured:&nbsp;</td>
+#                                       <td class="value">Drug discrimination</td>
+#                                   </tr>
+#                                   <tr>
+#                                       <td class="key">References:&nbsp;</td>
+#                                       <td class="value"><a href='javascript:callRef("ReferenceDisplayForward?referenceId=1915&displayId=36", 960, 600)' title="36. Howlett AC, Barth F, Bonner TI, Cabral G, Casellas P, Devane WA, Felder CC, Herkenham M, Mackie K, Martin BR, Mechoulam R, Pertwee RG. (2002) Pharmacol. Rev. 54: 161-202">36</a></td>
+#                                   </tr>
+#                               </table>
+#                           </td>
+#                       </tr>
+#                   </table>
+#               </td>
+#           </tr>
+
+
+    fun renderDataBox(box) {
+      fun renderDataRow(row) {
+
+        fun renderDatum((k, v)) {
+          tr(a0,
+            td(class("key"), textNode(k)) +*
+            td(class("value"), renderM(v)))
+        }
+
+        var renderedData = MvuHTML.concat(map(renderDatum, row.entryData));
+        var referencesRow =
+          if (row.entryReferences == []) {
+            MvuHTML.empty
+          } else {
+            tr(a0,
+              td(class("key"), textNode("References")) +*
+              td(class("value"),
+                Reference.renderCitationList(row.entryReferences,
+                  objectInfo.objectReferences)))
+          };
+
+        tr(a0,
+          td(class("info"),
+            table_(class("inner_receptor_data_tables"),
+              tr(a0,
+                td(class("description"), renderM(row.entryComment))) +*
+              tr(a0,
+                td(a0,
+                  table_(class("inner_receptor_data_tables"),
+                    renderedData +* referencesRow))))))
+      }
+
+      var renderedRows = MvuHTML.concat(map(renderDataRow, box.boxRows));
+
+      a(name(box.boxName), h0) +*
+      table_(class("receptor_data_tables fullwidth"),
+        thead(a0,
+          tr(name("hotspot") +@ class("hotspot"),
+            td(class("info category"), textNode(box.boxName)))) +*
+        tbody(name("toggle"), renderedRows))
+    }
+
     var tissueDistributionBox = MvuHTML.empty;
-    var functionalAssaysBox = MvuHTML.empty;
+    var functionalAssaysBox =
+      renderDataBox(objectInfo.objectFunctionalAssays);
     var physiologicalFunctionsBox = MvuHTML.empty;
     var physiologicalConsequencesBox = MvuHTML.empty;
     var phenotypesBox = MvuHTML.empty;
