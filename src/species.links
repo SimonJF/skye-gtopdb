@@ -1,0 +1,29 @@
+open Tables;
+
+typename SpeciesID = Int;
+typename SpeciesShortName = String;
+typename SpeciesLongName = String;
+
+typename SpeciesMap = [(SpeciesID, (SpeciesShortName, SpeciesLongName))];
+
+fun getSpeciesMap() {
+  query {
+    for (s <-- Tables.species)
+      [(s.species_id, (s.short_name, s.name))]
+  }
+}
+
+fun resolveSpeciesShortName(speciesId, speciesMap) {
+  switch (lookup(speciesId, speciesMap)) {
+    case Just((name, _)) -> name
+    case Nothing -> "?"
+  }
+}
+
+fun resolveSpeciesLongName(speciesId, speciesMap) {
+  switch (lookup(speciesId, speciesMap)) {
+    case Just((_, name)) -> name
+    case Nothing -> "?"
+  }
+}
+
