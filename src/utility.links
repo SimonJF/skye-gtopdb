@@ -184,3 +184,6 @@ fun groupBy(f, xs) {
   go([], xs)
 }
 
+fun replacePlaceholder(url, code) {
+  (url =~ s/\$PLACEHOLDER/{code}/ )
+}
