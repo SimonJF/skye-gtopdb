@@ -198,6 +198,7 @@ typename ObjectInfo = (
    # objectExpressionDataset: (),
     objectFunctionalAssays: DataTableBox,
     objectPhysiologicalFunctions: DataTableBox,
+    objectPhysiologicalConsequences: DataTableBox,
    # objectPhenotypes: SortableTable(Phenotype, Message),
     objectVariants: [Variant],
     objectComments: ReceptorComments,
@@ -332,6 +333,14 @@ fun getInitialModel() {
                        for (pfRef <-- Tables.physiological_function_refs)
                          where (pfRef.physiological_function_id == pf.physiological_function_id)
                          [pfRef.reference_id])],
+             alteredExpressions =
+               for (ae <-- Tables.altered_expression)
+                 where (ae.object_id == objectId)
+                   [(ae = ae,
+                     refs =
+                       for (aeRef <-- Tables.altered_expression_refs)
+                         where (aeRef.altered_expression_id == ae.altered_expression_id)
+                         [aeRef.reference_id])],
              alleles = (), # Getting this is a faff, requiring structural info, etc. Leaving for now.
              variants =
                for (v <-- Tables.variant)
@@ -610,50 +619,6 @@ fun getInitialModel() {
         (entryComment = comment, entryData = data, entryReferences = references)
       }
 
-     #fun transformFunctionalAssays(fas) {
-     #  var (rows_rev, refs, ligands) =
-     #    fold_left(fun((rows_rev, refs, ligands), fa) {
-     #        var references = fa.refs;
-     #        var fa = fa.fa;
-     #        var comment = parseOrError(fa.description);
-     #        var species =
-     #          parseOrError(resolveSpeciesLongName(fa.species_id, speciesMap));
-     #        var tissue = parseOrError(fa.tissue);
-     #        var response = parseOrError(fa.response_measured);
-     #        var (rowRefs, rowLigands) =
-     #          collectAllIds([comment, species, tissue, response]);
-     #        var row =
-     #          mkDataTableEntry(comment,
-     #              [("Species", species), ("Tissue", tissue), ("Response measured", response)],
-     #              references);
-     #        (row :: rows_rev, references ++ rowRefs ++ refs, rowLigands ++ ligands)
-     #    }, ([], [], []), fas);
-
-     #  ((boxName = "Functional Assays", boxRows = reverse(rows_rev)),
-     #   refs, ligands)
-     #}
-
-     #fun transformPhysiologicalFunctions(pfs) {
-     #  var (rows_rev, refs, ligands) =
-     #    fold_left(fun((rows_rev, refs, ligands), pf) {
-     #        var references = pf.refs;
-     #        var pf = pf.pf;
-     #        var comment = parseOrError(pf.description);
-     #        var species =
-     #          parseOrError(resolveSpeciesLongName(pf.species_id, speciesMap));
-     #        var tissue = parseOrError(pf.tissue);
-     #        var (rowRefs, rowLigands) =
-     #          collectAllIds([comment, species, tissue]);
-     #        var row =
-     #          mkDataTableEntry(comment,
-     #              [("Species", species), ("Tissue", tissue)], references);
-     #        (row :: rows_rev, references ++ rowRefs ++ refs, rowLigands ++ ligands)
-     #    }, ([], [], []), pfs);
-
-     #  ((boxName = "Physiological Functions", boxRows = reverse(rows_rev)),
-     #   refs, ligands)
-     #}
-
       sig transformDataTableBox : forall a . (String, (a) ~%~> DataTableEntry, [a]) ~>
         (DataTableBox, [ReferenceID], [LigandID])
       fun transformDataTableBox(boxName, getRow, data) {
@@ -662,7 +627,8 @@ fun getInitialModel() {
             var row = getRow(x);
             var (rowRefs, rowLigands) =
               RenderMarkup.collectAllIds(map(second, row.entryData));
-            (row :: rows_rev, refs ++ rowRefs, ligands ++ rowLigands)
+            (row :: rows_rev, rowRefs ++ row.entryReferences ++ refs,
+               rowLigands ++ ligands)
           }, ([], [], []), data);
         var box = (boxName = boxName, boxRows = reverse(rows_rev));
         (box, refs, ligands)
@@ -690,6 +656,19 @@ fun getInitialModel() {
                ("Tissue", parseOrError(pf.tissue))], references)
           }, pfs)
       }
+
+      fun transformPhysiologicalConsequences(aes) {
+        transformDataTableBox("Physiological Consequences of Altering Gene Expression",
+          fun(ae) {
+            var references = ae.refs;
+            var ae = ae.ae;
+            mkDataTableEntry(parseOrError(ae.description),
+              [("Species", parseOrError(resolveSpeciesLongName(ae.species_id, speciesMap))),
+               ("Tissue", parseOrError(ae.tissue)),
+               ("Technique", parseOrError(ae.technique))], references)
+          }, aes)
+      }
+
       var (variants, variantRefs, variantLigands) =
         transformVariants(raw.variants);
 
@@ -708,6 +687,9 @@ fun getInitialModel() {
       var (physiologicalFunctions, pfRefs, pfLigands) =
         transformPhysiologicalFunctions(raw.physiologicalFunctions);
 
+      var (physiologicalConsequences, pcRefs, pcLigands) =
+        transformPhysiologicalConsequences(raw.alteredExpressions);
+
       # TODO: A few more comment fields (grac_comments, structural_info_comments, quanternary_structure_comments)
       # still to be handled
       var (receptorComments, commentRefs, commentLigands) =
@@ -722,6 +704,7 @@ fun getInitialModel() {
           transductionRefs ++
           faRefs ++
           pfRefs ++
+          pcRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -731,6 +714,7 @@ fun getInitialModel() {
           transductionLigands ++
           faLigands ++
           pfLigands ++
+          pcLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -752,6 +736,7 @@ fun getInitialModel() {
        objectReferences = refs,
        objectFunctionalAssays = functionalAssays,
        objectPhysiologicalFunctions = physiologicalFunctions,
+       objectPhysiologicalConsequences = physiologicalConsequences,
        objectSpeciesMap = speciesMap)
     }
 
@@ -1087,7 +1072,8 @@ fun view(model) {
       renderDataBox(objectInfo.objectFunctionalAssays);
     var physiologicalFunctionsBox =
       renderDataBox(objectInfo.objectPhysiologicalFunctions);
-    var physiologicalConsequencesBox = MvuHTML.empty;
+    var physiologicalConsequencesBox =
+      renderDataBox(objectInfo.objectPhysiologicalConsequences);
     var phenotypesBox = MvuHTML.empty;
     var generalCommentsBox =
       commentsBox("General Comments", comments.generalComments);
