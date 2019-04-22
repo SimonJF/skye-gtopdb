@@ -73,31 +73,6 @@ typename PDBData = (
 typename EndogenousLigandSummary =
   (elsName: Markup, elsSpeciesID: SpeciesID, elsLigandID: LigandID);
 
-typename TissueDistribution = (
-    tdDescription: Markup,
-    tdSpeciesID: SpeciesID,
-    tdTechnique: String,
-    tdReferences: [ReferenceID]
-);
-
-typename PhysiologicalFunction = TissueDistribution;
-
-typename FunctionalAssay = (
-    faDescription: Markup,
-    faSpeciesID: SpeciesID,
-    faTechnique: String,
-    faResponseMeasured: Markup,
-    faReferences: [ReferenceID]
-);
-
-typename AlteredExpression = (
-    aeDescription: Markup,
-    aeSpeciesID: SpeciesID,
-    aeTissue: Markup,
-    aeTechnique: Markup,
-    aeReferences: [ReferenceID]
-);
-
 typename Phenotype = (
     phenoAllele: Markup,
     phenoComposition: Markup,
