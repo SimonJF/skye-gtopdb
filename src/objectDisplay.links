@@ -3,7 +3,6 @@
 # ion channels, etc.)
 
 # TODO (22nd April list):
-# 2. Tissue distribution
 # 3. Database links
 # 4. Cell type associations
 # 5. Immuno process associations
@@ -11,6 +10,7 @@
 # 7. Expression datasets
 # 8. Contributors
 # 9. Activator / inhibitor tables with voltage information
+# 10. Annotation status
 
 
 # TODO: Voltage dependence field for VGICs.
@@ -158,6 +158,14 @@ typename DataTableBox = (
     boxRows: [DataTableEntry]
 );
 
+typename DatabaseLink = (
+  dbName: String,
+  dbURL: String,
+  dbSpecialist: Bool,
+  dbPrefix: String,
+  dbEntries: [(SpeciesID, String)]
+);
+
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
 typename ObjectInfo = (
     objectId: Int,
@@ -169,7 +177,7 @@ typename ObjectInfo = (
       (giComments: Markup, giEntries: [GeneProteinInfo]),
     # TODO: Suss this out and add it in
     # objectQuaternaryStructure: (),
-   # objectDatabaseLinks: (), # for now
+   # objectDatabaseLinks: [DatabaseLink], # for now
     objectPDBData: [PDBData],
     objectEndogenousLigands: [EndogenousLigandSummary],
     # TODO: Potency order(!?)

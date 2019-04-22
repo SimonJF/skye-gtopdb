@@ -171,3 +171,16 @@ fun valign(val) {
 fun target(val) {
   MvuAttrs.attr("target", val)
 }
+
+fun groupBy(f, xs) {
+  fun go(acc, rest) {
+    switch(rest) {
+      case [] -> acc
+      case x :: xs ->
+        var (group, others) = partition(fun(y) { f(y) == f(x) }, rest);
+        go((f(x), group) :: acc, others)
+    }
+  }
+  go([], xs)
+}
+

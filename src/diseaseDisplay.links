@@ -207,20 +207,9 @@ fun getModel(diseaseId) {
     # immuno and pathophysiology tables, or one. If they are in both, we need
     # to merge the results.
     var allTargets = rawResult.patho_targets ++ rawResult.immuno_targets;
-    fun groupTargets(acc, rest) {
-      switch(rest) {
-        case [] -> acc
-        case x :: xs ->
-          var (group, others) = partition(fun(y) { y.id == x.id }, rest);
-          groupTargets(group :: acc, others)
-      }
-    }
-    var groupedTargets = groupTargets([], allTargets);
+    var groupedTargets = map(second, groupBy(fun(x) { x.id }, allTargets));
     # Now we've grouped, we need to merge
     var targets = map(fun(group) {
-        fun removeDummyInteractions(interactions) {
-          filter(fun(x) { not(x.lId == (-1)) }, interactions)
-        }
         fun concatComments(x, y) {
           switch((x, y)) {
             case ("", x) -> x
