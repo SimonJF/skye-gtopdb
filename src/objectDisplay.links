@@ -2,11 +2,16 @@
 # Detailed information about objects (i.e., ligand targets: receptors,
 # ion channels, etc.)
 
-# Next up:
-#  1. Tie comments to the model
-#  2. Ligand lookup table query, and add to the model
-#  3. Begin getting some of the basics rendered
-#  4. Gradually add commented things back in
+# TODO (22nd April list):
+# 2. Tissue distribution
+# 3. Database links
+# 4. Cell type associations
+# 5. Immuno process associations
+# 6. Phenotypes etc.
+# 7. Expression datasets
+# 8. Contributors
+# 9. Activator / inhibitor tables with voltage information
+
 
 # TODO: Voltage dependence field for VGICs.
 # Functional characteristics
@@ -192,7 +197,7 @@ typename ObjectInfo = (
    # objectGeneInformation: SortableTable(GeneProteinInfo, Message),
    # objectDatabaseLinks: (), # for now
     objectPDBData: [PDBData],
-   # objectEndogenousLigands: [EndogenousLigandSummary],
+    objectEndogenousLigands: [EndogenousLigandSummary],
     # TODO: Potency order(!?)
   # objectPotencyOrder: (),
     objectSortedInteractions: SortedInteractions,
@@ -379,12 +384,14 @@ fun getInitialModel() {
       #  channelBlockers: [Interaction],
       #  gatingInhibitors: [Interaction],
       #  subunitSpecific: [Interaction],
+      #  endogenous: [EndogenousLigandSummary],
       #  references: [ReferenceID])
       fun transformInteractions(rawInteractions) {
         var emptyResult =
           (agonists = [], antagonists = [], allostericModulators = [],
            activators = [], inhibitors = [], channelBlockers = [],
-           gatingInhibitors = [], subunitSpecific = [], references = []);
+           gatingInhibitors = [], subunitSpecific = [], endogenous = [],
+           references = []);
 
         fold_left(fun(acc, x) {
           var i = x.interaction;
@@ -449,6 +456,15 @@ fun getInitialModel() {
             } else {
               acc
             };
+
+          var acc =
+            if (i.endogenous) {
+              var els =
+                (elsName = parseOrError(l.name),
+                 elsSpeciesID = i.species_id,
+                 elsLigandID = i.ligand_id);
+              (acc with endogenous = els :: acc.endogenous)
+            } else { acc };
 
           (acc with references = (refs ++ acc.references))
         }, emptyResult, rawInteractions)
@@ -714,6 +730,8 @@ fun getInitialModel() {
       var (pdbData, pdbRefs, pdbLigands) = transformPDBs(raw.pdbData);
 
       var interactions = transformInteractions(raw.interactions);
+      var endogenousLigands = interactions.endogenous;
+
       var sortedInteractions = mkInteractionTables(interactions);
       var interactionRefs = interactions.references;
 
@@ -772,6 +790,7 @@ fun getInitialModel() {
        objectGeneProteinInfo = geneProteinInfo,
        objectAnnotationStatus = raw.annotationStatus,
        objectPDBData = pdbData,
+       objectEndogenousLigands = endogenousLigands,
        objectSortedInteractions = sortedInteractions,
        objectTransductionMechanisms = transductions,
        objectVariants = variants,
@@ -875,7 +894,30 @@ fun view(model) {
 
     var dbLinksBox = MvuHTML.empty;
     var pdbStructureBox = MvuHTML.empty;
-    var endogenousLigandsBox = MvuHTML.empty;
+    var endogenousLigandsBox = {
+      fun renderSummary(els) {
+        tr(class("info"),
+            td(a0,
+              a(href("/ligandDisplay?ligandId=" ^^ intToString(els.elsLigandID)),
+                renderM(els.elsName))))
+      }
+
+      var renderedSummaries =
+        MvuHTML.concat(map(renderSummary, objectInfo.objectEndogenousLigands));
+
+      a(name("Endogenous"), h0) +*
+      table_(class("receptor_data_tables fullwidth"),
+        thead(a0,
+          tr(a0,
+            td(class("info category"), textNode("Natural/Endogenous Ligands")))) +*
+        tbody(a0,
+          renderedSummaries +*
+          tr(class("info"),
+            td(a0,
+              b(a0, textNode("Comments: ")) +*
+              renderM(objectInfo.objectComments.listComments)))))
+    };
+
     var potencyOrderBox = MvuHTML.empty;
 
     var interactionsTables = {
@@ -942,7 +984,6 @@ fun view(model) {
           affinityCol +*
           parameterCol +*
           referenceCol)
-
       }
 
       fun renderReceptorTable((tbl, label, commentsHeader, comments)) {
@@ -951,7 +992,7 @@ fun view(model) {
         } else {
           dataBox(label, 1,
             a(name(label), h0) +*
-            tr(a0, td(a0,
+            tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
             DataTable.renderTable(tbl, renderRow)))) +*
           commentsBox(commentsHeader, comments)
         }
