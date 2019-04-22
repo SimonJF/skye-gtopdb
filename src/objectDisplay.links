@@ -46,6 +46,8 @@ typename PDBID = String;
 
 typename GeneProteinInfo = (
     gpiSpeciesID: Int,
+    gpiSymbol: String,
+    gpiShortName: String,
     gpiName: Markup,
     gpiTransmembraneDomains: Int,
     gpiAminoAcids: Int,
@@ -622,7 +624,9 @@ fun getInitialModel() {
             var gi = gi.si;
             var res = (
               gpiSpeciesID = gi.species_id,
-              gpiName = parseOrError(gi.gene_name),
+              gpiName = parseOrError(gi.gene_long_name),
+              gpiSymbol = gi.official_gene_id,
+              gpiShortName = gi.gene_name,
               gpiTransmembraneDomains = gi.transmembrane_domains,
               gpiAminoAcids = gi.amino_acids,
               gpiReferences = references,
@@ -1187,6 +1191,45 @@ fun view(model) {
                 textNode("Selected 3D Structures")))) +*
           tbody(name("toggle"), pdbRows))
       }
+    };
+
+
+    var geneProteinInfoBox = {
+      var gi = objectInfo.objectGeneProteinInfo;
+      var headings = ["Species", "TM", "AA", "Chromosomal Location", "Gene Symbol",
+          "Gene Name", "Reference"];
+      fun renderHeading(h) { td(class("info heading"), textNode(h)) }
+      var renderedHeadings = MvuHTML.concat(map(renderHeading, headings));
+
+      fun renderRow(gpi) {
+        fun renderData(val) {
+          td(class("info centre"), val)
+        }
+        var data = [
+          textNode(speciesLongName(gpi.gpiSpeciesID)),
+          textNode(intToString(gpi.gpiTransmembraneDomains)),
+          textNode(intToString(gpi.gpiAminoAcids)),
+          textNode(gpi.gpiChromosomalLocation),
+          textNode(gpi.gpiShortName),
+          renderM(gpi.gpiName),
+          Reference.renderCitationList(gpi.gpiReferences,
+              objectInfo.objectReferences)
+        ];
+        tr(a0, MvuHTML.concat(map(renderData, data)))
+      }
+      var renderedRows = MvuHTML.concat(map(renderRow, gi.giEntries));
+
+      a(name("StructuralInfo"), h0) +*
+      table_(class("receptor_data_tables fullwidth"),
+        thead(a0,
+          tr(name("hotspot") +@ class("hotspot"),
+            td(class("info category") +@ colSpan(7),
+              textNode("Gene and Protein Information")))) +*
+        tbody(name("toggle"),
+          tr(a0,
+            td(class("info") +@ colSpan(7), renderM(gi.giComments))) +*
+          tr(a0, renderedHeadings) +*
+          renderedRows))
     };
 
     var dataBoxes =
