@@ -177,7 +177,7 @@ typename ObjectInfo = (
       (giComments: Markup, giEntries: [GeneProteinInfo]),
     # TODO: Suss this out and add it in
     # objectQuaternaryStructure: (),
-   # objectDatabaseLinks: [DatabaseLink], # for now
+    objectDatabaseLinks: [DatabaseLink],
     objectPDBData: [PDBData],
     objectEndogenousLigands: [EndogenousLigandSummary],
     # TODO: Potency order(!?)
@@ -204,8 +204,6 @@ typename Model = Maybe(ObjectInfo);
 
 sig getInitialModel : () ~%~> Model
 fun getInitialModel() {
-  # TODO: We also need to traverse this record to transform everything to markup and
-  # get the referenced ligands and references.
 
   sig getObjectInfo : (Int) ~%~> Maybe(ObjectInfo)
   fun getObjectInfo(objectId) {
@@ -274,7 +272,10 @@ fun getInitialModel() {
                      for (siRef <-- Tables.structural_info_refs)
                        where (siRef.structural_info_id == si.structural_info_id)
                        [siRef.reference_id])],
-             databaseLinks = (), # FIXME: FILL ME IN
+             databaseLinks =
+               for (dbl <-- Tables.database_link)
+                 where (dbl.object_id == objectId)
+                   [dbl],
              pdbData =
                for (pdb <-- Tables.pdb_structure)
                  where (pdb.object_id == objectId)
@@ -717,6 +718,35 @@ fun getInitialModel() {
           }, tds)
       }
 
+      fun transformDBLinks(dbls) {
+        var dbIDs = map(fun(x) { x.database_id }, dbls);
+        var dbPred = contains(dbIDs);
+        var dbMap = query {
+          for (db <-- Tables.tbl_database)
+            where (dbPred(db.database_id))
+              [(db.database_id, db)]
+        };
+        var groupedDBLs =
+          groupBy(fun(dbl) { dbl.database_id }, dbls);
+
+        concatMap(fun((dbID, dbls)) {
+          switch (lookup(dbID, dbMap)) {
+            case Nothing ->
+              debug("Invalid DB ID: " ^^ intToString(dbID));
+              []
+            case Just(db) ->
+              var entries =
+                map(fun(dbl) { (dbl.species_id, dbl.placeholder ) }, dbls);
+
+              [(dbName = db.name, dbURL = db.url, dbSpecialist = db.specialist,
+                 dbPrefix = db."prefix",
+                 dbEntries = entries)]
+          }
+        }, groupedDBLs)
+      }
+
+      var dbLinks = transformDBLinks(raw.databaseLinks);
+
       var (variants, variantRefs, variantLigands) =
         transformVariants(raw.variants);
 
@@ -786,6 +816,7 @@ fun getInitialModel() {
        objectSynonyms = transformSynonyms(raw.synonyms),
        objectFamily = transformFamily(raw.family),
        objectGeneProteinInfo = geneProteinInfo,
+       objectDatabaseLinks = dbLinks,
        objectAnnotationStatus = raw.annotationStatus,
        objectPDBData = pdbData,
        objectEndogenousLigands = endogenousLigands,
