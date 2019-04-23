@@ -763,7 +763,20 @@ fun getInitialModel() {
         var extraLinks =
           concatMap(fun(dbl) {
             if (dbl.dbID == 15) {
-              []
+              concatMap(fun((species, code, url)) {
+                  if (speciesShortName(species) == "Hs") {
+                    var dbURL = "http://www.proteinatlas.org/$PLACEHOLDER";
+                    var url = replacePlaceholder(dbURL, code);
+                    [(dbID = (-1), # hack
+                      dbName = "Human Protein Atlas",
+                      dbURL = dbURL,
+                      dbSpecialist = false,
+                      dbPrefix = "",
+                      dbEntries = [(species, code, url)])]
+                  } else {
+                    []
+                  }
+              }, dbl.dbEntries)
             } else if (dbl.dbID == 3) {
               var dbURL = "https://www.genome.jp/dbget-bin/www_bget?$PLACEHOLDER";
               var entries = map(fun((species, code, url)) {
@@ -779,7 +792,7 @@ fun getInitialModel() {
               }, dbl.dbEntries);
               [(dbID = (-1), # Hack
                dbName = "Kegg Gene",
-               dbURL = "https://www.genome.jp/dbget-bin/www_bget?$PLACEHOLDER",
+               dbURL = dbURL,
                dbSpecialist = false,
                dbPrefix = "",
                dbEntries = entries)]
