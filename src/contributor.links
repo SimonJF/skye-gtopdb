@@ -46,3 +46,5 @@ fun displayContributors(contributors) {
           h3(a0, textNode("Other contributors:")) +*
           otherContributors)))))
 }
+
+

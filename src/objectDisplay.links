@@ -39,7 +39,7 @@ typename ColumnName = String;
 
 typename Message = [|
     SortInteractionTable:(InteractionTable, ColumnName, SortDirection)
-  | ToggleReferences
+  | ToggleReferences | ToggleContributors
 |];
 
 typename Family = (familyId: Int, familyName: Markup);

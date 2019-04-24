@@ -442,47 +442,35 @@ fun getInitialModel() {
           sortBy(fun(ref) { ref.authors }, furtherReading);
 
         ### Contributors
-        # It's not possible to abstract over the table here,
-        # unfortunately, I don't think? Maybe we could do a
-        # row annotation? There could be a way to make this slightly
-        # neater, perhaps?
+        fun getContributors(t) {
+          for (contrib <-- Tables.contributor_copy)
+            where (contrib.contributor_id == t.contributor_id)
+            orderby (-(t.display_order))
+            [(resultId=contrib.contributor_id,
+              resultName=(contrib.first_names ^^ " " ^^ contrib.surname),
+              resultAddress=contrib.address,
+              resultRole=t.role)]
+        }
+
         var subcommitteeMembers =
           for (t <-- Tables.subcommittee)
             where (t.family_id == familyId)
-            for (contrib <-- Tables.contributor_copy)
-              where (contrib.contributor_id == t.contributor_id)
-              orderby (-(t.display_order))
-              [(resultId=contrib.contributor_id,
-                resultName=(contrib.first_names ^^ " " ^^ contrib.surname),
-                resultAddress=contrib.address,
-                resultRole=t.role)];
+            getContributors(t);
 
         var additionalContributors =
           for (t <-- Tables.contributor2family)
             where (t.family_id == familyId)
-            for (contrib <-- Tables.contributor_copy)
-              where (contrib.contributor_id == t.contributor_id)
-              orderby (-(t.display_order))
-              [(resultId=contrib.contributor_id,
-                resultName=(contrib.first_names ^^ " " ^^ contrib.surname),
-                resultAddress=contrib.address,
-                resultRole=t.role)];
+            getContributors(t);
 
-        var subcommitteeMembers = map(fun(res) {
+        fun mkContributor(res) {
           (contribId=res.resultId,
-          contribName=res.resultName,
-          contribAddress=parseOrError(res.resultAddress),
-          contribRole=res.resultRole)
-        }, subcommitteeMembers);
+            contribName=res.resultName,
+            contribAddress=parseOrError(res.resultAddress),
+            contribRole=res.resultRole)
+        }
 
-        var additionalContributors = map(fun(res) {
-          (contribId=res.resultId,
-          contribName=res.resultName,
-          contribAddress=parseOrError(res.resultAddress),
-          contribRole=res.resultRole)
-        }, additionalContributors);
-
-
+        var subcommitteeMembers = map(mkContributor, subcommitteeMembers);
+        var additionalContributors = map(mkContributor, additionalContributors);
 
         var (contributors: Contributors) =
           (subcommittee=subcommitteeMembers, additional=additionalContributors);
