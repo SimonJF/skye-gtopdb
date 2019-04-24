@@ -28,6 +28,7 @@ open Mvu;
 open Template;
 open Ligand;
 open Species;
+open ToggleBox;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -198,8 +199,8 @@ typename ObjectInfo = (
     objectShowReferences: Bool,
     objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))],
     objectLigandNames: [(LigandId, LigandName)],
-    objectSpeciesMap: SpeciesMap
-   # objectContributors: [Contributor.Contributor]
+    objectSpeciesMap: SpeciesMap,
+    objectContributors: ContentBox([Contributor.Contributor])
 );
 
 typename Model = Maybe(ObjectInfo);
@@ -351,7 +352,7 @@ fun getInitialModel() {
              contributors =
                for (c2o <-- Tables.contributor2object)
                  where (c2o.object_id == objectId)
-                   for (c <-- Tables.contributor)
+                   for (c <-- Tables.contributor_copy)
                      where (c.contributor_id == c2o.contributor_id)
                      [(c = c, order=c2o.display_order)]
              )]
@@ -751,14 +752,6 @@ fun getInitialModel() {
             }
           }, groupedDBLs);
 
-        # FIXME:::
-        # Each human entry in Ensembl Gene (ID 15) also has an entry in
-        # the Human Protein Atlas (with same code as for the Ensembl DB).
-        # Each entry in the Entrez Gene (ID 3) also has entries in the
-        # Kegg Gene database, with the following prefixes:
-        # Hs: hsa:XXX
-        # Mm: mmu:XXX
-        # Rn: rno:XXX
         var extraLinks =
           concatMap(fun(dbl) {
             if (dbl.dbID == 15) {
@@ -800,6 +793,16 @@ fun getInitialModel() {
             }
           }, baseLinks);
         baseLinks ++ extraLinks
+      }
+
+      fun transformContributors(cs) {
+        var sorted = sortBy(fun(c) { c.order }, cs);
+        mkTBox("Contributors", false, map(
+          fun(c) {
+            var c = c.c;
+            mkContributor(c.contributor_id, c.first_names ^^ " " ^^ c.surname,
+                parseOrError(c.address), "")
+          }, sorted))
       }
 
       var dbLinks = transformDBLinks(raw.databaseLinks);
@@ -888,7 +891,8 @@ fun getInitialModel() {
        objectPhysiologicalFunctions = physiologicalFunctions,
        objectPhysiologicalConsequences = physiologicalConsequences,
        objectTissueDistribution = tissueDistribution,
-       objectSpeciesMap = speciesMap)
+       objectSpeciesMap = speciesMap,
+       objectContributors = transformContributors(raw.contributors))
     }
 
     switch(raw) {
@@ -1413,6 +1417,10 @@ fun view(model) {
           objectInfo.objectReferences,
           fun() { ToggleReferences });
 
+    var contributorsBox =
+      ToggleBox.showBox(objectInfo.objectContributors, ToggleContributors,
+        Contributor.renderContributors);
+
     div(class("grid_12"),
         infoBox +*
         dataBoxes +*
@@ -1434,6 +1442,9 @@ fun updt(msg, model) {
       case ToggleReferences ->
         (objectInfo with
           objectShowReferences=not(objectInfo.objectShowReferences))
+      case ToggleContributors ->
+        (objectInfo with
+          objectContributors = toggleBox(objectInfo.objectContributors))
       case SortInteractionTable(tableTy, colName, dir) ->
         var osi = objectInfo.objectSortedInteractions;
         (objectInfo with

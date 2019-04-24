@@ -2,11 +2,19 @@ open MvuAttrs;
 open MvuHTML;
 
 typename ContentBox(a) =
-  (boxName: String,  boxVisible: Bool, boxContents: a);
+  (tboxName: String,  tboxVisible: Bool, tboxContents: a);
 
+
+fun mkTBox(name, visible, contents) {
+  (tboxName = name, tboxVisible = visible, tboxContents = contents)
+}
 
 fun boxContents(box) {
-  box.boxContents
+  box.tboxContents
+}
+
+fun setContents(box, contents) {
+  (box with tboxContents = contents)
 }
 
 # showBox: Generic content box, supporting show/hide functionality.
@@ -15,9 +23,9 @@ fun showBox(box, toggleMsg, f) {
   var a0 = MvuAttrs.empty;
   var h0 = MvuHTML.empty;
 
-  var inner = f(box.contents);
+  var inner = f(box.tboxContents);
   var showHideLink =
-    if(box.boxVisible) {
+    if(box.tboxVisible) {
       a(id("hide_overview") +@ onClick(fun() { toggleMsg }),
         small(a0, textNode("Hide")))
     } else {
@@ -26,14 +34,14 @@ fun showBox(box, toggleMsg, f) {
     };
 
   var innerSection =
-    if(box.boxVisible) {
+    if(box.tboxVisible) {
       div(class("visibleSection"), inner)
     } else {
       h0
     };
 
   div(class("grid_16 alpha"),
-    h4(a0, textNode(box.boxName)) +*
+    h4(a0, textNode(box.tboxName)) +*
     div(class("contentboxfullhelp"),
       div(class("imageleft"), textNode("?")) +*
       div(class("textright"),
@@ -42,10 +50,10 @@ fun showBox(box, toggleMsg, f) {
 }
 
 fun toggleBox(box) {
-  (box with boxVisible=(not(box.boxVisible)))
+  (box with tboxVisible=(not(box.tboxVisible)))
 }
 
 fun setBoxVisibility(box, visible) {
-  (box with boxVisible=visible)
+  (box with tboxVisible=visible)
 }
 

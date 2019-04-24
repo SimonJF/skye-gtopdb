@@ -1,39 +1,54 @@
 open MvuHTML;
 open MvuAttrs;
+open Parser;
 open RenderMarkup;
 
 typename Contributor =
   (contribId: Int, contribName: String,
    contribRole: String, contribAddress: Parser.Markup);
 
+fun mkContributor(id, name, address, role) {
+  (contribId=id,
+    contribName=name,
+    contribAddress=address,
+    contribRole=role)
+}
+
 typename Contributors =
   (subcommittee: [Contributor], additional: [Contributor]);
+
+fun renderContributor(c) {
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+
+  var roleNode =
+    if (c.contribRole == "") {
+      MvuHTML.empty
+    } else {
+      textNode(" (" ^^ c.contribRole ^^ ")")
+    };
+
+  p(a0, b(a0,
+    a(href("/contributorDisplay?contributorId="
+      ^^ intToString(c.contribId)),
+      textNode(c.contribName)) +* roleNode) +*
+    br(a0, h0) +*
+    renderSimple(c.contribAddress)
+  )
+}
+
+fun renderContributors(contributors) {
+  MvuHTML.concat(map(renderContributor, contributors))
+}
 
 fun displayContributors(contributors) {
   var a0 = MvuAttrs.empty;
   var h0 = MvuHTML.empty;
 
-  fun renderContributor(c) {
-    var roleNode =
-      if (c.contribRole == "") {
-        MvuHTML.empty
-      } else {
-        textNode(" (" ^^ c.contribRole ^^ ")")
-      };
-
-    p(a0, b(a0,
-      a(href("/contributorDisplay?contributorId="
-        ^^ intToString(c.contribId)),
-        textNode(c.contribName)) +* roleNode) +*
-      br(a0, h0) +*
-      renderSimple(c.contribAddress)
-    )
-  }
-
   var subcommitteeMembers =
-    MvuHTML.concat(map(renderContributor, contributors.subcommittee));
+    renderContributors(contributors.subcommittee);
   var otherContributors =
-    MvuHTML.concat(map(renderContributor, contributors.additional));
+    renderContributors(contributors.additional);
 
   div(id("13_subcommittee") +@ class("visibleSection") +@ style("display: block;"),
     table_(a0,
@@ -46,5 +61,4 @@ fun displayContributors(contributors) {
           h3(a0, textNode("Other contributors:")) +*
           otherContributors)))))
 }
-
 

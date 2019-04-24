@@ -118,7 +118,7 @@ fun setBoxVisibilities(visible, model) {
 }
 
 fun toggleObject(objectBox, id) {
-  var contents = objectBox.contents;
+  var contents = boxContents(objectBox);
 
   var newContents =
     map(fun(objectBox) {
@@ -128,7 +128,7 @@ fun toggleObject(objectBox, id) {
         objectBox
       }
     }, contents);
-  (objectBox with contents = newContents)
+  setContents(objectBox, newContents)
 }
 
 fun updt(msg, model) {
@@ -375,7 +375,7 @@ fun view(model) {
           model.references,
           fun() { ToggleReferences });
 
-    # (boxName: String,  boxVisible: Bool, contents: a);
+    # (tboxName: String,  tboxVisible: Bool, contents: a);
     headerBox +*
     showBox(model.overview, ToggleOverview, displayOverview) +*
     showBox(model.objects, ToggleObjects, displayObjects) +*
@@ -598,14 +598,13 @@ fun getInitialModel() {
         var objectName = formatObjectName(type);
 
         Just((familyId=familyId, familyName=name, familyType=type,
-           overview=(boxName="Overview", boxVisible=true, contents=overviewMarkup),
-           objects=(boxName=objectName, boxVisible=true, contents=objectBoxes),
-           comments=(boxName="Comments", boxVisible=true, contents=commentsMarkup),
-           furtherReading=(boxName="Further Reading", boxVisible=true,
-             contents=furtherReading),
+           overview=mkTBox("Overview", true, overviewMarkup),
+           objects=mkTBox(objectName, true, objectBoxes),
+           comments=mkTBox("Comments", true, commentsMarkup),
+           furtherReading=mkTBox("Further Reading", true, furtherReading),
            showReferences=true,
            references=referenceData,
-           contributors=(boxName="Contributors", boxVisible=true, contents=contributors),
+           contributors=mkTBox("Contributors", true, contributors),
            ligandNames = ligands,
            speciesMap=speciesMap))
     }
