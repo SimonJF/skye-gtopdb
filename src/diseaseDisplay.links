@@ -339,7 +339,7 @@ fun getModel(diseaseId) {
     var dbLinks = map(fun(link) {
       (dbName=link.dbName,
        dbLinkText = link.dbPrefix ^^ link.dbPlaceholder,
-       dbLinkURL = (link.dbUrl =~ s/\$PLACEHOLDER/(link.dbPlaceholder)/ ))
+       dbLinkURL = replacePlaceholder(link.dbUrl, link.dbPlaceholder))
     }, rawResult.dbLinks);
 
     (diID = rawResult.id,
