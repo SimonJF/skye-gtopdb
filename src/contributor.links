@@ -1,31 +1,48 @@
-typename Contributor =
-  (
-    contribId: Int,
-    contribAddress: String,
-    contribEmail: String,
-    contribFirstNames: String,
-    contribSurname: String,
-    contribSuffix: String,
-    contribNote: String,
-    contribOrcid: String,
-    contribCountry: String,
-    contribDescription: String,
-    contribInstitution: String
-  );
+open MvuHTML;
+open MvuAttrs;
+open RenderMarkup;
 
-fun mkContributor(id, addr, email, firstNames, surname, suffix,
-  note, orcid, country, description, institution) {
-  (
-    contribId = id,
-    contribAddress = addr,
-    contribEmail = email,
-    contribFirstNames = firstNames,
-    contribSurname = surname,
-    contribSuffix = suffix,
-    contribNote = note,
-    contribOrcid = orcid,
-    contribCountry = country,
-    contribDescription = description,
-    contribInstitution = institution
-  )
+typename Contributor =
+  (contribId: Int, contribName: String,
+   contribRole: String, contribAddress: Parser.Markup);
+
+typename Contributors =
+  (subcommittee: [Contributor], additional: [Contributor]);
+
+fun displayContributors(contributors) {
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+
+  fun renderContributor(c) {
+    var roleNode =
+      if (c.contribRole == "") {
+        MvuHTML.empty
+      } else {
+        textNode(" (" ^^ c.contribRole ^^ ")")
+      };
+
+    p(a0, b(a0,
+      a(href("/contributorDisplay?contributorId="
+        ^^ intToString(c.contribId)),
+        textNode(c.contribName)) +* roleNode) +*
+      br(a0, h0) +*
+      renderSimple(c.contribAddress)
+    )
+  }
+
+  var subcommitteeMembers =
+    MvuHTML.concat(map(renderContributor, contributors.subcommittee));
+  var otherContributors =
+    MvuHTML.concat(map(renderContributor, contributors.additional));
+
+  div(id("13_subcommittee") +@ class("visibleSection") +@ style("display: block;"),
+    table_(a0,
+      tbody(a0,
+        tr(a0,
+        td(style("vertical-align: top;"),
+          h3(a0, textNode("Subcommittee members:")) +*
+          subcommitteeMembers) +*
+        td(style("vertical-align: top;"),
+          h3(a0, textNode("Other contributors:")) +*
+          otherContributors)))))
 }

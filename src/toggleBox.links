@@ -1,0 +1,51 @@
+open MvuAttrs;
+open MvuHTML;
+
+typename ContentBox(a) =
+  (boxName: String,  boxVisible: Bool, boxContents: a);
+
+
+fun boxContents(box) {
+  box.boxContents
+}
+
+# showBox: Generic content box, supporting show/hide functionality.
+# sig showBox : forall a. (ContentBox(a), Message, (a) ~> HTML(Message)) ~> HTML(Message)
+fun showBox(box, toggleMsg, f) {
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+
+  var inner = f(box.contents);
+  var showHideLink =
+    if(box.boxVisible) {
+      a(id("hide_overview") +@ onClick(fun() { toggleMsg }),
+        small(a0, textNode("Hide")))
+    } else {
+      a(id("show_overview") +@ onClick(fun() { toggleMsg }),
+        small(a0, textNode("Show")))
+    };
+
+  var innerSection =
+    if(box.boxVisible) {
+      div(class("visibleSection"), inner)
+    } else {
+      h0
+    };
+
+  div(class("grid_16 alpha"),
+    h4(a0, textNode(box.boxName)) +*
+    div(class("contentboxfullhelp"),
+      div(class("imageleft"), textNode("?")) +*
+      div(class("textright"),
+        p(class("split_para"), showHideLink) +*
+        innerSection)))
+}
+
+fun toggleBox(box) {
+  (box with boxVisible=(not(box.boxVisible)))
+}
+
+fun setBoxVisibility(box, visible) {
+  (box with boxVisible=visible)
+}
+

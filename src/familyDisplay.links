@@ -11,6 +11,8 @@ open Utility;
 open InteractionUtilities;
 open Ligand;
 open Species;
+open ToggleBox;
+open Contributor;
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -70,19 +72,9 @@ typename ObjectSummary = (
 typename ObjectBox =
   (objectSummary: ObjectSummary, objectBoxVisible: Bool);
 
-typename ContentBox(a) =
-  (boxName: String,  boxVisible: Bool, contents: a);
-
 # BUG (hacky workaround): Type arguments don't appear to be renamed
 typename Reference = Reference;
 typename Markup = Parser.Markup;
-
-typename Contributor =
-  (contribId: Int, contribName: String,
-   contribRole: String, contribAddress: Parser.Markup);
-
-typename Contributors =
-  (subcommittee: [Contributor], additional: [Contributor]);
 
 typename Model =
   Maybe((familyId: Int,
@@ -105,14 +97,6 @@ typename Message = [|
   | SetAllVisibilities:Bool
   | ToggleObjectSummary:Int
 |];
-
-fun toggleBox(box) {
-  (box with boxVisible=(not(box.boxVisible)))
-}
-
-fun setBoxVisibility(box, visible) {
-  (box with boxVisible=visible)
-}
 
 fun withModel(model, f) {
   switch(model) {
@@ -179,34 +163,6 @@ fun view(model) {
           model.references, model.ligandNames)
     }
 
-    # showBox: Generic content box, supporting show/hide functionality.
-    # sig showBox : forall a. (ContentBox(a), Message, (a) ~> HTML(Message)) ~> HTML(Message)
-    fun showBox(box, toggleMsg, f) {
-      var inner = f(box.contents);
-      var showHideLink =
-        if(box.boxVisible) {
-          a(id("hide_overview") +@ onClick(fun() { toggleMsg }),
-            small(a0, textNode("Hide")))
-        } else {
-          a(id("show_overview") +@ onClick(fun() { toggleMsg }),
-            small(a0, textNode("Show")))
-        };
-
-      var innerSection =
-        if(box.boxVisible) {
-          div(class("visibleSection"), inner)
-        } else {
-          h0
-        };
-
-      div(class("grid_16 alpha"),
-        h4(a0, textNode(box.boxName)) +*
-        div(class("contentboxfullhelp"),
-          div(class("imageleft"), textNode("?")) +*
-          div(class("textright"),
-            p(class("split_para"), showHideLink) +*
-            innerSection)))
-    }
     # headerBox: Header information for given family
     var headerBox =
       div(class("grid_16 alpha"),
@@ -411,42 +367,6 @@ fun view(model) {
         var prefixNode = if(x.isKey) { textNode("* ") } else { MvuHTML.empty };
         renderReference(prefixNode, x)
       }, refs))
-    }
-
-    sig displayContributors : (Contributors) ~> HTML(Message)
-    fun displayContributors(contributors) {
-      fun renderContributor(c) {
-        var roleNode =
-          if (c.contribRole == "") {
-            MvuHTML.empty
-          } else {
-            textNode(" (" ^^ c.contribRole ^^ ")")
-          };
-
-        p(a0, b(a0,
-          a(href("/contributorDisplay?contributorId="
-            ^^ intToString(c.contribId)),
-            textNode(c.contribName)) +* roleNode) +*
-          br(a0, h0) +*
-          renderM(c.contribAddress)
-        )
-      }
-
-      var subcommitteeMembers =
-        MvuHTML.concat(map(renderContributor, contributors.subcommittee));
-      var otherContributors =
-        MvuHTML.concat(map(renderContributor, contributors.additional));
-
-      div(id("13_subcommittee") +@ class("visibleSection") +@ style("display: block;"),
-        table_(a0,
-          tbody(a0,
-            tr(a0,
-            td(style("vertical-align: top;"),
-              h3(a0, textNode("Subcommittee members:")) +*
-              subcommitteeMembers) +*
-            td(style("vertical-align: top;"),
-              h3(a0, textNode("Other contributors:")) +*
-              otherContributors)))))
     }
 
     var referencesBox =
