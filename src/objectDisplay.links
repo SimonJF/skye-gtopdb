@@ -3,7 +3,6 @@
 # ion channels, etc.)
 
 # TODO (22nd April list):
-# 4. Cell type associations
 # 5. Immuno process associations
 # 6. Phenotypes etc.
 # 7. Expression datasets
@@ -84,10 +83,18 @@ typename Phenotype = (
 );
 
 typename CellTypeAssociation = (
-    ctaImmunoCelltype: (immunoCTID: Int, immunoCTName: String),
-    ctaComments: Markup,
-    ctaCellOntologyType: (cellOntologyName: String, cellOntologyID: String),
-    ctaReferences: [ReferenceID]
+  ctaImmunoCelltype: (immunoCTID: Int, immunoCTName: String),
+  ctaComments: Markup,
+  ctaCellOntologyType: (cellOntologyName: String, cellOntologyID: String),
+  ctaReferences: [ReferenceID]
+);
+
+
+typename ImmunoProcessAssociations = (
+  ipImmunoProcess: (immunoProcessID: Int, immunoProcessName: String),
+  ipShowAnnotations: Bool,
+  ipAnnotations: [(goProcessID: String, goProcessComment: String, goProcessEvidence: String)],
+  ipReferences: [ReferenceID]
 );
 
 typename LigandSize = [| Small | Peptide | OtherSize |];
