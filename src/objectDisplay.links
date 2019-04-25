@@ -1443,6 +1443,47 @@ fun view(model) {
           renderedRows))
     };
 
+    var cellTypeAssociationsBox = {
+      fun renderCTA(cta) {
+        fun renderRow((key, val)) {
+          tr(a0,
+            td(class("key"), textNode(key ^^ ":")) +*
+            td(class("value"), val))
+        }
+
+        var ct = cta.ctaImmunoCelltype;
+        var cto = cta.ctaCellOntologyType;
+        var cellTypeContent =
+          a(href("/objectCelltypeAssocList?immCellType=" ^^
+                intToString(ct.immunoCTID)), textNode(ct.immunoCTName));
+        var cellOntologyContent =
+          textNode(cto.cellOntologyName ^^ " (" ^^ cto.cellOntologyID ^^ ")");
+        var referencesRow =
+          if (cta.ctaReferences == []) { MvuHTML.empty } else {
+            renderRow(("References",
+                Reference.renderCitationList(cta.ctaReferences,
+                  objectInfo.objectReferences)))
+          };
+        var rows =
+          [("Immuno Cell Type", cellTypeContent),
+           ("Cell Ontology Term", cellOntologyContent),
+           ("Comment", renderM(cta.ctaComments))];
+        var renderedRows = MvuHTML.concat(map(renderRow, rows) ++ [referencesRow]);
+        tr(a0,
+          td(class("info"),
+            table_(class("inner_receptor_data_tables"), renderedRows)))
+      }
+
+      var renderedCTAs =
+        MvuHTML.concat(map(renderCTA, objectInfo.objectCellTypeAssociations));
+
+      a(name("Celltypes"), h0) +*
+      table_(class("receptor_data_tables fullwidth"),
+        tr(name("hotspot") +@ class("hotspot"),
+          td(class("info category"), textNode("Cell Type Associations"))) +*
+        renderedCTAs)
+    };
+
     var dataBoxes =
       div(class("grid_16 alpha"),
         div(class("contentboxfullhelp"),
@@ -1456,6 +1497,7 @@ fun view(model) {
             interactionsTables +*
             immunoCommentsBox +*
             malariaCommentsBox +*
+            cellTypeAssociationsBox +*
             transductionMechanismsBoxes +*
             tissueDistributionBox +*
             functionalAssaysBox +*

@@ -32,7 +32,7 @@ var cellular_location_refs = table "cellular_location_refs" with (cellular_locat
 
 var chembl_cluster = table "chembl_cluster" with (object_id: Int, chembl_id: String, cluster: String, cluster_family: String) from db;
 
-var co_celltype = table "co_celltype" with (co_celltype_id: Int, name: String, definition: String, last_modified: Int, type: String, cellonto_id: String) from db;
+var co_celltype = table "co_celltype" with (co_celltype_id: Int, name: String, definition: String, last_modified: String, type: String, cellonto_id: String) from db;
 
 var co_celltype_isa = table "co_celltype_isa" with (parent_id: Int, child_id: Int) from db;
 
@@ -97,7 +97,7 @@ var dna_binding = table "dna_binding" with (dna_binding_id: Int, object_id: Int,
 
 var dna_binding_refs = table "dna_binding_refs" with (dna_binding_id: Int, reference_id: Int) from db;
 
-var do_disease = table "do_disease" with (do_disease_id: Int, term: String, definition: String, last_modified: Int, do_id: String) from db;
+var do_disease = table "do_disease" with (do_disease_id: Int, term: String, definition: String, last_modified: String, do_id: String) from db;
 
 var do_disease_isa = table "do_disease_isa" with (parent_id: Int, child_id: Int) from db;
 
@@ -113,7 +113,7 @@ var expression_pathophysiology = table "expression_pathophysiology" with (expres
 
 var expression_pathophysiology_refs = table "expression_pathophysiology_refs" with (expression_pathophysiology_id: Int, reference_id: Int) from db;
 
-var family = table "family" with (family_id: Int, name: String, last_modified: Int, old_family_id: Int, type: String, display_order: Int, annotation_status: Int, previous_names: String, only_grac: Bool, only_iuphar: Bool, in_cgtp: Bool) from db;
+var family = table "family" with (family_id: Int, name: String, last_modified: String, old_family_id: Int, type: String, display_order: Int, annotation_status: Int, previous_names: String, only_grac: Bool, only_iuphar: Bool, in_cgtp: Bool) from db;
 
 var functional_assay = table "functional_assay" with (functional_assay_id: Int, object_id: Int, description: String, response_measured: String, species_id: Int, tissue: String) from db;
 
@@ -121,13 +121,13 @@ var functional_assay_refs = table "functional_assay_refs" with (functional_assay
 
 var further_reading = table "further_reading" with (object_id: Int, reference_id: Int) from db;
 
-var go_process = table "go_process" with (go_process_id: Int, term: String, definition: String, last_modified: Int, annotation: String, go_id: String) from db;
+var go_process = table "go_process" with (go_process_id: Int, term: String, definition: String, last_modified: String, annotation: String, go_id: String) from db;
 
 var go_process_rel = table "go_process_rel" with (parent_id: Int, child_id: Int) from db;
 
 var gpcr = table "gpcr" with (object_id: Int, class: String, ligand: String) from db;
 
-var grac_family_text = table "grac_family_text" with (family_id: Int, overview: String, comments: String, last_modified: Int) from db;
+var grac_family_text = table "grac_family_text" with (family_id: Int, overview: String, comments: String, last_modified: String) from db;
 
 var grac_functional_characteristics = table "grac_functional_characteristics" with (object_id: Int, functional_characteristics: String) from db;
 
@@ -143,13 +143,13 @@ var grouping = table "grouping" with (group_id: Int, family_id: Int, display_ord
 
 var gtip2go_process = table "gtip2go_process" with (gtip_process_id: Int, go_process_id: Int, comment: String, go_id: String, go_term: String) from db;
 
-var gtip_process = table "gtip_process" with (gtip_process_id: Int, term: String, definition: String, last_modified: Int, short_term: String, anchor: String) from db;
+var gtip_process = table "gtip_process" with (gtip_process_id: Int, term: String, definition: String, last_modified: String, short_term: String, anchor: String) from db;
 
 var hottopic_refs = table "hottopic_refs" with (reference_id: Int, type: String, topic_date: Int) from db;
 
 var immuno2co_celltype = table "immuno2co_celltype" with (immuno_celltype_id: Int, cellonto_id: String, comment: String) from db;
 
-var immuno_celltype = table "immuno_celltype" with (immuno_celltype_id: Int, term: String, definition: String, last_modified: Int, short_term: String) from db;
+var immuno_celltype = table "immuno_celltype" with (immuno_celltype_id: Int, term: String, definition: String, last_modified: String, short_term: String) from db;
 
 var immuno_disease2ligand = table "immuno_disease2ligand" with (immuno_disease2ligand_id: Int, ligand_id: Int, disease_id: Int, comment: String, immuno: Bool) from db;
 
@@ -165,7 +165,7 @@ var immunopaedia2ligand = table "immunopaedia2ligand" with (immunopaedia_case_id
 
 var immunopaedia2object = table "immunopaedia2object" with (immunopaedia_case_id: Int, object_id: Int, section: String, url: String, comment: String) from db;
 
-var immunopaedia_cases = table "immunopaedia_cases" with (immunopaedia_case_id: Int, title: String, url: String, last_modified: Int, short_title: String) from db;
+var immunopaedia_cases = table "immunopaedia_cases" with (immunopaedia_case_id: Int, title: String, url: String, last_modified: String, short_title: String) from db;
 
 var inn = table "inn" with (inn_number: Int, inn: String, cas: String, smiles: String, smiles_salts_stripped: String, inchi_key_salts_stripped: String, nonisomeric_smiles_salts_stripped: String, nonisomeric_inchi_key_salts_stripped: String, neutralised_smiles: String, neutralised_inchi_key: String, neutralised_nonisomeric_smiles: String, neutralised_nonisomeric_inchi_key: String) from db;
 
@@ -173,7 +173,7 @@ var interaction = table "interaction" with (interaction_id: Int, ligand_id: Int,
 
 var interaction_affinity_refs = table "interaction_affinity_refs" with (interaction_id: Int, reference_id: Int) from db;
 
-var introduction = table "introduction" with (family_id: Int, txt: String, last_modified: Int, annotation_status: Int, no_contributor_list: Bool) from db;
+var introduction = table "introduction" with (family_id: Int, txt: String, last_modified: String, annotation_status: Int, no_contributor_list: Bool) from db;
 
 var iuphar2discoverx = table "iuphar2discoverx" with (object_id: Int, cat_no: String) from db;
 
@@ -219,7 +219,7 @@ var mutation_refs = table "mutation_refs" with (mutation_id: Int, reference_id: 
 
 var nhr = table "nhr" with (object_id: Int, ligand: String, binding_partner_comments: String, coregulator_comments: String, dna_binding_comments: String, target_gene_comments: String) from db;
 
-var object = table "object" with (object_id: Int, name: String, last_modified: Int, comments: String, structural_info_comments: String, old_object_id: Int, annotation_status: Int, only_iuphar: Bool, grac_comments: String, only_grac: Bool, no_contributor_list: Bool, abbreviation: String, systematic_name: String, quaternary_structure_comments: String, in_cgtp: Bool, in_gtip: Bool, gtip_comment: String, in_gtmp: Bool, gtmp_comment: String) from db;
+var object = table "object" with (object_id: Int, name: String, last_modified: String, comments: String, structural_info_comments: String, old_object_id: Int, annotation_status: Int, only_iuphar: Bool, grac_comments: String, only_grac: Bool, no_contributor_list: Bool, abbreviation: String, systematic_name: String, quaternary_structure_comments: String, in_cgtp: Bool, in_gtip: Bool, gtip_comment: String, in_gtmp: Bool, gtmp_comment: String) from db;
 
 var object2go_process = table "object2go_process" with (object_id: Int, go_process_id: Int, go_evidence: String, comment: String) from db;
 

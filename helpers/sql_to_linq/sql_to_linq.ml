@@ -19,7 +19,7 @@ let rec show_links_type = function
   | Links_integer -> "Int"
   | Links_float -> "Float"
   | Links_char -> "Char"
-  | Links_date -> "Int" (* Timestamp for now? *)
+  | Links_date -> "String"
 
 type field = (field_name * links_type)
 
