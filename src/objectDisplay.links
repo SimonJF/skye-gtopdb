@@ -7,9 +7,10 @@
 # 5. Immuno process associations
 # 6. Phenotypes etc.
 # 7. Expression datasets
-# 8. Contributors
 # 9. Activator / inhibitor tables with voltage information
 # 10. Annotation status
+# 11. Gene expression and pathophysiology + comments
+# 12. Clinically-relevant mutations and pathophysiology + comments
 
 
 # TODO: Voltage dependence field for VGICs.
@@ -80,6 +81,13 @@ typename Phenotype = (
     phenoSpeciesID: SpeciesID,
     phenoPubmedID: String,
     phenoPhenotype: Markup
+);
+
+typename CellTypeAssociation = (
+    ctaImmunoCelltype: (immunoCTID: Int, immunoCTName: String),
+    ctaComments: Markup,
+    ctaCellOntologyType: (cellOntologyName: String, cellOntologyID: String),
+    ctaReferences: [ReferenceID]
 );
 
 typename LigandSize = [| Small | Peptide | OtherSize |];
@@ -188,6 +196,7 @@ typename ObjectInfo = (
     objectSortedInteractions: SortedInteractions,
     objectTransductionMechanisms: [TransductionMechanism],
     objectTissueDistribution: DataTableBox,
+    objectCellTypeAssociations: [CellTypeAssociation],
     # TODO: Expression dataset(!?)
    # objectExpressionDataset: (),
     objectFunctionalAssays: DataTableBox,
@@ -292,6 +301,23 @@ fun getInitialModel() {
                          [pdbR.reference_id])],
              potencyOrder = (), # FIXME: FILL ME IN
              receptorBasic = rb,
+             cellTypeAssociations =
+               for (cta <-- Tables.celltype_assoc)
+               where (cta.object_id == objectId)
+                 for (ctac <-- Tables.celltype_assoc_colist)
+                 where (ctac.celltype_assoc_id == cta.celltype_assoc_id)
+                   for (ct <-- Tables.co_celltype)
+                   where (ct.cellonto_id == ctac.cellonto_id)
+                     for (immuno <-- Tables.immuno_celltype)
+                     where (immuno.immuno_celltype_id == cta.immuno_celltype_id)
+                     [( ctaComment = cta.comment,
+                        cellType = ct,
+                        immuno = immuno,
+                        refs =
+                          for (car <-- Tables.celltype_assoc_refs)
+                          where (car.celltype_assoc_id == cta.celltype_assoc_id)
+                          [car.reference_id]
+                      )],
              interactions =
                for (i <-- Tables.interaction)
                  where (i.object_id == objectId)
@@ -805,6 +831,27 @@ fun getInitialModel() {
           }, sorted))
       }
 
+      fun transformCellTypeAssociations(ctas) {
+        var (ctasRev, ctaRefs, ctaLigands) =
+          fold_left(fun((ctasRev, ctaRefs, ctaLigands), x) {
+            var comment = parseOrError(x.ctaComment);
+            var cellType =
+              (cellOntologyID = x.cellType.cellonto_id,
+               cellOntologyName = x.cellType.name);
+            var immuno =
+              (immunoCTID = x.immuno.immuno_celltype_id, immunoCTName = x.immuno.term);
+            var (commentRefs, commentLigands) = collectIds(comment);
+            var allRefs = commentRefs ++ x.refs;
+            var res =
+              (ctaImmunoCelltype = immuno,
+               ctaComments = comment,
+               ctaCellOntologyType = cellType,
+               ctaReferences = x.refs);
+            (res :: ctasRev, allRefs ++ ctaRefs, commentLigands ++ ctaLigands)
+          }, ([], [], []), ctas);
+        (reverse(ctasRev), ctaRefs, ctaLigands)
+      }
+
       var dbLinks = transformDBLinks(raw.databaseLinks);
 
       var (variants, variantRefs, variantLigands) =
@@ -836,6 +883,9 @@ fun getInitialModel() {
       var (geneProteinInfo, gpiRefs, gpiLigands) =
         transformGeneProteinInfo(raw.gpcrComments, raw.geneInformation);
 
+      var (cellTypeAssociations, ctaRefs, ctaLigands) =
+        transformCellTypeAssociations(raw.cellTypeAssociations);
+
       # TODO: A few more comment fields (grac_comments, structural_info_comments, quanternary_structure_comments)
       # still to be handled
       var (receptorComments, commentRefs, commentLigands) =
@@ -853,6 +903,7 @@ fun getInitialModel() {
           pcRefs ++
           gpiRefs ++
           tdRefs ++
+          ctaRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -865,6 +916,7 @@ fun getInitialModel() {
           pcLigands ++
           gpiLigands ++
           tdLigands ++
+          ctaLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -891,6 +943,7 @@ fun getInitialModel() {
        objectPhysiologicalFunctions = physiologicalFunctions,
        objectPhysiologicalConsequences = physiologicalConsequences,
        objectTissueDistribution = tissueDistribution,
+       objectCellTypeAssociations = cellTypeAssociations,
        objectSpeciesMap = speciesMap,
        objectContributors = transformContributors(raw.contributors))
     }
