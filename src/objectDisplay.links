@@ -90,10 +90,14 @@ typename CellTypeAssociation = (
 );
 
 
-typename ImmunoProcessAssociations = (
+typename ImmunoProcessAssociation = (
   ipImmunoProcess: (immunoProcessID: Int, immunoProcessName: String),
-  ipShowAnnotations: Bool,
-  ipAnnotations: [(goProcessID: String, goProcessComment: String, goProcessEvidence: String)],
+  ipGoProcesses: [
+    (goProcessShow: Bool,
+     goProcessID: String,
+     goProcessComment: String,
+     goProcessEvidence: String)
+  ],
   ipReferences: [ReferenceID]
 );
 
@@ -204,6 +208,7 @@ typename ObjectInfo = (
     objectTransductionMechanisms: [TransductionMechanism],
     objectTissueDistribution: DataTableBox,
     objectCellTypeAssociations: [CellTypeAssociation],
+    objectImmunoProcessAssociations: [ImmunoProcessAssociation],
     # TODO: Expression dataset(!?)
    # objectExpressionDataset: (),
     objectFunctionalAssays: DataTableBox,
@@ -325,6 +330,31 @@ fun getInitialModel() {
                           where (car.celltype_assoc_id == cta.celltype_assoc_id)
                           [car.reference_id]
                       )],
+             immunoProcessAssociations =
+               for (pa <-- Tables.process_assoc)
+               where (pa.object_id == objectId)
+                 for (gtip <-- Tables.gtip_process)
+                 where (gtip.gtip_process_id == pa.gtip_process_id)
+                   # Relevant immuno processes
+                   [( gtipProc = gtip,
+                      goProcs =
+                        # GO immuno processes associated with relevant GTIP processes,
+                        # where the GO processes are associated with the given object.
+                        # (Just because a GO process is associated with a GTIP process,
+                        # does not mean that it's relevant for a given object).
+                        for (g2go <-- Tables.gtip2go_process)
+                        where (g2go.gtip_process_id == gtip.gtip_process_id)
+                          for (o2go <-- Tables.object2go_process)
+                          where (o2go.object_id == objectId)
+                            for (go <-- Tables.go_process)
+                            where (go.go_process_id == o2go.go_process_id)
+                            [(g2go = g2go,
+                              o2go = o2go,
+                              go = go)],
+                      refs =
+                        for (r <-- Tables.process_assoc_refs)
+                        where (r.process_assoc_id == pa.process_assoc_id)
+                        [r.reference_id])],
              interactions =
                for (i <-- Tables.interaction)
                  where (i.object_id == objectId)
@@ -859,6 +889,27 @@ fun getInitialModel() {
         (reverse(ctasRev), ctaRefs, ctaLigands)
       }
 
+      fun transformImmunoProcessAssociations(ipas) {
+        var (ipasRev, ipaRefs) =
+          fold_left(fun((ipasRev, ipaRefs), x) {
+            var goProcs =
+              map(fun(g) {
+                  (goProcessShow = false,
+                   goProcessID = g.go.go_id,
+                   goProcessComment = g.go.term,
+                   goProcessEvidence = g.o2go.go_evidence)
+              }, x.goProcs);
+            (
+             (ipImmunoProcess =
+              (immunoProcessID = x.gtipProc.gtip_process_id,
+               immunoProcessName = x.gtipProc.term),
+             ipGoProcesses = goProcs,
+             ipReferences = x.refs
+            ) :: ipasRev, x.refs ++ ipaRefs)
+          }, ([], []), ipas);
+        (reverse(ipasRev), ipaRefs)
+      }
+
       var dbLinks = transformDBLinks(raw.databaseLinks);
 
       var (variants, variantRefs, variantLigands) =
@@ -893,6 +944,9 @@ fun getInitialModel() {
       var (cellTypeAssociations, ctaRefs, ctaLigands) =
         transformCellTypeAssociations(raw.cellTypeAssociations);
 
+      var (immunoProcessAssociations, ipaRefs) =
+        transformImmunoProcessAssociations(raw.immunoProcessAssociations);
+
       # TODO: A few more comment fields (grac_comments, structural_info_comments, quanternary_structure_comments)
       # still to be handled
       var (receptorComments, commentRefs, commentLigands) =
@@ -911,6 +965,7 @@ fun getInitialModel() {
           gpiRefs ++
           tdRefs ++
           ctaRefs ++
+          ipaRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -951,6 +1006,7 @@ fun getInitialModel() {
        objectPhysiologicalConsequences = physiologicalConsequences,
        objectTissueDistribution = tissueDistribution,
        objectCellTypeAssociations = cellTypeAssociations,
+       objectImmunoProcessAssociations = immunoProcessAssociations,
        objectSpeciesMap = speciesMap,
        objectContributors = transformContributors(raw.contributors))
     }
