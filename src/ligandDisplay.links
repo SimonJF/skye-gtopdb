@@ -1,0 +1,112 @@
+open Ligand;
+
+typename Tab =
+  [| Summary | BiologicalActivity | ClinicalData | References
+   | Structure | Immunopharmacology | Malaria | Immuno |];
+
+typename ApprovalSource = String;
+typename LigandApproval = [| Approved:ApprovalSource | NotApproved |];
+
+typename INN = (innNumber: Int, inn: String);
+
+typename Synonym = (synonymName: Markup, synonymRefs: [ReferenceID]);
+
+typename LigandPhysicalProperties = (
+  lpHydrogenBondAcceptors: Int,
+  lpHydrogenBondDonors: Int,
+  lpRotatableBonds: Int,
+  lpTopologicalPolarSurfaceArea: Float,
+  lpMolecularWeight: Float,
+  lpXLogP: Float,
+  lpLipinkskiRules: Int
+);
+
+typename Comments = (
+  clinicalUseComments: Markup,
+  mechanismOfActionComments: Markup,
+  absorptionDistributionComments: Markup,
+  metabolismComments: Markup,
+  eliminationComments: Markup,
+  popnPharmokineticsComments: Markup,
+  organFunctionImpairmentComments: Markup,
+  bioactivityComments: Markup,
+  immunoComments: Markup
+);
+
+typename BioactivityTables = (); # For now.
+
+typename LigandStructure = (
+  canonicalSmiles: String,
+  isomericSmiles: String,
+  inchiStandardID: String,
+  inchiStandardKey: String
+);
+
+typename LigandInfo = (
+  ligandID: Int,
+  ligandName: Markup,
+  ligandPhysicalProperties: LigandPhysicalProperties,
+  ligandApproval: LigandApproval,
+  ligandIUPACName: String,
+  ligandINNs: [INN],
+  ligandSynonyms: [Synonym],
+  ligandComments: Comments,
+  ligandDBLinks: (), # For now
+  ligandBioactivityTables: BioactivityTables,
+  ligandReferences: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
+  ligandStructure: LigandStructure,
+  ligandLigandRefs: [(LigandId, LigandName)]
+);
+
+typename Model = Maybe(
+  modelTab: Tab,
+  modelLigand: LigandInfo
+);
+
+
+fun getInitialModel() {
+
+  fun getLigandInfo(ligandId) {
+    fun transformLigandInfo(rawInfo) {
+      # TODO
+      raise
+    }
+
+    var results =
+      query {
+        for (l <-- Tables.ligand)
+        where (l.ligand_id == ligandId)
+          for (physchem <-- Tables.ligand_physchem_public)
+          where (physchem.ligand_id == ligandId)
+            for (struct <-- Tables.ligand_structure)
+            [(
+              ligand = l
+              physicalProperties = physchem,
+              synonyms =
+                for (l2s <-- Tables.ligand2synonym)
+                  where (s.ligand_id == ligandId)
+                  [(l2s = l2s,
+                    refs =
+                      for (sref <-- Tables.ligand2synonym_refs)
+                        where (sref.ligand2synonym_id == s.ligand2synonym_id)
+                        [sref.reference_id])],
+            )]
+      };
+
+    switch (results) {
+      case [] -> Nothing
+      case x :: _ -> Just(transformLigandInfo(x))
+    }
+  }
+
+  switch(lookup("ligandId", environment())) {
+    case Nothing -> Nothing
+    case Just(id) ->
+      switch getLigandInfo(id) {
+        case Nothing -> Nothing
+        case Just(ligandInfo) -> Just((modelTab = Summary, modelLigand = ligandInfo))
+      }
+  }
+}
+
+
