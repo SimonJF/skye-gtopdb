@@ -3,7 +3,7 @@
 # ion channels, etc.)
 
 # TODO (22nd April list):
-# 5. Immuno process associations
+# 5. Immuno process associations (mostly done; still a bit to do)
 # 6. Phenotypes etc.
 # 7. Expression datasets
 # 9. Activator / inhibitor tables with voltage information
@@ -29,6 +29,7 @@ open Template;
 open Ligand;
 open Species;
 open ToggleBox;
+open AnnotationStatus;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -338,6 +339,8 @@ fun getInitialModel() {
                    # Relevant immuno processes
                    [( gtipProc = gtip,
                       goProcs =
+                        # FIXME: This doesn't quite work; we also need to do something with
+                        # go_process_rel.
                         # GO immuno processes associated with relevant GTIP processes,
                         # where the GO processes are associated with the given object.
                         # (Just because a GO process is associated with a GTIP process,
@@ -1066,7 +1069,7 @@ fun view(model) {
               renderM(objectInfo.objectFamily.familyName))) +*
           p(a0,
             b(a0, textNode("Annotation status: ")) +*
-            textNode("Not implemented yet.")))))
+            renderAnnotationStatus(objectInfo.objectAnnotationStatus)))))
     };
 
 
@@ -1630,10 +1633,6 @@ fun view(model) {
                 arrow)) +*
             td(colSpan(2) +@ style("width:800%;font-style:italic;"),
                 textNode("click arrow to show/hide IEA associations")))
-   #                    <tr>
-   #                      <td style="width:20%;"><a href="" title="Toggle GO associations with IEA evidence" class="toggle"><div class="arrow"></div></a></td>
-   #                      <td colspan="2" style="width:800%;"><i>click arrow to show/hide IEA associations</i></td>
-   #                    </tr>
         };
 
         var ieaAnnotations =

@@ -1,0 +1,69 @@
+open MvuHTML;
+open MvuAttrs;
+open Utility;
+
+fun annotationDescription(id) {
+    if(id == 1 || id == 2){
+        "Annotated and expert reviewed. Please contact us if you can help with updates."
+    } else if(id == 3){
+        "Annotated and awaiting review. Please contact us if you can help with reviewing."
+    } else if(id == 4 || id == 5){
+        "Awaiting annotation/under development. Please contact us if you can help with annotation."
+    } else {
+        "Annotation status unknown"
+    }
+}
+
+fun renderCircleInternal(id) {
+  var h0 = MvuHTML.empty;
+  if (id == 1) {
+    img(src("/images/greencircle.png") +@ alt("image of a green circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else if (id == 2) {
+    img(src("/images/bluecircle.png") +@ alt("image of a blue circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else if (id == 3) {
+    img(src("/images/orangecircle.png") +@ alt("image of an orange circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else if (id == 4) {
+    img(src("/images/greycircle.png") +@ alt("image of a grey circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else if (id == 5) {
+    img(src("/images/redcircle.png") +@ alt("image of a red circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else {
+    MvuHTML.empty
+  }
+}
+
+fun renderCircle(id) {
+  var h0 = MvuHTML.empty;
+  if (id == 1 || id == 2) {
+    img(src("/images/greencircle.png") +@ alt("image of a green circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else if (id == 3) {
+    img(src("/images/orangecircle.png") +@ alt("image of an orange circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else if (id == 4 || id == 5) {
+    img(src("/images/redcircle.png") +@ alt("image of a red circle")
+        +@ width("10") +@ height("10") +@
+        style("vertical-align:baseline"), h0)
+  } else {
+    MvuHTML.empty
+  }
+}
+
+
+fun renderAnnotationStatus(id) {
+  var circle = renderCircle(id);
+  var text = annotationDescription(id);
+  circle +* textNode(" " ^^ text)
+}
+
