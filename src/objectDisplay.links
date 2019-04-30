@@ -92,9 +92,9 @@ typename CellTypeAssociation = (
 
 typename ImmunoProcessAssociation = (
   ipImmunoProcess: (immunoProcessID: Int, immunoProcessName: String),
+  ipShowIEA: Bool,
   ipGoProcesses: [
-    (goProcessShow: Bool,
-     goProcessID: String,
+    (goProcessID: String,
      goProcessComment: String,
      goProcessEvidence: String)
   ],
@@ -798,7 +798,7 @@ fun getInitialModel() {
           groupBy(fun(dbl) { dbl.database_id }, dbls);
 
         var baseLinks =
-          concatMap(fun((dbID, dbls)) {
+          listConcatMap(fun((dbID, dbls)) {
             switch (lookup(dbID, dbMap)) {
               case Nothing ->
                 debug("Invalid DB ID: " ^^ intToString(dbID));
@@ -816,9 +816,9 @@ fun getInitialModel() {
           }, groupedDBLs);
 
         var extraLinks =
-          concatMap(fun(dbl) {
+          listConcatMap(fun(dbl) {
             if (dbl.dbID == 15) {
-              concatMap(fun((species, code, url)) {
+              listConcatMap(fun((species, code, url)) {
                   if (speciesShortName(species) == "Hs") {
                     var dbURL = "http://www.proteinatlas.org/$PLACEHOLDER";
                     var url = replacePlaceholder(dbURL, code);
@@ -894,8 +894,7 @@ fun getInitialModel() {
           fold_left(fun((ipasRev, ipaRefs), x) {
             var goProcs =
               map(fun(g) {
-                  (goProcessShow = false,
-                   goProcessID = g.go.go_id,
+                  (goProcessID = g.go.go_id,
                    goProcessComment = g.go.term,
                    goProcessEvidence = g.o2go.go_evidence)
               }, x.goProcs);
@@ -903,6 +902,7 @@ fun getInitialModel() {
              (ipImmunoProcess =
               (immunoProcessID = x.gtipProc.gtip_process_id,
                immunoProcessName = x.gtipProc.term),
+             ipShowIEA = false,
              ipGoProcesses = goProcs,
              ipReferences = x.refs
             ) :: ipasRev, x.refs ++ ipaRefs)
@@ -1045,6 +1045,12 @@ fun view(model) {
           objectInfo.objectLigandNames)
     }
 
+    fun renderKeyVal((key, val)) {
+      tr(a0,
+        td(class("key"), textNode(key ^^ ":")) +*
+        td(class("value"), val))
+    }
+
     var infoBox = {
     div(class("grid_16 alpha"),
       a(name("top"), MvuHTML.empty) +*
@@ -1145,12 +1151,12 @@ fun view(model) {
       var renderedSpecialists =
         if (specialist == []) { MvuHTML.empty } else {
           dbLinkHeader("Specialist Databases") +*
-          MvuHTML.concat(map(renderDBLink, specialist))
+          MvuHTML.concatMap(renderDBLink, specialist)
         };
       var renderedOthers =
         if (others == []) { MvuHTML.empty } else {
           dbLinkHeader("Other Databases") +*
-          MvuHTML.concat(map(renderDBLink, others))
+          MvuHTML.concatMap(renderDBLink, others)
         };
 
       a(name("DatabaseLinks"), h0) +*
@@ -1171,7 +1177,7 @@ fun view(model) {
       }
 
       var renderedSummaries =
-        MvuHTML.concat(map(renderSummary, objectInfo.objectEndogenousLigands));
+        MvuHTML.concatMap(renderSummary, objectInfo.objectEndogenousLigands);
 
       a(name("Endogenous"), h0) +*
       table_(class("receptor_data_tables fullwidth"),
@@ -1289,8 +1295,8 @@ fun view(model) {
          "Gating Inhibitor Comments", oc.gatingInhibitorsComments)
       ];
 
-      MvuHTML.concat(map(renderReceptorTable, receptorTables)) +*
-      MvuHTML.concat(map(renderChannelTable, channelTables))
+      MvuHTML.concatMap(renderReceptorTable, receptorTables) +*
+      MvuHTML.concatMap(renderChannelTable, channelTables)
 
     };
 
@@ -1307,7 +1313,7 @@ fun view(model) {
         var (primary, secondary) = partition(fun(t) { not(t.tSecondary) }, tms);
         fun renderTransduction(t) {
           fun renderMarkups(ms) {
-            MvuHTML.concat(map(fun(m) { p(a0, renderM(m)) }, ms))
+            MvuHTML.concatMap(fun(m) { p(a0, renderM(m)) }, ms)
           }
           var commentsRow =
             if (Parser.markupEmpty(t.tComments)) { MvuHTML.empty } else {
@@ -1335,12 +1341,12 @@ fun view(model) {
 
         var primaryBox = if (primary == []) { MvuHTML.empty } else {
           dataBox("Primary Transduction Mechanisms", 2,
-              MvuHTML.concat(map(renderTransduction, primary)))
+              MvuHTML.concatMap(renderTransduction, primary))
         };
 
         var secondaryBox = if (secondary == []) { MvuHTML.empty } else {
           dataBox("Secondary Transduction Mechanisms", 2,
-              MvuHTML.concat(map(renderTransduction, secondary)))
+              MvuHTML.concatMap(renderTransduction, secondary))
         };
 
         primaryBox +* secondaryBox
@@ -1356,7 +1362,7 @@ fun view(model) {
             td(class("value"), renderM(v)))
         }
 
-        var renderedData = MvuHTML.concat(map(renderDatum, row.entryData));
+        var renderedData = MvuHTML.concatMap(renderDatum, row.entryData);
         var referencesRow =
           if (row.entryReferences == []) {
             MvuHTML.empty
@@ -1379,7 +1385,7 @@ fun view(model) {
                     renderedData +* referencesRow))))))
       }
 
-      var renderedRows = MvuHTML.concat(map(renderDataRow, box.boxRows));
+      var renderedRows = MvuHTML.concatMap(renderDataRow, box.boxRows);
 
       a(name(box.boxName), h0) +*
       table_(class("receptor_data_tables fullwidth"),
@@ -1452,7 +1458,7 @@ fun view(model) {
               referencesRow)))
       }
 
-      var pdbRows = MvuHTML.concat(map(renderPDBRow, objectInfo.objectPDBData));
+      var pdbRows = MvuHTML.concatMap(renderPDBRow, objectInfo.objectPDBData);
 
       if (objectInfo.objectPDBData == []) {
         MvuHTML.empty
@@ -1473,7 +1479,7 @@ fun view(model) {
       var headings = ["Species", "TM", "AA", "Chromosomal Location", "Gene Symbol",
           "Gene Name", "Reference"];
       fun renderHeading(h) { td(class("info heading"), textNode(h)) }
-      var renderedHeadings = MvuHTML.concat(map(renderHeading, headings));
+      var renderedHeadings = MvuHTML.concatMap(renderHeading, headings);
 
       fun renderRow(gpi) {
         fun renderData(val) {
@@ -1489,9 +1495,9 @@ fun view(model) {
           Reference.renderCitationList(gpi.gpiReferences,
               objectInfo.objectReferences)
         ];
-        tr(a0, MvuHTML.concat(map(renderData, data)))
+        tr(a0, MvuHTML.concatMap(renderData, data))
       }
-      var renderedRows = MvuHTML.concat(map(renderRow, gi.giEntries));
+      var renderedRows = MvuHTML.concatMap(renderRow, gi.giEntries);
 
       a(name("StructuralInfo"), h0) +*
       table_(class("receptor_data_tables fullwidth"),
@@ -1508,12 +1514,6 @@ fun view(model) {
 
     var cellTypeAssociationsBox = {
       fun renderCTA(cta) {
-        fun renderRow((key, val)) {
-          tr(a0,
-            td(class("key"), textNode(key ^^ ":")) +*
-            td(class("value"), val))
-        }
-
         var ct = cta.ctaImmunoCelltype;
         var cto = cta.ctaCellOntologyType;
         var cellTypeContent =
@@ -1523,7 +1523,7 @@ fun view(model) {
           textNode(cto.cellOntologyName ^^ " (" ^^ cto.cellOntologyID ^^ ")");
         var referencesRow =
           if (cta.ctaReferences == []) { MvuHTML.empty } else {
-            renderRow(("References",
+            renderKeyVal(("References",
                 Reference.renderCitationList(cta.ctaReferences,
                   objectInfo.objectReferences)))
           };
@@ -1531,20 +1531,146 @@ fun view(model) {
           [("Immuno Cell Type", cellTypeContent),
            ("Cell Ontology Term", cellOntologyContent),
            ("Comment", renderM(cta.ctaComments))];
-        var renderedRows = MvuHTML.concat(map(renderRow, rows) ++ [referencesRow]);
+        var renderedRows = MvuHTML.concat(map(renderKeyVal, rows) ++ [referencesRow]);
         tr(a0,
           td(class("info"),
             table_(class("inner_receptor_data_tables"), renderedRows)))
       }
 
       var renderedCTAs =
-        MvuHTML.concat(map(renderCTA, objectInfo.objectCellTypeAssociations));
+        MvuHTML.concatMap(renderCTA, objectInfo.objectCellTypeAssociations);
 
       a(name("Celltypes"), h0) +*
       table_(class("receptor_data_tables fullwidth"),
         tr(name("hotspot") +@ class("hotspot"),
           td(class("info category"), textNode("Cell Type Associations"))) +*
         renderedCTAs)
+    };
+
+   #<a name="Processes"></a>
+   #<table class="receptor_data_tables fullwidth">
+   #  <tr name="hotspot" class="hotspot">
+   #    <td class="info category">Immuno Process Associations</td>
+   #  </tr>
+   #    <tr>
+   #      <td class="info">
+   #        <table class="inner_receptor_data_tables" style="width:70%;">
+   #          <tr>
+   #            <td class="key">Immuno Process:&nbsp;</td>
+   #            <td class="value"><a href="ObjectImmProcessListForward?immprocess=3">Antigen presentation</a></td>
+   #          </tr>
+   #          <tr>
+   #            <td class="key">GO Annotations:&nbsp;</td>
+   #            <td class="value">
+   #                Associated to 1 GO processes
+   #            </td>
+   #          </tr>
+   #          <tr>
+   #            <td></td>
+   #            <td>
+   #              <table id="go" class="tablesorter inner_receptor_data_tables">
+   #                    <tr>
+   #                      <td style="width:20%;">GO:0006909</td>
+   #                      <td style="width:70%;">phagocytosis</td>
+   #                      <td style="width:10%;">TAS</td>
+   #                    </tr>
+   #                    <tr>
+   #                      <td style="width:20%;"><a href="" title="Toggle GO associations with IEA evidence" class="toggle"><div class="arrow"></div></a></td>
+   #                      <td colspan="2" style="width:800%;"><i>click arrow to show/hide IEA associations</i></td>
+   #                    </tr>
+   #                    <tr class="tablesorter-childRow">
+   #                      <td style="width:20%;">GO:0002548</td>
+   #                      <td style="width:70%;">monocyte chemotaxis</td>
+   #                      <td style="width:10%;">IEA</td>
+   #                    </tr>
+   #              </table>
+   #            </td>
+   #          </tr>
+   #        </table>
+   #      </td>
+   #    </tr>
+
+    var immunoProcessAssociationsBox = {
+      fun renderProcess(proc) {
+        var iProc = proc.ipImmunoProcess;
+        var goProcCount = length(proc.ipGoProcesses);
+
+        var (ieaProcs, otherProcs) =
+          partition(fun(p) { p.goProcessEvidence == "IEA" }, proc.ipGoProcesses);
+
+        var goAnnotationsCountRow = {
+          var content = {
+            var suffix =
+              if (otherProcs == []) {
+                textNode(", IEA only")
+              } else { MvuHTML.empty };
+            textNode("Associated to " ^^ intToString(goProcCount) ^^ " processes") +*
+            suffix
+          };
+          renderKeyVal(("Go Annotations", content))
+        };
+
+        fun renderGoProcess(goProc) {
+          tr(a0,
+            td(style("width:20%;"), textNode(goProc.goProcessID)) +*
+            td(style("width:70%;"), textNode(goProc.goProcessComment)) +*
+            td(style("width:10%;"), textNode(goProc.goProcessEvidence)))
+        }
+
+        var goAnnotations = MvuHTML.concatMap(renderGoProcess, otherProcs);
+
+        var toggleGoAnnotationsRow = {
+          var arrow =
+            if (proc.ipShowIEA) {
+              div(class("arrow up"), h0)
+            } else {
+              div(class("arrow up"), h0)
+            };
+          tr(a0,
+            td(style("width:20%;"),
+              a(href("") +@ title("Toggle GO associations with IEA evidence") +@ class(toggle),
+                arrow)) +*
+            td(colSpan(2) +@ style("width:800%;font-style:italic;"),
+                textNode("click arrow to show/hide IEA associations")))
+   #                    <tr>
+   #                      <td style="width:20%;"><a href="" title="Toggle GO associations with IEA evidence" class="toggle"><div class="arrow"></div></a></td>
+   #                      <td colspan="2" style="width:800%;"><i>click arrow to show/hide IEA associations</i></td>
+   #                    </tr>
+        };
+
+        var ieaAnnotations =
+          if (proc.ipShowIEA) {
+            MvuHTML.concatMap(renderGoProcess, ieaProcs)
+          } else {
+            MvuHTML.empty
+          };
+
+        tr(a0,
+          td(class("info"),
+            table_(class("inner_receptor_data_tables") +@ style("width:70%"),
+              renderKeyVal(("Immuno Process",
+                a(href("/immProcessList?immprocess=" ^^ intToString(iProc.immunoProcessID)),
+                  textNode(iProc.immunoProcessName)))) +*
+              goAnnotationsCountRow +*
+              tr(a0,
+                td(a0, h0) +*
+                table_(id("go") +@ class("tablesorter inner_receptor_data_tables"),
+                  goAnnotations +*
+                  toggleGoAnnotationsRow +*
+                  ieaAnnotations)))))
+      }
+
+      var procs = objectInfo.objectImmunoProcessAssociations;
+      if (procs == []) {
+        MvuHTML.empty
+      } else {
+        var renderedProcs = MvuHTML.concatMap(renderProcess, procs);
+        a(name("Processes"), MvuHTML.empty) +*
+        table_(class("receptor_data_tables fullwidth"),
+          tr(name("hotspot") +@ class("hotspot"),
+            td(class("info category"), textNode("Immuno Process Associations"))) +*
+          renderedProcs)
+      }
     };
 
     var dataBoxes =
@@ -1561,6 +1687,7 @@ fun view(model) {
             immunoCommentsBox +*
             malariaCommentsBox +*
             cellTypeAssociationsBox +*
+            immunoProcessAssociationsBox +*
             transductionMechanismsBoxes +*
             tissueDistributionBox +*
             functionalAssaysBox +*

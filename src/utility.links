@@ -1,5 +1,7 @@
+# Hacks necessary due to module system :(
 fun listEmpty(xs) { empty(xs) }
 fun listSpan(f, xs) { span(f, xs) }
+fun listConcatMap(f, xs) { concatMap(f, xs) }
 ## Useful in defining list predicates in LINQ.
 # sig contains : ([a]) ~> ((a) {}-> Bool)
 # fun contains(l) {

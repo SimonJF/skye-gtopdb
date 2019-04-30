@@ -563,10 +563,10 @@ fun getInitialModel() {
             )
           }, objects);
 
-        var objectReferences = concatMap(fun (object) {
-            concatMap(fun (interaction) { interaction.interactionReferences },
+        var objectReferences = listConcatMap(fun (object) {
+            listConcatMap(fun (interaction) { interaction.interactionReferences },
                 object.objectInteractions) ++
-            concatMap(fun (synonym) { synonym.synonymReferences },
+            listConcatMap(fun (synonym) { synonym.synonymReferences },
                 object.objectSynonyms)
         }, objects);
 
