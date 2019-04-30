@@ -40,7 +40,7 @@ typename ColumnName = String;
 
 typename Message = [|
     SortInteractionTable:(InteractionTable, ColumnName, SortDirection)
-  | ToggleReferences | ToggleContributors
+  | ToggleReferences | ToggleContributors | ToggleShowIEA:Int
 |];
 
 typename Family = (familyId: Int, familyName: Markup);
@@ -345,12 +345,10 @@ fun getInitialModel() {
                         for (g2go <-- Tables.gtip2go_process)
                         where (g2go.gtip_process_id == gtip.gtip_process_id)
                           for (o2go <-- Tables.object2go_process)
-                          where (o2go.object_id == objectId)
+                          where (o2go.object_id == objectId && o2go.go_process_id == g2go.go_process_id)
                             for (go <-- Tables.go_process)
                             where (go.go_process_id == o2go.go_process_id)
-                            [(g2go = g2go,
-                              o2go = o2go,
-                              go = go)],
+                            [(o2go = o2go, go = go)],
                       refs =
                         for (r <-- Tables.process_assoc_refs)
                         where (r.process_assoc_id == pa.process_assoc_id)
@@ -1620,15 +1618,15 @@ fun view(model) {
         var goAnnotations = MvuHTML.concatMap(renderGoProcess, otherProcs);
 
         var toggleGoAnnotationsRow = {
-          var arrow =
-            if (proc.ipShowIEA) {
-              div(class("arrow up"), h0)
-            } else {
-              div(class("arrow up"), h0)
-            };
+          var clickAttr = onClick(fun() { ToggleShowIEA(proc.ipImmunoProcess.immunoProcessID) });
+          var arrow = {
+            var arrowClass = if (proc.ipShowIEA) { "arrow up" } else { "arrow" };
+            div(class(arrowClass) +@ clickAttr, h0)
+          };
+
           tr(a0,
             td(style("width:20%;"),
-              a(href("") +@ title("Toggle GO associations with IEA evidence") +@ class(toggle),
+              a(title("Toggle GO associations with IEA evidence") +@ class("toggle"),
                 arrow)) +*
             td(colSpan(2) +@ style("width:800%;font-style:italic;"),
                 textNode("click arrow to show/hide IEA associations")))
@@ -1723,6 +1721,17 @@ fun view(model) {
 sig updt : (Message, Model) ~%~> Model
 fun updt(msg, model) {
   fun updtOI(objectInfo) {
+
+    fun toggleIEA(procID) {
+      var ipas = objectInfo.objectImmunoProcessAssociations;
+      map(fun(x) { if (x.ipImmunoProcess.immunoProcessID == procID) {
+            (x with ipShowIEA = not(x.ipShowIEA))
+          } else {
+            x
+          }
+        }, ipas)
+    }
+
     switch(msg) {
       case ToggleReferences ->
         (objectInfo with
@@ -1730,6 +1739,9 @@ fun updt(msg, model) {
       case ToggleContributors ->
         (objectInfo with
           objectContributors = toggleBox(objectInfo.objectContributors))
+      case ToggleShowIEA(procID) ->
+        (objectInfo with
+          objectImmunoProcessAssociations=toggleIEA(procID))
       case SortInteractionTable(tableTy, colName, dir) ->
         var osi = objectInfo.objectSortedInteractions;
         (objectInfo with
