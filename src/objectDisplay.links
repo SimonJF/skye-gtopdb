@@ -726,7 +726,7 @@ fun getInitialModel() {
         (entryComment = comment, entryData = data, entryReferences = references)
       }
 
-      sig transformDataTableBox : forall a . (String, (a) ~%~> DataTableEntry, [a]) ~>
+      sig transformDataTableBox : (String, (a) ~%~> DataTableEntry, [a]) ~>
         (DataTableBox, [ReferenceID], [LigandID])
       fun transformDataTableBox(boxName, getRow, data) {
         var (rows_rev, refs, ligands) =

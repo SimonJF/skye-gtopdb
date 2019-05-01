@@ -134,7 +134,7 @@ fun partition(pred, xs) {
 
 
 # This only works because we have arbitrary polymorphic comparisons.
-sig simpleCmp : forall a . (a, a) ~%~> Int
+sig simpleCmp : forall a, e :: Row. (a, a) -e-> Int
 fun simpleCmp(s1, s2) {
   if (s1 < s2) {
     (-1)
