@@ -1,4 +1,15 @@
 open Ligand;
+open MvuHTML;
+open MvuAttrs;
+open Mvu;
+open Reference;
+open Parser;
+open RenderMarkup;
+open ToggleBox;
+open Utility;
+open Template;
+
+typename Message = ();
 
 typename Tab =
   [| Summary | BiologicalActivity | ClinicalData | References
@@ -18,7 +29,7 @@ typename LigandPhysicalProperties = (
   lpTopologicalPolarSurfaceArea: Float,
   lpMolecularWeight: Float,
   lpXLogP: Float,
-  lpLipinkskiRules: Int
+  lpLipinskiRules: Int
 );
 
 typename Comments = (
@@ -50,63 +61,229 @@ typename LigandInfo = (
   ligandIUPACName: String,
   ligandINNs: [INN],
   ligandSynonyms: [Synonym],
-  ligandComments: Comments,
+#  ligandComments: Comments,
   ligandDBLinks: (), # For now
-  ligandBioactivityTables: BioactivityTables,
+#  ligandBioactivityTables: BioactivityTables,
   ligandReferences: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
-  ligandStructure: LigandStructure,
+  # ligandStructure: LigandStructure,
   ligandLigandRefs: [(LigandId, LigandName)]
 );
 
-typename Model = Maybe(
-  modelTab: Tab,
+typename Model = Maybe((
+  modelTab:Tab,
   modelLigand: LigandInfo
-);
+));
 
 
+sig getInitialModel : () ~%~> Model
 fun getInitialModel() {
 
   fun getLigandInfo(ligandId) {
     fun transformLigandInfo(rawInfo) {
-      # TODO
-      raise
+      var rawLigand = rawInfo.ligand;
+      fun transformPhysicalProperties(rawProps) {
+        (lpHydrogenBondAcceptors = rawProps.hydrogen_bond_acceptors,
+         lpHydrogenBondDonors = rawProps.hydrogen_bond_donors,
+         lpRotatableBonds = rawProps.rotatable_bonds_count,
+         lpTopologicalPolarSurfaceArea = rawProps.topological_polar_surface_area,
+         lpMolecularWeight = rawProps.molecular_weight,
+         lpXLogP = rawProps.xlogp,
+         lpLipinskiRules = rawProps.lipinski_s_rule_of_five)
+      }
+
+      var approval =
+        if (rawInfo.ligand.approved) {
+          Approved(rawLigand.approved_source)
+        } else {
+          NotApproved
+        };
+
+
+      (ligandID = ligandId,
+       ligandName = parseOrError(rawInfo.ligand.name),
+       ligandPhysicalProperties =
+         transformPhysicalProperties(rawInfo.physicalProperties),
+       ligandApproval = approval,
+       ligandIUPACName = rawLigand.iupac_name,
+       ligandINNs = [],
+       ligandSynonyms = [],
+       ligandDBLinks = (),
+       ligandReferences = mkTBox("References", false, []),
+       ligandLigandRefs = [])
     }
 
     var results =
       query {
         for (l <-- Tables.ligand)
         where (l.ligand_id == ligandId)
-          for (physchem <-- Tables.ligand_physchem_public)
+          for (physchem <-- Tables.ligand_physchem)
           where (physchem.ligand_id == ligandId)
             for (struct <-- Tables.ligand_structure)
+            where (struct.ligand_id == ligandId)
             [(
-              ligand = l
+              ligand = l,
               physicalProperties = physchem,
               synonyms =
                 for (l2s <-- Tables.ligand2synonym)
-                  where (s.ligand_id == ligandId)
+                  where (l2s.ligand_id == ligandId)
                   [(l2s = l2s,
                     refs =
                       for (sref <-- Tables.ligand2synonym_refs)
-                        where (sref.ligand2synonym_id == s.ligand2synonym_id)
-                        [sref.reference_id])],
+                        where (sref.ligand2synonym_id == l2s.ligand2synonym_id)
+                        [sref.reference_id])]
             )]
       };
 
     switch (results) {
-      case [] -> Nothing
+      case [] -> debug("No results"); Nothing
       case x :: _ -> Just(transformLigandInfo(x))
     }
   }
 
   switch(lookup("ligandId", environment())) {
-    case Nothing -> Nothing
+    case Nothing -> debug("No ID"); Nothing
     case Just(id) ->
-      switch getLigandInfo(id) {
-        case Nothing -> Nothing
+      debug("ID: " ^^ id);
+      switch (getLigandInfo(stringToInt(id))) {
+        case Nothing -> debug("Failed getting ligand info"); Nothing
         case Just(ligandInfo) -> Just((modelTab = Summary, modelLigand = ligandInfo))
       }
   }
 }
 
+sig updt : (Message, Model) ~%~> Model
+fun updt(msg, model) {
+  model
+}
+
+sig view : (Model) ~%~> HTML(Message)
+fun view(model) {
+  fun viewModel(model) {
+    var ligandInfo = model.modelLigand;
+    var strId = intToString(ligandInfo.ligandID);
+    fun renderM(m) {
+      renderMarkup(m, ToggleBox.boxContents(ligandInfo.ligandReferences),
+          ligandInfo.ligandLigandRefs)
+    }
+
+    var h0 = MvuHTML.empty;
+    var a0 = MvuAttrs.empty;
+
+    var basicInfoBox = {
+      div(class("grid_16 alpha"),
+        a(name("top"), h0) +*
+        h4(a0, renderM(ligandInfo.ligandName)) +*
+        div(class("contentboxfullhelp"),
+          div(class("textright"),
+            p(a0, b(a0, textNode("Ligand id: ")) +*
+              textNode(strId)) +*
+            p(a0, b(a0, textNode("Name: ")) +*
+              renderM(ligandInfo.ligandName)))))
+    };
+
+    var structuralInfoBox = {
+      var structureImgBox = {
+        td(style("width:453px;min-width:453px;text-align:left;vertical-align:top;"),
+          table_(class("ligand_header_table") +@ style("width:453px;margin:0px"),
+            tr(a0,
+              td(class("ligand_header_category"), textNode("2D Structure"))) +*
+            tr(class("ligand_header_info"),
+              td(style("vertical-align:middle;text-align:center;"),
+                a(style("color:white;") +@ href("/chemicalStructureEditor?ligandId="
+                    ^^ strId) +@
+                  MvuAttrs.title("Click here for structure editor"),
+                  img(src("https://www.guidetopharmacology.org/CHEMSTRUCT/iuphar/" ^^ strId ^^ ".gif") +@
+                    height("250") +@ alt("Click here for structure editor"), h0))))))
+      };
+
+      var propertiesBox = {
+        var lpps = ligandInfo.ligandPhysicalProperties;
+        var properties =
+          [("Hydrogen bond acceptors",
+              textNode(intToString(lpps.lpHydrogenBondAcceptors))),
+           ("Hydrogen bond donors",
+              textNode(intToString(lpps.lpHydrogenBondDonors))),
+           ("Rotatable bonds", textNode(intToString(lpps.lpRotatableBonds))),
+           ("Topological polar surface area",
+              textNode(floatToString(lpps.lpTopologicalPolarSurfaceArea))),
+           ("Molecular weight",
+              textNode(floatToString(lpps.lpMolecularWeight))),
+           ("XLogP", textNode(floatToString(lpps.lpXLogP))),
+           ("No. Lipinski's rules broken",
+              textNode(intToString(lpps.lpLipinskiRules)))];
+
+        fun renderRow((name, html)) {
+          tr(class("ligand_header_info"),
+            td(a0, textNode(name)) +*
+            td(style("text-align:center"), html))
+        }
+        var rows = MvuHTML.concatMap(renderRow, properties);
+        table_(class("ligand_header_table") +@ style("width:453px;margin:0px;"),
+          thead(a0,
+            tr(a0,
+              td(class("ligand_header_category") +@ colSpan(2) +@ style("text-align:left;"),
+                textNode("Calculated Physico-chemical Properties")))) +*
+            rows) +*
+        p(style("margin:5px;font-size:90%;"),
+              textNode("Molecular properties generated using the ") +*
+              a(href("https://cdk.github.io"), textNode("CDK")))
+      };
+
+      div(class("grid_16 alpha"),
+        h4(a0,
+          textNode("Structure and Physico-chemical Properties")) +*
+        div(class("contentboxfullhelp"),
+          table_(class("fullwidth") +@ style("position:relative; margin-bottom: 10px"),
+            tr(a0,
+              structureImgBox +*
+              td(style("min-width:10px;width:10px;"), h0) +*
+              propertiesBox))))
+
+    };
+
+    var summaryPage = {
+      MvuHTML.empty
+    };
+
+    var biologicalActivityPage = {
+      MvuHTML.empty
+    };
+
+    var clinicalDataPage = {
+      MvuHTML.empty
+    };
+
+    var referencesPage = {
+      MvuHTML.empty
+    };
+
+    var structurePage = {
+      MvuHTML.empty
+    };
+
+    var similarLigandsPage = {
+      MvuHTML.empty
+    };
+
+    var tabBox = {
+      MvuHTML.empty
+    };
+
+    basicInfoBox +*
+    structuralInfoBox +*
+    tabBox
+
+  }
+
+  switch(model) {
+    case Just(model) -> viewModel(model)
+    case Nothing -> textNode("Invalid Ligand ID")
+  }
+}
+
+fun mainPage() {
+  var initialModel = getInitialModel();
+  Mvu.runSimple("vdom_placeholder", initialModel, view, updt);
+  template("Ligand Display")
+}
 

@@ -56,7 +56,6 @@ typename LigandResult =
    lrName: Markup,
    lrApproved:Bool,
    lrRadioactive: Bool,
-   # lrType=String,
    lrHasPDB: Bool,
    lrLabelled: Bool,
    lrImmuno: Bool,
