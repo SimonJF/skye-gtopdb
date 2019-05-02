@@ -9,11 +9,12 @@ open ToggleBox;
 open Utility;
 open Template;
 
-typename Message = ();
-
 typename Tab =
   [| Summary | BiologicalActivity | ClinicalData | References
-   | Structure | Immunopharmacology | Malaria | Immuno |];
+   | Structure | SimilarLigands | Malaria | Immuno |];
+
+
+typename Message = [| ChangeTab:Tab |];
 
 typename ApprovalSource = String;
 typename LigandApproval = [| Approved:ApprovalSource | NotApproved |];
@@ -265,7 +266,39 @@ fun view(model) {
       MvuHTML.empty
     };
 
+    var immunoPage = {
+      MvuHTML.empty
+    };
+
+    var malariaPage = {
+      MvuHTML.empty
+    };
+
     var tabBox = {
+      var tabs = [(
+        ("Summary", Summary),
+        ("Biological activity", BiologicalActivity),
+        ("Clinical data", ClinicalData),
+        ("References", References),
+        ("Structure", Structure),
+        ("Similar ligands", SimilarLigands),
+        ("Immunopharmacology", Immuno),
+        ("Malaria", Malaria)
+      )];
+
+      var content =
+        switch(model.modelTab) {
+          case Summary -> summaryPage
+          case BiologicalActivity -> biologicalActivityPage
+          case ClinicalData -> clinicalDataPage
+          case References -> referencesPage
+          case Structure -> structurePage
+          case SimilarLigands -> similarLigandsPage
+          case Immuno -> immunoPage
+          case Malaria -> malariaPage
+        };
+
+
       MvuHTML.empty
     };
 
