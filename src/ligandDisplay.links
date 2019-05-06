@@ -488,8 +488,6 @@ fun view(model) {
 
     var clinicalDataPage = {
       var comments = ligandInfo.ligandComments;
-      # not empty ligand.absorptionAndDistribution.text || not empty ligand.metabolism.text || not empty ligand.elimination.text || not empty ligand.populationPharmacokinetics.text || not empty ligand.organFunctionImpairment.text}
-
       var commentsTable = {
         var commentsRows =
           [("Absorption/Distribution", comments.absorptionDistributionComments),
@@ -557,7 +555,37 @@ fun view(model) {
     };
 
     var referencesPage = {
-      MvuHTML.empty
+      fun renderReference((refID, (refNum, ref))) {
+         # tr(class("info"),
+        # TODO: Go from here
+         #             td(a0,
+        MvuHTML.empty
+      }
+
+      var ligandRefs = ligandInfo.ligandReferences;
+      var renderedReferences = MvuHTML.concatMap(renderReference, ligandRefs);
+
+      if (listEmpty(ligandInfo.ligandReferences)) {
+        textNode("There are no references to display")
+      } else {
+        table_(class("receptor_data_tables") +@ style("width:100%"),
+          tr(a0,
+            td(class("category"), textNode("References"))) +*
+            renderedReferences)
+      }
+      #<table class="receptor_data_tables" style="width:100%;">
+      #   <tr>
+      #       <td class="category">References</td>
+      #   </tr>
+      #       <tr class="info">
+      #           <td>
+      #                <span class="referenceAuthors">1.&nbsp;Fan X, Zhou N, Zhang X, Mukhtar M, Lu Z, Fang J, DuBois GC, Pomerantz RJ.&nbsp;(2003)</span>
+<br/>S#ructural and functional study of the apelin-13 peptide, an endogenous ligand of the HIV-1 coreceptor, APJ.
+      #                   <br/><i>Biochemistry.</i>, <b>42</b>: 10163-10168.
+      #                           [PMID:<a href="javascript:newWindow('https://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=pubmed&dopt=AbstractPlus&list_uids=12939143', 800, 500)">12939143</a>]
+      #           </td>
+      #       </tr>
+
     };
 
     var structurePage = {
