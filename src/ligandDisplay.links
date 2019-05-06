@@ -5,9 +5,13 @@ open Mvu;
 open Reference;
 open Parser;
 open RenderMarkup;
-open ToggleBox;
 open Utility;
 open Template;
+
+# Not implemented yet:
+# Drug / prodrug relations (prodrug table)
+# Peptide info (medical relevance / gene info)
+
 
 typename Tab =
   [| Summary | BiologicalActivity | ClinicalData | References
@@ -23,6 +27,8 @@ typename INN = (innNumber: Int, inn: String);
 
 typename Synonym = (synonymName: Markup, synonymRefs: [ReferenceID]);
 
+typename LigandFamily = (familyName: String, familyId: Int);
+
 typename LigandPhysicalProperties = (
   lpHydrogenBondAcceptors: Int,
   lpHydrogenBondDonors: Int,
@@ -34,15 +40,17 @@ typename LigandPhysicalProperties = (
 );
 
 typename Comments = (
+  generalComments: Markup,
   clinicalUseComments: Markup,
   mechanismOfActionComments: Markup,
   absorptionDistributionComments: Markup,
   metabolismComments: Markup,
   eliminationComments: Markup,
-  popnPharmokineticsComments: Markup,
+  popnPharmacokineticsComments: Markup,
   organFunctionImpairmentComments: Markup,
   bioactivityComments: Markup,
-  immunoComments: Markup
+  immunoComments: Markup,
+  malariaComments: Markup
 );
 
 typename BioactivityTables = (); # For now.
@@ -54,18 +62,28 @@ typename LigandStructure = (
   inchiStandardKey: String
 );
 
+typename LigandURLs = (
+  drugsURL: String,
+  emaURL: String,
+  emcURL: String
+);
+
 typename LigandInfo = (
   ligandID: Int,
+  ligandType: String,
   ligandName: Markup,
+  ligandFamilies: [LigandFamily],
   ligandPhysicalProperties: Maybe(LigandPhysicalProperties),
   ligandApproval: LigandApproval,
+  ligandWithdrawn: Bool,
   ligandIUPACName: String,
   ligandINNs: [INN],
   ligandSynonyms: [Synonym],
-#  ligandComments: Comments,
+  ligandComments: Comments,
+  ligandURLs: LigandURLs,
   ligandDBLinks: (), # For now
 #  ligandBioactivityTables: BioactivityTables,
-  ligandReferences: ContentBox([(ReferenceId, (ReferenceNumber, Reference))]),
+  ligandReferences: [(ReferenceId, (ReferenceNumber, Reference))],
   # ligandStructure: LigandStructure,
   ligandLigandRefs: [(LigandId, LigandName)]
 );
@@ -104,18 +122,76 @@ fun getInitialModel() {
           NotApproved
         };
 
+      fun transformFamilies(fs) {
+        map(fun(f) { (familyId = f.family_id, familyName = f.name) }, fs)
+      }
+
+      fun transformSynonyms(ss) {
+        fold_right(fun(x, acc) {
+            if (x.l2s.display) {
+              (synonymName = parseOrError(x.l2s.synonym), synonymRefs = x.refs) :: acc
+            } else {
+              acc
+            }
+        }, [], ss)
+      }
+
+      fun transformInns(inns) {
+        map(fun(inn) { (innNumber = inn.inn_number, inn = inn.inn) }, inns)
+      }
+
+      fun transformComments(l) {
+        var parsed =
+         (generalComments = parseOrError(l.comments),
+          clinicalUseComments = parseOrError(l.clinical_use),
+          mechanismOfActionComments = parseOrError(l.mechanism_of_action),
+          absorptionDistributionComments = parseOrError(l.absorption_distribution),
+          metabolismComments = parseOrError(l.metabolism),
+          eliminationComments = parseOrError(l.elimination),
+          popnPharmacokineticsComments = parseOrError(l.popn_pharmacokinetics),
+          organFunctionImpairmentComments = parseOrError(l.organ_function_impairment),
+          bioactivityComments = parseOrError(l.bioactivity_comments),
+          immunoComments = parseOrError(l.immuno_comments),
+          malariaComments = parseOrError(l.gtmp_comments));
+
+        var (refs, ligands) =
+          RenderMarkup.collectAllIds([
+          parsed.generalComments,
+          parsed.clinicalUseComments, parsed.mechanismOfActionComments,
+          parsed.absorptionDistributionComments, parsed.metabolismComments,
+          parsed.eliminationComments, parsed.popnPharmacokineticsComments,
+          parsed.organFunctionImpairmentComments, parsed.bioactivityComments,
+          parsed.immunoComments, parsed.malariaComments]);
+        (parsed, refs, ligands)
+      }
+
+      var (comments, commentRefs, commentLigands) =
+        transformComments(rawLigand);
+
+      var refs = mkReferenceData(queryReferences(commentRefs));
+      var ligandRefs = queryLigands(commentLigands);
+      var urls = (
+        drugsURL = rawLigand.drugs_url,
+        emcURL = rawLigand.emc_url,
+        emaURL = rawLigand.ema_url
+      );
 
       (ligandID = ligandId,
+       ligandType = rawInfo.ligand.type,
        ligandName = parseOrError(rawInfo.ligand.name),
+       ligandFamilies = transformFamilies(rawInfo.families),
        ligandPhysicalProperties =
          transformPhysicalProperties(rawInfo.physicalProperties),
        ligandApproval = approval,
+       ligandWithdrawn = rawLigand.withdrawn_drug,
        ligandIUPACName = rawLigand.iupac_name,
-       ligandINNs = [],
-       ligandSynonyms = [],
+       ligandINNs = transformInns(rawInfo.inns),
+       ligandSynonyms = transformSynonyms(rawInfo.synonyms),
+       ligandComments = comments,
+       ligandURLs = urls,
        ligandDBLinks = (),
-       ligandReferences = mkTBox("References", false, []),
-       ligandLigandRefs = [])
+       ligandReferences = refs,
+       ligandLigandRefs = ligandRefs)
     }
 
     var results =
@@ -130,6 +206,18 @@ fun getInitialModel() {
                 for (physchem <-- Tables.ligand_physchem)
                 where (physchem.ligand_id == ligandId)
                 [physchem],
+              families =
+                for (l2f <-- Tables.ligand2family)
+                where (l2f.ligand_id == ligandId)
+                  for (f <-- Tables.family)
+                  where (f.family_id == l2f.family_id)
+                  [f],
+              inns =
+                for (l2inn <-- Tables.ligand2inn)
+                where (l2inn.ligand_id == ligandId)
+                  for (i <-- Tables.inn)
+                  where (i.inn_number == l2inn.inn_number)
+                  [i],
               synonyms =
                 for (l2s <-- Tables.ligand2synonym)
                   where (l2s.ligand_id == ligandId)
@@ -177,13 +265,29 @@ fun view(model) {
   fun viewModel(model) {
     var ligandInfo = model.modelLigand;
     var strId = intToString(ligandInfo.ligandID);
+    var h0 = MvuHTML.empty;
+    var a0 = MvuAttrs.empty;
+
     fun renderM(m) {
-      renderMarkup(m, ToggleBox.boxContents(ligandInfo.ligandReferences),
+      renderMarkup(m, ligandInfo.ligandReferences,
           ligandInfo.ligandLigandRefs)
     }
 
-    var h0 = MvuHTML.empty;
-    var a0 = MvuAttrs.empty;
+    fun renderBox(name, colspan, content) {
+      table_(class("receptor_data_tables") +@ style("width:100%"),
+        tbody(a0,
+          tr(a0,
+            td(class("category") +@ colSpan(colspan), textNode(name))) +*
+          content))
+    }
+
+    fun commentBox(caption, comments) {
+      if (markupEmpty(comments)) {
+        MvuHTML.empty
+      } else {
+        renderBox(caption, 1, tr(a0, td(class("info"), renderM(comments))))
+      }
+    }
 
     var basicInfoBox = {
       div(class("grid_16 alpha"),
@@ -264,7 +368,118 @@ fun view(model) {
     };
 
     var summaryPage = {
-      MvuHTML.empty
+      var classificationTable = {
+        fun renderFamily(f) {
+          a(href("/familyDisplay?familyId=" ^^ intToString(f.familyId)),
+              textNode(f.familyName))
+        }
+        var renderedFamilies =
+          MvuHTML.concat(join([textNode(", ")],
+            map(fun(f) { [renderFamily(f)] }, ligandInfo.ligandFamilies)));
+
+        var compoundClassData = {
+          var ligandHref =
+            if (ligandInfo.ligandType == "Synthetic organic") {
+              "SyntheticOrganic"
+            } else if (ligandInfo.ligandType == "Natural product") {
+              "NaturalProduct"
+            } else if (ligandInfo.ligandType == "Peptide") {
+              "EndogenousPeptide"
+            } else {
+              ligandInfo.ligandType
+            };
+          a(href("/ligandList?type=" ^^ ligandHref), textNode(ligandInfo.ligandType))
+        };
+
+        var approvalData =
+          switch (ligandInfo.ligandApproval) {
+            case NotApproved -> textNode("No")
+            case Approved(source) ->
+              var suffix =
+                if (source == "") {
+                  MvuHTML.empty
+                } else {
+                  textNode(" (" ^^ source ^^ ")")
+                };
+              textNode("Yes") +* suffix
+          };
+
+        var rows = [
+          ("Compound class", compoundClassData, true),
+          ("Ligand families / groups", renderedFamilies, not(listEmpty(ligandInfo.ligandFamilies))),
+          ("Approved drug", approvalData, ligandInfo.ligandApproval <> NotApproved),
+          ("Withdrawn drug", textNode("Yes"), ligandInfo.ligandWithdrawn),
+          ("Drugs", MvuHTML.empty, false), # TODO
+          ("Prodrugs", MvuHTML.empty, false) # TODO
+        ];
+
+        fun renderRow((columnName, content, show)) {
+          if (show) {
+            tr(a0,
+              td(class("info") +@ align("left") +@
+                style("min-width:250px;max-width:250px;width:250px;"),
+                textNode(columnName)) +*
+              td(class("info"), content))
+          } else {
+            MvuHTML.empty
+          }
+        }
+
+        var renderedRows = MvuHTML.concatMap(renderRow, rows);
+        renderBox("Classification", 2, renderedRows)
+      };
+
+      var iupacBox = {
+        if (ligandInfo.ligandIUPACName == "") {
+          MvuHTML.empty
+        } else {
+          renderBox("IUPAC Name", 1, tr(class("info"),
+            td(a0, textNode(ligandInfo.ligandIUPACName))))
+        }
+      };
+
+      var innsBox = {
+        fun renderINN(inn) {
+          tr(class("info"),
+            td(a0, textNode(intToString(inn.innNumber))) +*
+            td(a0, textNode(inn.inn)))
+        }
+        if (listEmpty(ligandInfo.ligandINNs)) {
+          MvuHTML.empty
+        } else {
+          var innsRows = MvuHTML.concatMap(renderINN, ligandInfo.ligandINNs);
+          var contents =
+            tr(a0,
+              td(class("heading"), textNode("INN Number")) +*
+              td(class("heading"), textNode("INN"))) +*
+            innsRows;
+          renderBox("International Nonproprietary Names", 2, contents)
+        }
+      };
+
+      var synonymsBox = {
+        var contents = MvuHTML.concat(join([textNode(" | ")],
+              map(fun(x) { [RenderMarkup.renderSimple(x.synonymName)] }, ligandInfo.ligandSynonyms)));
+        if (listEmpty(ligandInfo.ligandSynonyms)) {
+          MvuHTML.empty
+        } else {
+          renderBox("Synonyms", 1, tr(a0, td(class("info"), contents)))
+        }
+      };
+
+      var commentsBox =
+        commentBox("Comments", ligandInfo.ligandComments.generalComments);
+
+      var dbLinksBox = {
+        MvuHTML.empty
+      };
+
+      classificationTable +*
+      iupacBox +*
+      innsBox +*
+      synonymsBox +*
+      commentsBox +*
+      dbLinksBox
     };
 
     var biologicalActivityPage = {
@@ -272,7 +487,73 @@ fun view(model) {
     };
 
     var clinicalDataPage = {
-      MvuHTML.empty
+      var comments = ligandInfo.ligandComments;
+      # not empty ligand.absorptionAndDistribution.text || not empty ligand.metabolism.text || not empty ligand.elimination.text || not empty ligand.populationPharmacokinetics.text || not empty ligand.organFunctionImpairment.text}
+
+      var commentsTable = {
+        var commentsRows =
+          [("Absorption/Distribution", comments.absorptionDistributionComments),
+           ("Metabolism", comments.metabolismComments),
+           ("Elimination", comments.eliminationComments),
+           ("Population Pharmacokinetics", comments.popnPharmacokineticsComments),
+           ("Organ function impairment", comments.organFunctionImpairmentComments)];
+
+        fun renderRow((colName, comments)) {
+          if (markupEmpty(comments)) {
+            MvuHTML.empty
+          } else {
+            tr(a0,
+              td(class("category") +@ style("background:white;font-style:italic;"),
+                textNode(colName))) +*
+            tr(class("info"),
+              td(a0, renderM(comments)))
+          }
+        }
+        var renderedRows = MvuHTML.concatMap(renderRow, commentsRows);
+        var showTable = any(fun((_, comment)) { not(markupEmpty(comment)) }, commentsRows);
+        if (showTable) {
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            tr(a0,
+              td(class("category"), textNode("Pharmacokinetics"))) +*
+            renderedRows)
+        } else {
+          MvuHTML.empty
+        }
+      };
+
+      var externalURLs = {
+        var urls = ligandInfo.ligandURLs;
+        var urlInfo =
+          [("Electronic Medicines Compendium (eMC)", "Information about medicines licensed for use in the UK", urls.emcURL),
+           ("Drugs.com", "Drug Information Online", urls.drugsURL),
+           ("European Medicines Agency (EMA)", "Database of medicines used in Europe", urls.emaURL)];
+        fun renderURLRow((name, altText, url)) {
+          if (url == "") {
+            MvuHTML.empty
+          } else {
+            a(href(url) +@ title(altText), textNode(name)) +* br(a0, h0)
+          }
+        }
+        var renderedRows = MvuHTML.concatMap(renderURLRow, urlInfo);
+        var showURLs = any(fun((_, _, url)) { url <> "" }, urlInfo);
+        if (showURLs) {
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            tbody(a0,
+              tr(a0,
+                td(class("category"), textNode("External links"))) +*
+              tr(class("info"),
+                td(class("embedded_link"),
+                  p(a0, textNode("For extended ADME data see the following:")) +*
+                  renderedRows))))
+        } else {
+          MvuHTML.empty
+        }
+      };
+
+      commentBox("Summary of Clinical Use", comments.clinicalUseComments) +*
+      commentBox("Mechanism of Action and Pharmacodynamic Effects", comments.mechanismOfActionComments) +*
+      commentsTable +*
+      externalURLs
     };
 
     var referencesPage = {
@@ -315,7 +596,7 @@ fun view(model) {
             MvuAttrs.empty
           };
         li(attr,
-          a(onClick(fun() { ChangeTab(filter) }), textNode(name)))
+          a(href("#") +@ onClick(fun() { ChangeTab(filter) }), textNode(name)))
       }
 
       var renderedTabs = MvuHTML.concatMap(renderTab, tabs);
