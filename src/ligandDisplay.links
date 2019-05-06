@@ -154,7 +154,16 @@ fun getInitialModel() {
 
 sig updt : (Message, Model) ~%~> Model
 fun updt(msg, model) {
-  model
+  fun updt(model) {
+    switch (msg) {
+      case ChangeTab(filter) ->
+        (model with modelTab = filter)
+    }
+  }
+  switch (model) {
+    case Just(model) -> Just(updt(model))
+    case Nothing -> model
+  }
 }
 
 sig view : (Model) ~%~> HTML(Message)
@@ -275,7 +284,7 @@ fun view(model) {
     };
 
     var tabBox = {
-      var tabs = [(
+      var tabs = [
         ("Summary", Summary),
         ("Biological activity", BiologicalActivity),
         ("Clinical data", ClinicalData),
@@ -284,7 +293,20 @@ fun view(model) {
         ("Similar ligands", SimilarLigands),
         ("Immunopharmacology", Immuno),
         ("Malaria", Malaria)
-      )];
+      ];
+
+      fun renderTab((name, filter)) {
+        var attr =
+          if (filter == model.modelTab) {
+            class("active")
+          } else {
+            MvuAttrs.empty
+          };
+        li(attr,
+          a(onClick(fun() { ChangeTab(filter) }), textNode(name)))
+      }
+
+      var renderedTabs = MvuHTML.concatMap(renderTab, tabs);
 
       var content =
         switch(model.modelTab) {
@@ -298,8 +320,13 @@ fun view(model) {
           case Malaria -> malariaPage
         };
 
-
-      MvuHTML.empty
+      div(class("grid_16 alpha"),
+        div(class("contentboxfullhelp"),
+          div(id("cssmenu"),
+            ul(a0, renderedTabs)) +*
+          div(class("clear"), h0) +*
+          div(class("data_tables_container") +@ style("padding-top:10px; padding-bottom: 10px;"),
+            content)))
     };
 
     basicInfoBox +*
