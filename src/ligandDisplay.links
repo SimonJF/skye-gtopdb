@@ -57,7 +57,7 @@ typename LigandStructure = (
 typename LigandInfo = (
   ligandID: Int,
   ligandName: Markup,
-  ligandPhysicalProperties: LigandPhysicalProperties,
+  ligandPhysicalProperties: Maybe(LigandPhysicalProperties),
   ligandApproval: LigandApproval,
   ligandIUPACName: String,
   ligandINNs: [INN],
@@ -83,13 +83,18 @@ fun getInitialModel() {
     fun transformLigandInfo(rawInfo) {
       var rawLigand = rawInfo.ligand;
       fun transformPhysicalProperties(rawProps) {
-        (lpHydrogenBondAcceptors = rawProps.hydrogen_bond_acceptors,
-         lpHydrogenBondDonors = rawProps.hydrogen_bond_donors,
-         lpRotatableBonds = rawProps.rotatable_bonds_count,
-         lpTopologicalPolarSurfaceArea = rawProps.topological_polar_surface_area,
-         lpMolecularWeight = rawProps.molecular_weight,
-         lpXLogP = rawProps.xlogp,
-         lpLipinskiRules = rawProps.lipinski_s_rule_of_five)
+        switch(rawProps) {
+          case [] -> Nothing
+          case rawProps :: _ ->
+            Just(
+            (lpHydrogenBondAcceptors = rawProps.hydrogen_bond_acceptors,
+             lpHydrogenBondDonors = rawProps.hydrogen_bond_donors,
+             lpRotatableBonds = rawProps.rotatable_bonds_count,
+             lpTopologicalPolarSurfaceArea = rawProps.topological_polar_surface_area,
+             lpMolecularWeight = rawProps.molecular_weight,
+             lpXLogP = rawProps.xlogp,
+             lpLipinskiRules = rawProps.lipinski_s_rule_of_five))
+        }
       }
 
       var approval =
@@ -117,13 +122,14 @@ fun getInitialModel() {
       query {
         for (l <-- Tables.ligand)
         where (l.ligand_id == ligandId)
-          for (physchem <-- Tables.ligand_physchem)
-          where (physchem.ligand_id == ligandId)
             for (struct <-- Tables.ligand_structure)
             where (struct.ligand_id == ligandId)
             [(
               ligand = l,
-              physicalProperties = physchem,
+              physicalProperties =
+                for (physchem <-- Tables.ligand_physchem)
+                where (physchem.ligand_id == ligandId)
+                [physchem],
               synonyms =
                 for (l2s <-- Tables.ligand2synonym)
                   where (l2s.ligand_id == ligandId)
@@ -207,36 +213,42 @@ fun view(model) {
       };
 
       var propertiesBox = {
-        var lpps = ligandInfo.ligandPhysicalProperties;
-        var properties =
-          [("Hydrogen bond acceptors",
-              textNode(intToString(lpps.lpHydrogenBondAcceptors))),
-           ("Hydrogen bond donors",
-              textNode(intToString(lpps.lpHydrogenBondDonors))),
-           ("Rotatable bonds", textNode(intToString(lpps.lpRotatableBonds))),
-           ("Topological polar surface area",
-              textNode(floatToString(lpps.lpTopologicalPolarSurfaceArea))),
-           ("Molecular weight",
-              textNode(floatToString(lpps.lpMolecularWeight))),
-           ("XLogP", textNode(floatToString(lpps.lpXLogP))),
-           ("No. Lipinski's rules broken",
-              textNode(intToString(lpps.lpLipinskiRules)))];
+        fun renderProperties(lpps) {
+          var properties =
+            [("Hydrogen bond acceptors",
+                textNode(intToString(lpps.lpHydrogenBondAcceptors))),
+             ("Hydrogen bond donors",
+                textNode(intToString(lpps.lpHydrogenBondDonors))),
+             ("Rotatable bonds", textNode(intToString(lpps.lpRotatableBonds))),
+             ("Topological polar surface area",
+                textNode(floatToString(lpps.lpTopologicalPolarSurfaceArea))),
+             ("Molecular weight",
+                textNode(floatToString(lpps.lpMolecularWeight))),
+             ("XLogP", textNode(floatToString(lpps.lpXLogP))),
+             ("No. Lipinski's rules broken",
+                textNode(intToString(lpps.lpLipinskiRules)))];
 
-        fun renderRow((name, html)) {
-          tr(class("ligand_header_info"),
-            td(a0, textNode(name)) +*
-            td(style("text-align:center"), html))
+          fun renderRow((name, html)) {
+            tr(class("ligand_header_info"),
+              td(a0, textNode(name)) +*
+              td(style("text-align:center"), html))
+          }
+          var rows = MvuHTML.concatMap(renderRow, properties);
+          table_(class("ligand_header_table") +@ style("width:453px;margin:0px;"),
+            thead(a0,
+              tr(a0,
+                td(class("ligand_header_category") +@ colSpan(2) +@ style("text-align:left;"),
+                  textNode("Calculated Physico-chemical Properties")))) +*
+              rows) +*
+          p(style("margin:5px;font-size:90%;"),
+                textNode("Molecular properties generated using the ") +*
+                a(href("https://cdk.github.io"), textNode("CDK")))
         }
-        var rows = MvuHTML.concatMap(renderRow, properties);
-        table_(class("ligand_header_table") +@ style("width:453px;margin:0px;"),
-          thead(a0,
-            tr(a0,
-              td(class("ligand_header_category") +@ colSpan(2) +@ style("text-align:left;"),
-                textNode("Calculated Physico-chemical Properties")))) +*
-            rows) +*
-        p(style("margin:5px;font-size:90%;"),
-              textNode("Molecular properties generated using the ") +*
-              a(href("https://cdk.github.io"), textNode("CDK")))
+
+        switch(ligandInfo.ligandPhysicalProperties) {
+          case Just(lpps) -> renderProperties(lpps)
+          case Nothing -> MvuHTML.empty
+        }
       };
 
       div(class("grid_16 alpha"),
