@@ -71,9 +71,18 @@ typename LigandURLs = (
 typename Subunit = (Int, Markup);
 typename Heteromer = (Int, Markup);
 
+typename PeptideInfo = (
+  peptideOneLetterSeq: String,
+  peptideThreeLetterSeq: String,
+  peptidePostTranslationalModifications: Markup,
+  peptideChemicalModifications: Markup,
+  peptideMedicalRelevance: Markup
+);
+
 typename LigandInfo = (
   ligandID: Int,
   ligandType: String,
+  ligandPeptideInfo: Maybe(PeptideInfo),
   ligandName: Markup,
   ligandFamilies: [LigandFamily],
   ligandPhysicalProperties: Maybe(LigandPhysicalProperties),
@@ -89,7 +98,7 @@ typename LigandInfo = (
   ligandDBLinks: (), # For now
 #  ligandBioactivityTables: BioactivityTables,
   ligandReferences: [(ReferenceId, (ReferenceNumber, Reference))],
-  # ligandStructure: LigandStructure,
+  ligandStructure: Maybe(LigandStructure),
   ligandLigandRefs: [(Int, LigandName)]
 );
 
@@ -174,6 +183,51 @@ fun getInitialModel() {
       var (comments, commentRefs, commentLigands) =
         transformComments(rawLigand);
 
+      sig transformSubunits : ([(Int, String)]) ~%~> [Subunit]
+      fun transformSubunits(ss) {
+        map(fun ((id, name)) { (id, parseOrError(name)) }, ss)
+      }
+
+      fun transformStructure(structs) {
+        switch(structs) {
+          case [] -> Nothing
+          case x :: _ ->
+            Just((canonicalSmiles = x.nonisomeric_smiles,
+             isomericSmiles = x.isomeric_smiles,
+             inchiStandardID = x.nonisomeric_standard_inchi,
+             inchiStandardKey = x.nonisomeric_standard_inchi_key))
+        }
+      }
+
+      fun transformPeptideInfo(ps) {
+        switch(ps) {
+          case [] -> (Nothing, [], [])
+          case p :: _ ->
+            var res =
+              (peptideOneLetterSeq = p.one_letter_seq,
+               peptideThreeLetterSeq = p.three_letter_seq,
+               peptidePostTranslationalModifications =
+                 parseOrError(p.post_translational_modifications),
+               peptideChemicalModifications =
+                 parseOrError(p.chemical_modifications),
+               peptideMedicalRelevance =
+                 parseOrError(p.medical_relevance));
+            var (refs, ligands) =
+              collectAllIds([
+                res.peptidePostTranslationalModifications,
+                res.peptideChemicalModifications,
+                res.peptideMedicalRelevance]);
+            (Just(res), refs, ligands)
+        }
+      }
+
+      var (peptideInfo, peptideRefs, peptideLigands) =
+        transformPeptideInfo(rawInfo.peptide);
+
+      # Finally, resolve ligand and comment references
+      var rawRefs = commentRefs ++ peptideRefs;
+      var rawLigands = commentLigands ++ peptideLigands;
+
       var refs = mkReferenceData(queryReferences(commentRefs));
       var ligandRefs = queryLigands(commentLigands);
       var urls = (
@@ -182,14 +236,10 @@ fun getInitialModel() {
         emaURL = rawLigand.ema_url
       );
 
-      sig transformSubunits : ([(Int, String)]) ~%~> [Subunit]
-      fun transformSubunits(ss) {
-        map(fun ((id, name)) { (id, parseOrError(name)) }, ss)
-      }
-
       (ligandID = ligandId,
        ligandType = rawInfo.ligand.type,
        ligandName = parseOrError(rawInfo.ligand.name),
+       ligandPeptideInfo = peptideInfo,
        ligandFamilies = transformFamilies(rawInfo.families),
        ligandPhysicalProperties =
          transformPhysicalProperties(rawInfo.physicalProperties),
@@ -203,6 +253,7 @@ fun getInitialModel() {
        ligandComments = comments,
        ligandURLs = urls,
        ligandDBLinks = (),
+       ligandStructure = transformStructure(rawInfo.structural_info),
        ligandReferences = refs,
        ligandLigandRefs = ligandRefs)
     }
@@ -212,6 +263,10 @@ fun getInitialModel() {
         for (l <-- Tables.ligand)
         where (l.ligand_id == ligandId)
           [(ligand = l,
+            peptide =
+              for (p <-- Tables.peptide)
+              where (p.ligand_id == ligandId)
+              [p],
             physicalProperties =
               for (physchem <-- Tables.ligand_physchem)
               where (physchem.ligand_id == ligandId)
@@ -236,13 +291,13 @@ fun getInitialModel() {
               for (l2s <-- Tables.ligand2subunit)
               where (l2s.ligand_id == ligandId)
                 for (l <-- Tables.ligand)
-                  where (l.ligand_id == ligandId)
+                  where (l.ligand_id == l2s.subunit_id)
                   [(l.ligand_id, l.name)],
             heteromers =
               for (l2s <-- Tables.ligand2subunit)
               where (l2s.subunit_id == ligandId)
                 for (l <-- Tables.ligand)
-                  where (l.ligand_id == ligandId)
+                  where (l.ligand_id == l2s.ligand_id)
                   [(l.ligand_id, l.name)],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
@@ -661,8 +716,37 @@ fun view(model) {
       var heteromersBox =
         renderSubunitBox("Heteromers", ligandInfo.ligandHeteromers);
 
+      var structureBox = {
+        switch (ligandInfo.ligandStructure) {
+          case Nothing -> MvuHTML.empty
+            case Just(struct) ->
+              fun renderRow((k, v)) {
+                tr(class("info"),
+                  td(style("text-align:left; min-width:250px;max-width:250px;width:250px;"),
+                    textNode(k)) +*
+                  td(style("text-align:left;"),
+                    textNode(v)))
+              }
+
+              var rows = [
+                ("Canonical SMILES", struct.canonicalSmiles),
+                ("Isomeric SMILES", struct.isomericSmiles),
+                ("InChI standard identifier", struct.inchiStandardID),
+                ("InChI standard key", struct.inchiStandardKey)
+              ];
+
+              var renderedRows = MvuHTML.concatMap(renderRow, rows);
+
+              table_(class("receptor_data_tables") +@ style("width:100%;"),
+                tr(a0,
+                  td(class("category") +@ colSpan(2), textNode("Download 2D Structure"))) +*
+                renderedRows)
+        }
+      };
+
       subunitsBox +*
-      heteromersBox
+      heteromersBox +*
+      structureBox
     };
 
     var similarLigandsPage = {
