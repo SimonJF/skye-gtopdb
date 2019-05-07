@@ -7,6 +7,7 @@ open Parser;
 open RenderMarkup;
 open Utility;
 open Template;
+open Species;
 
 # Not implemented yet:
 # Drug / prodrug relations (prodrug table)
@@ -248,10 +249,17 @@ fun getInitialModel() {
         emaURL = rawLigand.ema_url
       );
 
+      fun transformPrecursors(rawPrecursors) {
+        []
+      }
+
+      var precursors = transformPrecursors(rawInfo.precursors);
+
       (ligandID = ligandId,
        ligandType = rawInfo.ligand.type,
        ligandName = parseOrError(rawInfo.ligand.name),
        ligandPeptideInfo = peptideInfo,
+       ligandPrecursors = precursors,
        ligandFamilies = transformFamilies(rawInfo.families),
        ligandPhysicalProperties =
          transformPhysicalProperties(rawInfo.physicalProperties),
@@ -344,7 +352,9 @@ fun getInitialModel() {
       debug("ID: " ^^ id);
       switch (getLigandInfo(stringToInt(id))) {
         case Nothing -> debug("Failed getting ligand info"); Nothing
-        case Just(ligandInfo) -> Just((modelTab = Summary, modelLigand = ligandInfo))
+        case Just(ligandInfo) ->
+          var speciesMap = Species.getSpeciesMap();
+          Just((modelTab = Summary, modelLigand = ligandInfo, modelSpeciesMap = speciesMap))
       }
   }
 }
