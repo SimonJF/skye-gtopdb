@@ -137,9 +137,13 @@ fun renderReference(prefixNode, reference) {
     ^^ intToString(reference.pubmedId) ^^ "', 800, 500)";
 
   var pubMedNode =
-    tn("[PMID:") +*
-    a(href(pubMedHref), tn(intToString(reference.pubmedId))) +*
-    tn("]");
+    if (reference.pubmedId == (-1)) {
+      MvuHTML.empty
+    } else {
+      tn("[PMID:") +*
+      a(href(pubMedHref), tn(intToString(reference.pubmedId))) +*
+      tn("]")
+    };
 
   p(class("grac_text"),
     prefixNode
@@ -162,12 +166,12 @@ fun displayReferences(refs) {
   MvuHTML.concat(map(fun((_, (i, ref))) {
     var prefixNode =
       a(id("ref" ^^ intToString(i)), MvuHTML.empty) +*
-      textNode(intToString(i + 1) ^^ ". ");
+      textNode(intToString(i) ^^ ". ");
     renderReference(prefixNode, ref)}, refs))
 }
 
 fun mkReferenceData(refList) {
-  mapi(fun(ref, i) { (ref.referenceId, (i, ref)) },
+  mapi(fun(ref, i) { (ref.referenceId, (i + 1, ref)) },
     sortBy(fun(ref) { ref.authors }, refList))
 }
 
