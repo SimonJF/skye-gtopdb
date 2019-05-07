@@ -370,6 +370,18 @@ fun view(model) {
       }
     }
 
+    fun renderBoxIfNonempty(boxName, contents) {
+      if (markupEmpty(contents)) {
+        MvuHTML.empty
+      } else {
+        table_(class("receptor_data_tables") +@ style("width:100%;"),
+          tr(a0,
+            td(class("category") +@ colSpan(2), textNode(boxName))) +*
+          tr(class("info"),
+            td(style("text-align:left;"), renderM(contents))))
+      }
+    }
+
     var basicInfoBox = {
       div(class("grid_16 alpha"),
         a(name("top"), h0) +*
@@ -548,6 +560,14 @@ fun view(model) {
         }
       };
 
+      var medicalRelevanceBox = {
+        switch (ligandInfo.ligandPeptideInfo) {
+          case Nothing -> MvuHTML.empty
+          case Just(pi) ->
+            renderBoxIfNonempty("Medical Relevance", pi.peptideMedicalRelevance)
+        }
+      };
+
       var commentsBox =
         commentBox("Comments", ligandInfo.ligandComments.generalComments);
 
@@ -560,6 +580,7 @@ fun view(model) {
       innsBox +*
       synonymsBox +*
       commentsBox +*
+      medicalRelevanceBox +*
       dbLinksBox
     };
 
@@ -744,8 +765,49 @@ fun view(model) {
         }
       };
 
+      var peptideStructureBox = {
+        fun renderIfNonempty(text) {
+          if (text == "") {
+            MvuHTML.empty
+          } else {
+            tr(class("info"),
+              td(style("text-align:left;"), textNode(text)))
+          }
+        }
+
+        switch (ligandInfo.ligandPeptideInfo) {
+          case Nothing -> MvuHTML.empty
+          case Just(pi) ->
+            if (pi.peptideOneLetterSeq <> "" || pi.peptideThreeLetterSeq <> "") {
+              table_(class("receptor_data_tables") +@ style("width:100%;"),
+                tr(a0,
+                  td(class("category") +@ colSpan(2), textNode("Peptide Sequence"))) +*
+                renderIfNonempty(pi.peptideOneLetterSeq) +*
+                renderIfNonempty(pi.peptideThreeLetterSeq))
+            } else {
+              MvuHTML.empty
+            }
+        }
+      };
+
+      var peptideStructureCommentsBox = {
+        switch (ligandInfo.ligandPeptideInfo) {
+          case Nothing -> MvuHTML.empty
+          case Just(pi) ->
+            renderBoxIfNonempty("Post-translational Modification",
+                pi.peptidePostTranslationalModifications) +*
+            renderBoxIfNonempty("Chemical Modification",
+                pi.peptideChemicalModifications)
+        }
+      };
+
+      var pdbStructureBox = MvuHTML.empty;
+
       subunitsBox +*
       heteromersBox +*
+      peptideStructureBox +*
+      pdbStructureBox +*
+      peptideStructureCommentsBox +*
       structureBox
     };
 

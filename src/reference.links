@@ -66,7 +66,7 @@ fun makeReference(refId,
 
 fun renderCitation(id, refs) {
   var refId = switch(lookup(id, refs)) {
-    case Just((refNum, _)) -> intToString(refNum + 1)
+    case Just((refNum, _)) -> intToString(refNum)
     case Nothing -> "?"
   };
 
@@ -81,7 +81,7 @@ fun renderCitationList(ids, refs) {
   fun citationLink(id) {
     switch(lookup(id, refs)) {
         case Just((refNum, _)) ->
-          var refId = intToString(refNum + 1);
+          var refId = intToString(refNum);
           a(href("#ref" ^^ refId), textNode(refId))
         case Nothing -> textNode("?")
     }
