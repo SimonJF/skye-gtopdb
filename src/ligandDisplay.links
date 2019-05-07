@@ -79,10 +79,21 @@ typename PeptideInfo = (
   peptideMedicalRelevance: Markup
 );
 
+typename PrecursorInfo = (
+  precursorID: Int,
+  precursorGeneName: String,
+  precursorOfficialGeneID: String,
+  precursorProteinName: String,
+  precursorSpecies: String,
+  precursorGeneLongName: String,
+  precursorSynonyms: [String]
+);
+
 typename LigandInfo = (
   ligandID: Int,
   ligandType: String,
   ligandPeptideInfo: Maybe(PeptideInfo),
+  ligandPrecursors: [PrecursorInfo],
   ligandName: Markup,
   ligandFamilies: [LigandFamily],
   ligandPhysicalProperties: Maybe(LigandPhysicalProperties),
@@ -104,7 +115,8 @@ typename LigandInfo = (
 
 typename Model = Maybe((
   modelTab:Tab,
-  modelLigand: LigandInfo
+  modelLigand: LigandInfo,
+  modelSpeciesMap: SpeciesMap
 ));
 
 
@@ -267,6 +279,16 @@ fun getInitialModel() {
               for (p <-- Tables.peptide)
               where (p.ligand_id == ligandId)
               [p],
+            precursors =
+              for (p2p <-- Tables.precursor2peptide)
+              where (p2p.ligand_id == ligandId)
+                for (p <-- Tables.precursor)
+                where (p.precursor_id == p2p.precursor_id)
+                [(precursor = p,
+                  synonyms =
+                    for (p2s <-- Tables.precursor2synonym)
+                    where (p2s.precursor_id == p.precursor_id)
+                      [p2s.synonym]) ],
             physicalProperties =
               for (physchem <-- Tables.ligand_physchem)
               where (physchem.ligand_id == ligandId)
