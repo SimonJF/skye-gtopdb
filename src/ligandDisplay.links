@@ -8,6 +8,7 @@ open RenderMarkup;
 open Utility;
 open Template;
 open Species;
+open DataTable;
 
 # Not implemented yet:
 # Drug / prodrug relations (prodrug table)
@@ -19,7 +20,8 @@ typename Tab =
    | Structure | SimilarLigands | Malaria | Immuno |];
 
 
-typename Message = [| ChangeTab:Tab |];
+typename Message =
+  [| ChangeTab:Tab | SortPrecursorTable:(ColumnName, SortDirection) |];
 
 typename ApprovalSource = String;
 typename LigandApproval = [| Approved:ApprovalSource | NotApproved |];
@@ -94,7 +96,7 @@ typename LigandInfo = (
   ligandID: Int,
   ligandType: String,
   ligandPeptideInfo: Maybe(PeptideInfo),
-  ligandPrecursors: [PrecursorInfo],
+  ligandPrecursorTable: SortableTable(PrecursorInfo, Message),
   ligandName: Markup,
   ligandFamilies: [LigandFamily],
   ligandPhysicalProperties: Maybe(LigandPhysicalProperties),
@@ -124,8 +126,10 @@ typename Model = Maybe((
 sig getInitialModel : () ~%~> Model
 fun getInitialModel() {
 
-  sig getLigandInfo : (Int) ~%~> Maybe(LigandInfo)
-  fun getLigandInfo(ligandId) {
+  sig getLigandInfo : (Int, SpeciesMap) ~%~> Maybe(LigandInfo)
+  fun getLigandInfo(ligandId, speciesMap) {
+    fun speciesShortName(speciesID) { resolveSpeciesShortName(speciesID, speciesMap) }
+    fun speciesLongName(speciesID) { resolveSpeciesLongName(speciesID, speciesMap) }
     fun transformLigandInfo(rawInfo) {
       var rawLigand = rawInfo.ligand;
       fun transformPhysicalProperties(rawProps) {
@@ -250,16 +254,38 @@ fun getInitialModel() {
       );
 
       fun transformPrecursors(rawPrecursors) {
-        []
+        map(fun(p) {
+          var precursor = p.precursor;
+          var synonyms = p.synonyms;
+          (precursorID = precursor.precursor_id,
+           precursorGeneName = precursor.gene_name,
+           precursorOfficialGeneID = precursor.official_gene_id,
+           precursorProteinName = precursor.protein_name,
+           precursorSpecies = speciesShortName(precursor.species_id),
+           precursorGeneLongName = precursor.gene_long_name,
+           precursorSynonyms = synonyms)
+        }, rawPrecursors)
       }
 
       var precursors = transformPrecursors(rawInfo.precursors);
+      var precursorTable = makeTable(
+          [
+           ("Gene Symbol", ("", Sortable(fun(x, y) {
+                simpleCmp(x.precursorGeneName, y.precursorGeneName) }))),
+           ("Gene name", ("", Sortable(fun(x, y) {
+                simpleCmp(x.precursorGeneName, y.precursorGeneName) }))),
+           ("Species", ("", Sortable(fun(x, y) {
+                simpleCmp(x.precursorSpecies, y.precursorSpecies) }))),
+           ("Precursor protein name", ("", Sortable(fun(x, y) {
+                simpleCmp(x.precursorProteinName, y.precursorProteinName) }))),
+           ("Synonyms", ("header", Sortable(fun(x, y) { 0 })))
+          ], precursors, fun(name, dir) { SortPrecursorTable(name, dir) });
 
       (ligandID = ligandId,
        ligandType = rawInfo.ligand.type,
        ligandName = parseOrError(rawInfo.ligand.name),
        ligandPeptideInfo = peptideInfo,
-       ligandPrecursors = precursors,
+       ligandPrecursorTable = precursorTable,
        ligandFamilies = transformFamilies(rawInfo.families),
        ligandPhysicalProperties =
          transformPhysicalProperties(rawInfo.physicalProperties),
@@ -349,11 +375,10 @@ fun getInitialModel() {
   switch(lookup("ligandId", environment())) {
     case Nothing -> debug("No ID"); Nothing
     case Just(id) ->
-      debug("ID: " ^^ id);
-      switch (getLigandInfo(stringToInt(id))) {
+      var speciesMap = Species.getSpeciesMap();
+      switch (getLigandInfo(stringToInt(id), speciesMap)) {
         case Nothing -> debug("Failed getting ligand info"); Nothing
         case Just(ligandInfo) ->
-          var speciesMap = Species.getSpeciesMap();
           Just((modelTab = Summary, modelLigand = ligandInfo, modelSpeciesMap = speciesMap))
       }
   }
@@ -365,6 +390,11 @@ fun updt(msg, model) {
     switch (msg) {
       case ChangeTab(filter) ->
         (model with modelTab = filter)
+      case SortPrecursorTable(colName, dir) ->
+        var sortedTable =
+          updateSortStatus(model.modelLigand.ligandPrecursorTable, colName, dir);
+        (model with modelLigand =
+          (model.modelLigand with ligandPrecursorTable = sortedTable))
     }
   }
   switch (model) {
@@ -603,6 +633,27 @@ fun view(model) {
       var commentsBox =
         commentBox("Comments", ligandInfo.ligandComments.generalComments);
 
+      var precursorTableBox = {
+        var renderedTable =
+          renderTable(ligandInfo.ligandPrecursorTable,
+            fun(precursor) {
+              var renderedSynonyms = MvuHTML.concat(join([textNode(", ")],
+                  map(fun(s) { [textNode(s)] }, precursor.precursorSynonyms)));
+              tr(class("info"),
+                td(a0, textNode(precursor.precursorGeneName)) +*
+                td(a0, textNode(precursor.precursorGeneLongName)) +*
+                td(a0, textNode(precursor.precursorSpecies)) +*
+                td(a0, textNode(precursor.precursorProteinName)) +*
+                td(a0, renderedSynonyms))
+            });
+        table_(class("receptor_data_tables") +@ width("100%"),
+          tbody(a0,
+            tr(a0,
+              td(class("category"), textNode("Gene/Precursor"))) +*
+            tr(a0,
+              td(class("table_container"), renderedTable))))
+      };
+
       var dbLinksBox = {
         MvuHTML.empty
       };
@@ -612,6 +663,7 @@ fun view(model) {
       innsBox +*
       synonymsBox +*
       commentsBox +*
+      precursorTableBox +*
       medicalRelevanceBox +*
       dbLinksBox
     };

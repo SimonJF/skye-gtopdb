@@ -11,6 +11,7 @@ typename SortStatus = [| Unsorted | Sorted:(ColumnName, SortDirection) |];
 typename ColumnSpec(a) =
   [| NotSortable | Sortable:((a, a) {}~> Int) |];
 
+  # tableColumns: also takes a CSS class. Maybe better to generalise this?
 typename SortableTable(data, msg) =
   ( tableColumns: [(ColumnName, (String, ColumnSpec(data)))],
     tableSortStatus: SortStatus,
