@@ -162,6 +162,10 @@ fun colSpan(n) {
   MvuAttrs.attr("colSpan", intToString(n))
 }
 
+fun rowSpan(n) {
+  MvuAttrs.attr("rowSpan", intToString(n))
+}
+
 fun align(val) {
   MvuAttrs.attr("align", val)
 }

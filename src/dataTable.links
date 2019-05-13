@@ -18,10 +18,10 @@ typename SortableTable(data, msg) =
     tableRows: [data],
     tableSortMsg: (ColumnName, SortDirection) {}~> msg );
 
-# sig makeTable : (
-#     [(ColumnName, (String, ColumnSpec(data)))],
-#     [data],
-#     (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
+sig makeTable : (
+    [(ColumnName, (String, ColumnSpec(data)))],
+    [data],
+    (ColumnName, SortDirection) {}~> msg) {}~> SortableTable(data, msg)
 fun makeTable(cols, data, sortMsg) {
   (tableColumns = cols,
    tableSortStatus = Unsorted,

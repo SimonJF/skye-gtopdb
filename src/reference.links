@@ -76,7 +76,7 @@ fun renderCitation(id, refs) {
   textNode("]")
 }
 
-sig renderCitationList : ([Int], [(Int, (Int, Reference))]) ~> HTML(_)
+#sig renderCitationList : ([Int], [(Int, (Int, Reference))]) ~%~> HTML(_)
 fun renderCitationList(ids, refs) {
   fun citationLink(id) {
     switch(lookup(id, refs)) {

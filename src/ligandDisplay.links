@@ -819,7 +819,67 @@ fun view(model) {
       };
 
       var interactions = {
-        MvuHTML.empty
+        var tables = ligandInfo.ligandBioactivityTables;
+        fun renderIfNonempty(tableName, tbl) {
+          fun renderRow(row) {
+            var i = row.interaction;
+            var renderedTarget = {
+              if (i.objectID <> 0) {
+                a(href("/objectDisplay?objectId=" ^^ intToString(i.objectID)),
+                    textNode(row.objectName))
+              } else if (i.targetLigandID <> 0) {
+                a(href("/ligandDisplay?ligandId=" ^^ intToString(i.targetLigandID)),
+                    textNode("TODO: Resolve name" ^^ intToString(i.targetLigandID)))
+              } else {
+                textNode("Unknown MOA")
+              }
+            };
+
+            fun mkRow(contents) { td(a0, contents) }
+            var renderedType = {
+              textNode(i.interactionType) +*
+              (if (i.ligandContext <> "") {
+                textNode(i.ligandContext ^^ " ")
+              } else {
+                MvuHTML.empty
+              })
+            };
+            tr(class("info"),
+              td(style("border-style: solid dotted solid solid;") +@ rowSpan(2),
+                renderedTarget) +*
+              boolImage(("/images/primary.png", i.primaryTarget, "Primary target of this compound")) +*
+              boolImage(("/images/endogenous.png", i.endogenous, "Ligand is endogenous in the given species")) +*
+              td(style("text-align:center;"), textNode(row.speciesShort)) +*
+              mkRow(renderM(i.assayDescription)) +*
+              mkRow(renderedType) +*
+              mkRow(textNode(i.interactionAction)) +*
+              mkRow(displayAffinity(i.affinity, true)) +*
+              mkRow(textNode(i.affinity.affinityUnits)) +*
+              mkRow(textNode(i.concentrationRange)) +*
+              mkRow(renderCitationList(row.references, ligandInfo.ligandReferences)))
+          }
+
+          if (listEmpty(getTableData(tbl))) {
+            MvuHTML.empty
+          } else {
+            table_(class("receptor_data_tables") +@ style("width:100%"),
+              thead(a0,
+                tr(name("hotspot") +@ class("hotspot"),
+                  td(class("category") +@ colSpan(3), textNode(tableName)))) +*
+              tbody(name("toggle"),
+                tr(a0,
+                  td(class("table_container") +@ colSpan(3),
+                    renderTable(tbl, renderRow)))))
+          }
+        }
+
+        renderIfNonempty("Selectivity at GPCRs", tables.gpcrInteractions) +*
+        renderIfNonempty("Selectivity at ion channels", tables.icInteractions) +*
+        renderIfNonempty("Selectivity at nuclear hormone receptors", tables.nhrInteractions) +*
+        renderIfNonempty("Selectivity at enzymes", tables.enzymeInteractions) +*
+        renderIfNonempty("Selectivity at catalytic receptors", tables.catalyticReceptorInteractions) +*
+        renderIfNonempty("Selectivity at transporters", tables.transporterInteractions) +*
+        renderIfNonempty("Selectivity at other protein targets", tables.otherInteractions)
       };
 
       var rankPotencies = {
