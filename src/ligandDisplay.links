@@ -9,10 +9,10 @@ open Utility;
 open Template;
 open Species;
 open DataTable;
+open InteractionUtilities;
 
 # Not implemented yet:
 # Drug / prodrug relations (prodrug table)
-# Peptide info (medical relevance / gene info)
 
 
 typename Tab =
@@ -56,7 +56,42 @@ typename Comments = (
   malariaComments: Markup
 );
 
-typename BioactivityTables = (); # For now.
+typename EnzymeSubstrate = (
+  enzyme: String,
+  enzymeID: Int,
+  ecNumber: String,
+  reaction: String,
+  references: [ReferenceID]
+);
+
+typename CofactorEnzyme = (
+  enzyme: String,
+  enzymeID: Int,
+  references: [ReferenceID]
+);
+
+typename TransporterSubstrate = (
+  transporter: String,
+  transporterID: Int,
+  ecNumber: String,
+  reaction: String,
+  references: [ReferenceID]
+);
+
+typename BioactivityTables = (
+  # Special tables
+  enzymeSubstrates: SortableTable(EnzymeSubstrate, Message),
+  cofactorEnzymes: SortableTable(CofactorEnzyme, Message),
+  transporterSubstrates: SortableTable(TransporterSubstrate, Message),
+  # Sorted interactions with different targets
+  gpcrInteractions: SortableTable(Interaction, Message),
+  icInteractions: SortableTable(Interaction, Message),
+  nhrInteractions: SortableTable(Interaction, Message),
+  enzymeInteractions: SortableTable(Interaction, Message),
+  catalyticReceptorinteractions: SortableTable(Interaction, Message),
+  transporterInteractions: SortableTable(Interaction, Message),
+  otherInteractions: SortableTable(Interaction, Message)
+);
 
 typename LigandStructure = (
   canonicalSmiles: String,
@@ -110,7 +145,8 @@ typename LigandInfo = (
   ligandComments: Comments,
   ligandURLs: LigandURLs,
   ligandDBLinks: (), # For now
-#  ligandBioactivityTables: BioactivityTables,
+  ligandInteractions: [Interaction],
+  ligandBioactivityTables: BioactivityTables,
   ligandReferences: [(ReferenceId, (ReferenceNumber, Reference))],
   ligandStructure: Maybe(LigandStructure),
   ligandLigandRefs: [(Int, LigandName)]
@@ -267,6 +303,8 @@ fun getInitialModel() {
         }, rawPrecursors)
       }
 
+      var interactions = map(InteractionUtilities.makeInteraction, rawInfo.interactions);
+
       var precursors = transformPrecursors(rawInfo.precursors);
       var precursorTable = makeTable(
           [
@@ -286,6 +324,7 @@ fun getInitialModel() {
        ligandName = parseOrError(rawInfo.ligand.name),
        ligandPeptideInfo = peptideInfo,
        ligandPrecursorTable = precursorTable,
+       ligandInteractions = interactions,
        ligandFamilies = transformFamilies(rawInfo.families),
        ligandPhysicalProperties =
          transformPhysicalProperties(rawInfo.physicalProperties),
@@ -313,6 +352,10 @@ fun getInitialModel() {
               for (p <-- Tables.peptide)
               where (p.ligand_id == ligandId)
               [p],
+            interactions =
+              for (i <-- Tables.interaction)
+              where (i.ligand_id == ligandId)
+              [i],
             precursors =
               for (p2p <-- Tables.precursor2peptide)
               where (p2p.ligand_id == ligandId)
@@ -669,7 +712,48 @@ fun view(model) {
     };
 
     var biologicalActivityPage = {
-      MvuHTML.empty
+      # TO DO:
+      # 1. Bioactivity comments
+      # 2. Endogenous targets
+      # 3. Enzyme substrates
+      # 4. Cofactor enzymes
+      # 5. Transporters
+      # 6. Interactions
+      # 7. Rank potencies
+      # 8. Targeting ligands
+      var endogenousTargetsBox = {
+        MvuHTML.empty
+      };
+      var enzymeSubstrates = {
+        MvuHTML.empty
+      };
+      var cofactorEnzymes = {
+        MvuHTML.empty
+      };
+      var transporters = {
+        MvuHTML.empty
+      };
+
+      var interactions = {
+        MvuHTML.empty
+      };
+
+      var rankPotencies = {
+        MvuHTML.empty
+      };
+
+      var targetingLigands = {
+        MvuHTML.empty
+      };
+
+      commentBox("Bioactivity Comments", ligandInfo.ligandComments.bioactivityComments) +*
+      endogenousTargetsBox +*
+      enzymeSubstrates +*
+      cofactorEnzymes +*
+      transporters +*
+      interactions +*
+      rankPotencies +*
+      targetingLigands
     };
 
     var clinicalDataPage = {

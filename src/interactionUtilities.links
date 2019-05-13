@@ -1,10 +1,100 @@
 # Functionality for dealing with ligand<->object interactions.
 # This will grow as I abstract more out.
 open MvuHTML;
+open Parser;
+
+typename InteractionAffinityVoltage =
+  (affinityVoltageHigh: Float,
+   affinityVoltageMedian: Float,
+   affinityVoltageLow: Float,
+   affinityPhysiologicalVoltage: Bool);
 
 typename InteractionAffinity =
   (affinityUnits: String, affinityLow: Float,
    affinityMedian: Float, affinityHigh: Float);
+
+fun mkAffinity(units, high, median, low) {
+  (affinityHigh = high, affinityMedian = median, affinityLow = low,
+   affinityUnits = units)
+}
+
+fun mkAffinityVoltage(high, median, low, physio) {
+  (affinityVoltageHigh = high, affinityVoltageMedian = median, affinityVoltageLow = low,
+   affinityPhysiologicalVoltage = physio)
+}
+
+typename Interaction =
+  (interactionID: Int,
+   ligandID: Int,
+   objectID: Int,
+   interactionType: String,
+   interactionAction: String,
+   interactionActionComment: Markup,
+   speciesID: Int,
+   endogenous: Bool,
+   selective: Bool,
+   useDependent: Bool,
+   voltageDependent: Bool,
+   affinity: InteractionAffinity,
+   concentrationRange: String,
+   affinityVoltage: InteractionAffinityVoltage,
+   rank: Int,
+   selectivity: String,
+   originalAffinity: InteractionAffinity,
+   originalAffinityRelation: String,
+   assayDescription: Markup,
+   assayConditions: String,
+   fromGrac: Bool,
+   onlyGrac: Bool,
+   receptorSite: String,
+   ligandContext: String,
+   percentActivity: Float,
+   assayURL: String,
+   primaryTarget: Bool,
+   targetLigandID: Int,
+   wholeOrganismAssay: Bool,
+   hide: Bool);
+
+# Makes an interaction from raw DB data.
+fun makeInteraction(raw) {
+  (interactionID = raw.interaction_id,
+   ligandID = raw.ligand_id,
+   objectID = raw.object_id,
+   interactionType = raw.type,
+   interactionAction = raw.action,
+   interactionActionComment = parseOrError(raw.action_comment),
+   speciesID = raw.species_id,
+   endogenous = raw.endogenous,
+   selective = raw.selective,
+   useDependent = raw.use_dependent,
+   voltageDependent = raw.voltage_dependent,
+   affinity = mkAffinity(raw.affinity_units, raw.affinity_high, raw.affinity_median, raw.affinity_low),
+   concentrationRange = raw.concentration_range,
+   affinityVoltage =
+     mkAffinityVoltage(raw.affinity_voltage_high, raw.affinity_voltage_median,
+       raw.affinity_voltage_low, raw.affinity_physiological_voltage),
+   rank = raw.rank,
+   selectivity = raw.selectivity,
+   originalAffinity =
+    mkAffinity(raw.original_affinity_units,
+      raw.original_affinity_high_nm, raw.original_affinity_median_nm,
+      raw.original_affinity_low_nm),
+   originalAffinityRelation = raw.original_affinity_relation,
+   assayDescription = parseOrError(raw.assay_description),
+   assayConditions = raw.assay_conditions,
+   fromGrac = raw.from_grac,
+   onlyGrac = raw.only_grac,
+   receptorSite = raw.receptor_site,
+   ligandContext = raw.ligand_context,
+   percentActivity = raw.percent_activity,
+   assayURL = raw.assay_url,
+   primaryTarget = raw.primary_target,
+   targetLigandID = raw.target_ligand_id,
+   wholeOrganismAssay = raw.whole_organism_assay,
+   hide = raw.hide)
+}
+
+#   original_affinity_low_nm: Float, original_affinity_median_nm: Float, original_affinity_high_nm: Float, original_affinity_units: String, original_affinity_relation: String, assay_description: String, assay_conditions: String, from_grac: Bool, only_grac: Bool, receptor_site: String, ligand_context: String, percent_activity: Float, assay_url: String, primary_target: Bool, target_ligand_id: Int, whole_organism_assay: Bool, hide: Bool)
 
 fun sortAffinity(a1, a2) {
   var a1Key =
