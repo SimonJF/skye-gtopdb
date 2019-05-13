@@ -1,4 +1,5 @@
 open MonadicParser;
+open Utility;
 
 # A simple parser for the GtoPdb markup.
 # Limitations right now:
@@ -138,6 +139,21 @@ fun parseOrError(str) {
 
 fun markupEmpty(m) {
   (m == MarkupEmpty) || (m == MarkupText(""))
+}
+
+# Very quick and dirty
+fun markupCmp(m1, m2) {
+  fun getText(m) {
+    switch(m) {
+      case MarkupAppend(m1, m2) ->
+        getText(m1) ^^ getText(m2)
+      case MarkupText(t) -> t
+      case MarkupHTMLTag(_, _, m) -> getText(m)
+      case _ -> ""
+    }
+  }
+
+  simpleCmp(getText(m1), getText(m2))
 }
 
 var testStr =

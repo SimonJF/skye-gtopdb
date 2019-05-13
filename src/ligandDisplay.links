@@ -21,7 +21,10 @@ typename Tab =
 
 
 typename Message =
-  [| ChangeTab:Tab | SortPrecursorTable:(ColumnName, SortDirection) |];
+  [| ChangeTab:Tab | SortPrecursorTable:(ColumnName, SortDirection)
+   | SortInteractionTable:(InteractionType, ColumnName, SortDirection)
+   | NoOp
+  |];
 
 typename ApprovalSource = String;
 typename LigandApproval = [| Approved:ApprovalSource | NotApproved |];
@@ -78,19 +81,27 @@ typename TransporterSubstrate = (
   references: [ReferenceID]
 );
 
+typename InteractionInfo = (
+  interaction: Interaction,
+  speciesShort: String,
+  objectName: String,
+  references: [ReferenceID],
+  interactionType: InteractionType
+);
+
 typename BioactivityTables = (
   # Special tables
   enzymeSubstrates: SortableTable(EnzymeSubstrate, Message),
   cofactorEnzymes: SortableTable(CofactorEnzyme, Message),
   transporterSubstrates: SortableTable(TransporterSubstrate, Message),
   # Sorted interactions with different targets
-  gpcrInteractions: SortableTable(Interaction, Message),
-  icInteractions: SortableTable(Interaction, Message),
-  nhrInteractions: SortableTable(Interaction, Message),
-  enzymeInteractions: SortableTable(Interaction, Message),
-  catalyticReceptorinteractions: SortableTable(Interaction, Message),
-  transporterInteractions: SortableTable(Interaction, Message),
-  otherInteractions: SortableTable(Interaction, Message)
+  gpcrInteractions: SortableTable(InteractionInfo, Message),
+  icInteractions: SortableTable(InteractionInfo, Message),
+  nhrInteractions: SortableTable(InteractionInfo, Message),
+  enzymeInteractions: SortableTable(InteractionInfo, Message),
+  catalyticReceptorInteractions: SortableTable(InteractionInfo, Message),
+  transporterInteractions: SortableTable(InteractionInfo, Message),
+  otherInteractions: SortableTable(InteractionInfo, Message)
 );
 
 typename LigandStructure = (
@@ -145,7 +156,7 @@ typename LigandInfo = (
   ligandComments: Comments,
   ligandURLs: LigandURLs,
   ligandDBLinks: (), # For now
-  ligandInteractions: [Interaction],
+  #ligandInteractions: [Interaction],
   ligandBioactivityTables: BioactivityTables,
   ligandReferences: [(ReferenceId, (ReferenceNumber, Reference))],
   ligandStructure: Maybe(LigandStructure),
@@ -159,10 +170,10 @@ typename Model = Maybe((
 ));
 
 
-sig getInitialModel : () ~%~> Model
+sig getInitialModel : () {}~> Model
 fun getInitialModel() {
 
-  sig getLigandInfo : (Int, SpeciesMap) ~%~> Maybe(LigandInfo)
+  sig getLigandInfo : (Int, SpeciesMap) {}~> Maybe(LigandInfo)
   fun getLigandInfo(ligandId, speciesMap) {
     fun speciesShortName(speciesID) { resolveSpeciesShortName(speciesID, speciesMap) }
     fun speciesLongName(speciesID) { resolveSpeciesLongName(speciesID, speciesMap) }
@@ -277,12 +288,6 @@ fun getInitialModel() {
       var (peptideInfo, peptideRefs, peptideLigands) =
         transformPeptideInfo(rawInfo.peptide);
 
-      # Finally, resolve ligand and comment references
-      var rawRefs = commentRefs ++ peptideRefs;
-      var rawLigands = commentLigands ++ peptideLigands;
-
-      var refs = mkReferenceData(queryReferences(commentRefs));
-      var ligandRefs = queryLigands(commentLigands);
       var urls = (
         drugsURL = rawLigand.drugs_url,
         emcURL = rawLigand.emc_url,
@@ -303,7 +308,66 @@ fun getInitialModel() {
         }, rawPrecursors)
       }
 
-      var interactions = map(InteractionUtilities.makeInteraction, rawInfo.interactions);
+      var interactions : [InteractionInfo] =
+        map(fun(i) {
+            (interaction = InteractionUtilities.makeInteraction(i.interaction),
+             speciesShort = speciesShortName(i.interaction.species_id),
+             objectName = i.objectName,
+             interactionType = i.interactionType,
+             references = i.references)
+          },
+          rawInfo.interactions);
+
+      var bioactivityTables = {
+        fun emptyTable() {
+          makeTable([], [], fun(colName, dir) { NoOp }) # TODO: Temporary
+        }
+
+        var grouped = groupBy(fun(i) { i.interactionType }, interactions);
+        fun makeTable(type) {
+          var data =
+            switch(lookup(type, grouped)) {
+              case Just(xs) -> xs
+              case Nothing -> []
+            };
+          DataTable.makeTable(
+            [("Target", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.objectName, y.objectName) }))),
+             ("", ("", NotSortable)), ("", ("", NotSortable)),
+             ("Sp.", ("keybox_header", Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
+             ("Assay Description", ("assay_long_header",
+                Sortable(fun(x, y) { markupCmp(x.interaction.assayDescription,
+                    y.interaction.assayDescription) }))),
+             ("Type", ("affinity_header", (Sortable(
+                fun(x, y) { simpleCmp(x.interaction.interactionType, y.interaction.interactionType) })))),
+             ("Action", ("affinity_header", Sortable(
+                fun(x, y) { simpleCmp(x.interaction.interactionAction, y.interaction.interactionAction) }))),
+             ("Affinity", ("affinity_header", Sortable(
+                fun(x, y) { sortAffinity(
+                  x.interaction.affinity,
+                  y.interaction.affinity) }))),
+             ("Parameter", ("units_header", Sortable(
+                fun(x, y) { simpleCmp(
+                  x.interaction.affinity.affinityUnits,
+                  y.interaction.affinity.affinityUnits) }))),
+             ("Concentration range (M)", ("units_header", Sortable(
+                fun(x, y) { simpleCmp(x.interaction.concentrationRange, y.interaction.concentrationRange) }))),
+             ("Reference", ("reference_header", Sortable(
+                fun(x, y) {
+                  0 # Meh. FIXME
+                })))], data, fun(col, dir) { SortInteractionTable(type, col, dir) })
+        }
+
+        (enzymeSubstrates = emptyTable(),
+         cofactorEnzymes = emptyTable(),
+         transporterSubstrates = emptyTable(),
+         gpcrInteractions = makeTable(GPCR),
+         icInteractions = makeTable(IC),
+         nhrInteractions = makeTable(NHR),
+         enzymeInteractions = makeTable(Enzyme),
+         catalyticReceptorInteractions = makeTable(CatalyticReceptor),
+         transporterInteractions = makeTable(Transporter),
+         otherInteractions = makeTable(Other))
+      };
 
       var precursors = transformPrecursors(rawInfo.precursors);
       var precursorTable = makeTable(
@@ -319,12 +383,22 @@ fun getInitialModel() {
            ("Synonyms", ("header", Sortable(fun(x, y) { 0 })))
           ], precursors, fun(name, dir) { SortPrecursorTable(name, dir) });
 
+      var interactionRefs = listConcatMap(fun(x) { x.references }, interactions);
+
+      # Finally, resolve ligand and comment references
+      var rawRefs = uniquify(commentRefs ++ peptideRefs ++ interactionRefs);
+      var rawLigands = uniquify(commentLigands ++ peptideLigands);
+
+      var refs = mkReferenceData(queryReferences(rawRefs));
+      var ligandRefs = queryLigands(rawLigands);
+
       (ligandID = ligandId,
        ligandType = rawInfo.ligand.type,
        ligandName = parseOrError(rawInfo.ligand.name),
        ligandPeptideInfo = peptideInfo,
        ligandPrecursorTable = precursorTable,
-       ligandInteractions = interactions,
+       #ligandInteractions = interactions,
+       ligandBioactivityTables = bioactivityTables,
        ligandFamilies = transformFamilies(rawInfo.families),
        ligandPhysicalProperties =
          transformPhysicalProperties(rawInfo.physicalProperties),
@@ -355,7 +429,15 @@ fun getInitialModel() {
             interactions =
               for (i <-- Tables.interaction)
               where (i.ligand_id == ligandId)
-              [i],
+                for (o <-- Tables.object)
+                where (o.object_id == i.object_id)
+                [(interaction = i,
+                  interactionType = classifyInteractionType(i.object_id),
+                  objectName = o.name,
+                  references =
+                    for (r <-- Tables.interaction_affinity_refs)
+                    where (r.interaction_id == i.interaction_id)
+                    [r.reference_id])],
             precursors =
               for (p2p <-- Tables.precursor2peptide)
               where (p2p.ligand_id == ligandId)
@@ -365,7 +447,7 @@ fun getInitialModel() {
                   synonyms =
                     for (p2s <-- Tables.precursor2synonym)
                     where (p2s.precursor_id == p.precursor_id)
-                      [p2s.synonym]) ],
+                      [p2s.synonym])],
             physicalProperties =
               for (physchem <-- Tables.ligand_physchem)
               where (physchem.ligand_id == ligandId)
@@ -438,6 +520,8 @@ fun updt(msg, model) {
           updateSortStatus(model.modelLigand.ligandPrecursorTable, colName, dir);
         (model with modelLigand =
           (model.modelLigand with ligandPrecursorTable = sortedTable))
+      case SortInteractionTable(ty, colName, dir) -> model # TODO: Implement
+      case NoOp -> model #temp
     }
   }
   switch (model) {
