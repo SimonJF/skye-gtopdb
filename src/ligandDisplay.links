@@ -1253,44 +1253,6 @@ fun view(model) {
                 td(class("heading") +@ style("width:100px;"), textNode("References"))) +*
               renderedRows)
         }
-    # <c:choose>
-    #     <c:when test="${not empty ligand.immunoLigandComments.text || not empty immDisLig}">
-    #         <c:if test="${not empty immDisLig}">
-    #             <table class="receptor_data_tables" style="width:100%;">
-    #                 <tr>
-    #                     <td class="category_immuno" colspan="4">Immunopharmacology Disease</td>
-    #                 </tr>
-    #                 <tr>
-    #                     <td class="heading">Disease</td>
-    #                     <td class="heading" style="width:200px;">X-Refs</td>
-    #                     <td class="heading" style="width:400px;">Comment</td>
-    #                     <td class="heading" style="width:100px;">References</td>
-    #                 </tr>
-    #                 <c:forEach var="immdis" items="${immDisLig}" varStatus = "status">
-    #                     <tr class="info"><td><a href="DiseaseDisplayForward?diseaseId=${immdis.disease.id}"><c:out value="${immdis.disease.name}" escapeXml="false"/></a></td>
-    #                         <td>
-    #                             <c:forEach var="element" items="${immdis.disease.linkMap}">
-    #                                 <c:out value="${element.key}" escapeXml="false"/>:
-    #                                 <c:out value="${element.value}" escapeXml="false"/><br>
-    #                             </c:forEach>
-    #                         </td>
-    #                         <td><c:out value="${immdis.immDiseaseLigandComment.textHTML}" escapeXml="false"/></td>
-    #                         <td><c:out value="${immdis.refs.refsHTML}" escapeXml="false"/></td>
-    #                     </tr>
-    #                 </c:forEach>
-    #             </table>
-    #         </c:if>
-    #         </c:if>
-    #     </c:when>
-    #     <c:otherwise>
-    #         <table class="receptor_data_tables" style="width:100%;">
-    #             <tr>
-    #                 <td><b><c:out value="${ligand.name}" escapeXml="false"/></b> has been tagged as relevant to immunopharmacology and is awaiting detailed curation for the Guide to IMMUNOPHARMACOLOGY.</td>
-    #             </tr>
-    #         </table>
-    #     </c:otherwise>
-    # </c:choose>
-    #  MvuHTML.empty
       };
 
       var immunoCasesBox = {
