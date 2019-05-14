@@ -175,6 +175,7 @@ typename LigandInfo = (
   ligandImmunopaediaCases: [(title: String, url: String)],
   ligandProdrugs: [(id: Int, name: String)],
   ligandActiveForms: [(id: Int, name: String)],
+  ligandEndogenousTargets: [(id: Int, name: String)],
   ligandLigandRefs: [(Int, LigandName)]
 );
 
@@ -464,6 +465,7 @@ fun getInitialModel() {
        ligandImmunopaediaCases = rawInfo.immunopaediaCases,
        ligandImmunoDiseases = immunoDiseases,
        ligandReferences = refs,
+       ligandEndogenousTargets = rawInfo.endogenousTargets,
        ligandProdrugs = rawInfo.prodrugs,
        ligandActiveForms = rawInfo.activeForms,
        ligandLigandRefs = ligandRefs)
@@ -571,6 +573,12 @@ fun getInitialModel() {
                 for (l <-- Tables.ligand)
                 where (l.ligand_id == p.drug_ligand_id)
                 [(id = l.ligand_id, name = l.name)],
+            endogenousTargets =
+              for (l <-- Tables.list_ligand)
+              where (l.ligand_id == ligandId)
+                for (o <-- Tables.object)
+                where (o.object_id == l.object_id)
+                [(id = o.object_id, name = o.name)],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -901,16 +909,43 @@ fun view(model) {
     var biologicalActivityPage = {
       # TO DO:
       # 1. ~~~Bioactivity comments~~~ DONE!
-      # 2. Endogenous targets
+      # 2. ~~~Endogenous targets~~~ DONE!
       # 3. Enzyme substrates
       # 4. Cofactor enzymes
       # 5. Transporters
       # 6. ~~~Interactions~~~ DONE!
       # 7. Rank potencies
       # 8. Targeting ligands
+
       var endogenousTargetsBox = {
-        MvuHTML.empty
+        if (listEmpty(ligandInfo.ligandEndogenousTargets)) {
+          MvuHTML.empty
+        } else {
+          fun renderRow(t) {
+            tr(class("info"),
+              td(a0,
+                a(href("/objectDisplay?objectId=" ^^ intToString(t.id)), textNode(t.name))))
+          }
+
+          var renderedRows =
+            MvuHTML.concatMap(renderRow, ligandInfo.ligandEndogenousTargets);
+
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("category") +@ colSpan(2), textNode("Natural / Endogenous Targets")))) +*
+            tbody(name("toggle"),
+              tr(a0,
+                td(class("table_container"),
+                  table_(id("endogenous-targets") +@ class("inner_receptor_data_tables"),
+                    thead(a0,
+                      tr(class("heading"),
+                        th(class("receptor_header header"), textNode("Target")))) +*
+                    tbody(a0, renderedRows))))))
+
+        }
       };
+
       var enzymeSubstrates = {
         MvuHTML.empty
       };
