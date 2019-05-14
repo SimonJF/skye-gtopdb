@@ -173,6 +173,8 @@ typename LigandInfo = (
   ligandMalaria: Bool,
   ligandImmunoDiseases: [ImmunoDiseaseInfo],
   ligandImmunopaediaCases: [(title: String, url: String)],
+  ligandProdrugs: [(id: Int, name: String)],
+  ligandActiveForms: [(id: Int, name: String)],
   ligandLigandRefs: [(Int, LigandName)]
 );
 
@@ -462,6 +464,8 @@ fun getInitialModel() {
        ligandImmunopaediaCases = rawInfo.immunopaediaCases,
        ligandImmunoDiseases = immunoDiseases,
        ligandReferences = refs,
+       ligandProdrugs = rawInfo.prodrugs,
+       ligandActiveForms = rawInfo.activeForms,
        ligandLigandRefs = ligandRefs)
     }
 
@@ -555,6 +559,18 @@ fun getInitialModel() {
                         for (db <-- Tables.tbl_database)
                         where (db.database_id == ddl.database_id)
                         [(db = db, ddl = ddl)])],
+            prodrugs =
+              for (p <-- Tables.prodrug)
+              where (p.drug_ligand_id == ligandId)
+                for (l <-- Tables.ligand)
+                where (l.ligand_id == p.prodrug_ligand_id)
+                [(id = l.ligand_id, name = l.name)],
+            activeForms =
+              for (p <-- Tables.prodrug)
+              where (p.prodrug_ligand_id == ligandId)
+                for (l <-- Tables.ligand)
+                where (l.ligand_id == p.drug_ligand_id)
+                [(id = l.ligand_id, name = l.name)],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -734,6 +750,17 @@ fun view(model) {
           MvuHTML.concat(join([textNode(", ")],
             map(fun(f) { [renderFamily(f)] }, ligandInfo.ligandFamilies)));
 
+        fun renderProdrugRefs(refs) {
+          MvuHTML.concat(join([textNode(", ")],
+            map(fun(r) {
+              [a(href("/ligandDisplay?ligandId=" ^^ intToString(r.id)),
+                textNode(r.name))]
+            }, refs)))
+        }
+
+        var renderedActiveForms = renderProdrugRefs(ligandInfo.ligandActiveForms);
+        var renderedProdrugs = renderProdrugRefs(ligandInfo.ligandProdrugs);
+
         var compoundClassData = {
           var ligandHref =
             if (ligandInfo.ligandType == "Synthetic organic") {
@@ -766,8 +793,9 @@ fun view(model) {
           ("Ligand families / groups", renderedFamilies, not(listEmpty(ligandInfo.ligandFamilies))),
           ("Approved drug", approvalData, ligandInfo.ligandApproval <> NotApproved),
           ("Withdrawn drug", textNode("Yes"), ligandInfo.ligandWithdrawn),
-          ("Drugs", MvuHTML.empty, false), # TODO
-          ("Prodrugs", MvuHTML.empty, false) # TODO
+          ("Is prodrug?", textNode("Yes"), not(listEmpty(ligandInfo.ligandActiveForms))),
+          ("Drugs", renderedActiveForms, not(listEmpty(ligandInfo.ligandActiveForms))),
+          ("Prodrugs", renderedProdrugs, not(listEmpty(ligandInfo.ligandProdrugs)))
         ];
 
         fun renderRow((columnName, content, show)) {
