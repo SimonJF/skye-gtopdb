@@ -163,6 +163,7 @@ typename LigandInfo = (
   ligandStructure: Maybe(LigandStructure),
   ligandImmuno: Bool,
   ligandMalaria: Bool,
+  ligandImmunopaediaCases: [(title: String, url: String)],
   ligandLigandRefs: [(Int, LigandName)]
 );
 
@@ -425,6 +426,7 @@ fun getInitialModel() {
        ligandStructure = transformStructure(rawInfo.structural_info),
        ligandImmuno = rawInfo.ligand.in_gtip,
        ligandMalaria = rawInfo.ligand.in_gtmp,
+       ligandImmunopaediaCases = rawInfo.immunopaediaCases,
        ligandReferences = refs,
        ligandLigandRefs = ligandRefs)
     }
@@ -496,6 +498,12 @@ fun getInitialModel() {
                 for (l <-- Tables.ligand)
                   where (l.ligand_id == l2s.ligand_id)
                   [(l.ligand_id, l.name)],
+            immunopaediaCases =
+              for (i2l <-- Tables.immunopaedia2ligand)
+              where (i2l.ligand_id == ligandId)
+                for (i <-- Tables.immunopaedia_cases)
+                where (i.immunopaedia_case_id == i2l.immunopaedia_case_id)
+                [(title=i.title, url=i.url)],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -1145,7 +1153,78 @@ fun view(model) {
     };
 
     var immunoPage = {
-      MvuHTML.empty
+      var immunoCommentBox = {
+        var immunoComments = ligandInfo.ligandComments.immunoComments;
+        if (not(markupEmpty(immunoComments))) {
+          table_(id("immuno") +@ class("receptor_data_tables") +@ style("width:100%"),
+            tr(a0,
+              td(class("category_immuno"), textNode("Immunopharmacology Comments"))) +*
+            tr(class("info"),
+              td(a0, renderM(immunoComments))))
+        } else {
+          MvuHTML.empty
+        }
+      };
+
+      var immunoCasesBox = {
+        fun renderRow(x) {
+          tr(class("info"),
+            td(a0, a(href(x.url), textNode(x.title))))
+        }
+
+        var immunoCases = ligandInfo.ligandImmunopaediaCases;
+        var renderedRows = MvuHTML.concatMap(renderRow, immunoCases);
+        if (not(listEmpty(immunoCases))) {
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            tr(a0,
+              td(class("category_immuno"),
+                textNode("Immunopaedia Case Studies Links"))) +*
+            renderedRows)
+        } else {
+          MvuHTML.empty
+        }
+      };
+      immunoCommentBox +*
+      immunoCasesBox
+
+    # <c:choose>
+    #     <c:when test="${not empty ligand.immunoLigandComments.text || not empty immDisLig}">
+    #         <c:if test="${not empty immDisLig}">
+    #             <table class="receptor_data_tables" style="width:100%;">
+    #                 <tr>
+    #                     <td class="category_immuno" colspan="4">Immunopharmacology Disease</td>
+    #                 </tr>
+    #                 <tr>
+    #                     <td class="heading">Disease</td>
+    #                     <td class="heading" style="width:200px;">X-Refs</td>
+    #                     <td class="heading" style="width:400px;">Comment</td>
+    #                     <td class="heading" style="width:100px;">References</td>
+    #                 </tr>
+    #                 <c:forEach var="immdis" items="${immDisLig}" varStatus = "status">
+    #                     <tr class="info"><td><a href="DiseaseDisplayForward?diseaseId=${immdis.disease.id}"><c:out value="${immdis.disease.name}" escapeXml="false"/></a></td>
+    #                         <td>
+    #                             <c:forEach var="element" items="${immdis.disease.linkMap}">
+    #                                 <c:out value="${element.key}" escapeXml="false"/>:
+    #                                 <c:out value="${element.value}" escapeXml="false"/><br>
+    #                             </c:forEach>
+    #                         </td>
+    #                         <td><c:out value="${immdis.immDiseaseLigandComment.textHTML}" escapeXml="false"/></td>
+    #                         <td><c:out value="${immdis.refs.refsHTML}" escapeXml="false"/></td>
+    #                     </tr>
+    #                 </c:forEach>
+    #             </table>
+    #         </c:if>
+    #         </c:if>
+    #     </c:when>
+    #     <c:otherwise>
+    #         <table class="receptor_data_tables" style="width:100%;">
+    #             <tr>
+    #                 <td><b><c:out value="${ligand.name}" escapeXml="false"/></b> has been tagged as relevant to immunopharmacology and is awaiting detailed curation for the Guide to IMMUNOPHARMACOLOGY.</td>
+    #             </tr>
+    #         </table>
+    #     </c:otherwise>
+    # </c:choose>
+    #  MvuHTML.empty
     };
 
     var malariaPage = {
