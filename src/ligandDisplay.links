@@ -139,6 +139,14 @@ typename PrecursorInfo = (
   precursorSynonyms: [String]
 );
 
+typename ImmunoDiseaseInfo = (
+  immunoDiseaseID: Int,
+  immunoDiseaseName: String,
+  immunoDiseaseXRefs: [(dbName: String, displayID: String, url: String)],
+  immunoDiseaseComments: Markup,
+  immunoDiseaseReferences: [ReferenceID]
+);
+
 typename LigandInfo = (
   ligandID: Int,
   ligandType: String,
@@ -163,6 +171,7 @@ typename LigandInfo = (
   ligandStructure: Maybe(LigandStructure),
   ligandImmuno: Bool,
   ligandMalaria: Bool,
+  ligandImmunoDiseases: [ImmunoDiseaseInfo],
   ligandImmunopaediaCases: [(title: String, url: String)],
   ligandLigandRefs: [(Int, LigandName)]
 );
@@ -312,6 +321,28 @@ fun getInitialModel() {
         }, rawPrecursors)
       }
 
+      fun transformImmunoDiseases(ids) {
+        fun transformXRef(dbLink) {
+          (dbName = dbLink.db.name,
+           displayID = dbLink.ddl.placeholder,
+           url = replacePlaceholder(dbLink.db.url, dbLink.ddl.placeholder))
+        }
+        fold_right(fun(id, (acc, refs, ligands)) {
+          var markup = parseOrError(id.comment);
+          var (cRefs, cLigands) = collectIds(markup);
+          var res =
+            (immunoDiseaseID = id.disease.disease_id,
+             immunoDiseaseName = id.disease.name,
+             immunoDiseaseComments = markup,
+             immunoDiseaseXRefs = map(transformXRef, id.dbLinks),
+             immunoDiseaseReferences = id.refs);
+          (res :: acc, cRefs ++ id.refs ++ refs, cLigands ++ ligands)
+        }, ([], [], []), ids)
+      }
+
+      var (immunoDiseases, immunoDiseaseRefs, immunoDiseaseLigands) =
+        transformImmunoDiseases(rawInfo.immunoDiseases);
+
       var interactions : [InteractionInfo] =
         map(fun(i) {
             var targetName = switch ((i.objectName, i.targetLigandName)) {
@@ -397,8 +428,10 @@ fun getInitialModel() {
       var interactionRefs = listConcatMap(fun(x) { x.references }, interactions);
 
       # Finally, resolve ligand and comment references
-      var rawRefs = uniquify(commentRefs ++ peptideRefs ++ interactionRefs);
-      var rawLigands = uniquify(commentLigands ++ peptideLigands);
+      var rawRefs =
+        uniquify(commentRefs ++ peptideRefs ++ interactionRefs ++ immunoDiseaseRefs);
+      var rawLigands =
+        uniquify(commentLigands ++ peptideLigands ++ immunoDiseaseLigands);
 
       var refs = mkReferenceData(queryReferences(rawRefs));
       var ligandRefs = queryLigands(rawLigands);
@@ -427,6 +460,7 @@ fun getInitialModel() {
        ligandImmuno = rawInfo.ligand.in_gtip,
        ligandMalaria = rawInfo.ligand.in_gtmp,
        ligandImmunopaediaCases = rawInfo.immunopaediaCases,
+       ligandImmunoDiseases = immunoDiseases,
        ligandReferences = refs,
        ligandLigandRefs = ligandRefs)
     }
@@ -504,6 +538,23 @@ fun getInitialModel() {
                 for (i <-- Tables.immunopaedia_cases)
                 where (i.immunopaedia_case_id == i2l.immunopaedia_case_id)
                 [(title=i.title, url=i.url)],
+            immunoDiseases =
+              for (id2l <-- Tables.immuno_disease2ligand)
+              where (id2l.ligand_id == ligandId)
+                for (d <-- Tables.disease)
+                where (d.disease_id == id2l.disease_id)
+                  [(disease = d,
+                    comment = id2l.comment,
+                    refs =
+                      for (r <-- Tables.immuno_disease2ligand_refs)
+                      where (r.immuno_disease2ligand_id == id2l.immuno_disease2ligand_id)
+                      [r.reference_id],
+                    dbLinks =
+                      for (ddl <-- Tables.disease_database_link)
+                      where (ddl.disease_id == d.disease_id)
+                        for (db <-- Tables.tbl_database)
+                        where (db.database_id == ddl.database_id)
+                        [(db = db, ddl = ddl)])],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -1166,27 +1217,42 @@ fun view(model) {
         }
       };
 
-      var immunoCasesBox = {
-        fun renderRow(x) {
-          tr(class("info"),
-            td(a0, a(href(x.url), textNode(x.title))))
-        }
-
-        var immunoCases = ligandInfo.ligandImmunopaediaCases;
-        var renderedRows = MvuHTML.concatMap(renderRow, immunoCases);
-        if (not(listEmpty(immunoCases))) {
-          table_(class("receptor_data_tables") +@ style("width:100%"),
-            tr(a0,
-              td(class("category_immuno"),
-                textNode("Immunopaedia Case Studies Links"))) +*
-            renderedRows)
-        } else {
+      var immunoDiseasesBox = {
+        var immunoDiseases = ligandInfo.ligandImmunoDiseases;
+        if (listEmpty(immunoDiseases)) {
           MvuHTML.empty
-        }
-      };
-      immunoCommentBox +*
-      immunoCasesBox
+        } else {
 
+          fun renderRow(row) {
+            fun renderXRef(ref) {
+              p(a0,
+                textNode(ref.dbName ^^ ": ") +*
+                a(href(ref.url), textNode(ref.displayID)))
+            }
+
+            var renderedXRefs = MvuHTML.concatMap(renderXRef, row.immunoDiseaseXRefs);
+
+            tr(class("info"),
+              td(a0,
+                a(href("/diseaseDisplay?diseaseId=" ^^ intToString(row.immunoDiseaseID)),
+                  textNode(row.immunoDiseaseName))) +*
+              td(a0, renderedXRefs) +*
+              td(a0, renderM(row.immunoDiseaseComments)) +*
+              td(a0, renderCitationList(row.immunoDiseaseReferences, ligandInfo.ligandReferences)))
+          }
+          var renderedRows = MvuHTML.concatMap(renderRow, ligandInfo.ligandImmunoDiseases);
+
+          table_(class("receptor_data_tables") +@ style("width:100%;"),
+              tr(a0,
+                td(class("category_immuno") +@ colSpan(4),
+                  textNode("Immunopharmacology Disease"))) +*
+              tr(a0,
+                td(class("heading"), textNode("Disease")) +*
+                td(class("heading") +@ style("width:200px;"), textNode("X-Refs")) +*
+                td(class("heading") +@ style("width:400px;"), textNode("Comment")) +*
+                td(class("heading") +@ style("width:100px;"), textNode("References"))) +*
+              renderedRows)
+        }
     # <c:choose>
     #     <c:when test="${not empty ligand.immunoLigandComments.text || not empty immDisLig}">
     #         <c:if test="${not empty immDisLig}">
@@ -1225,6 +1291,30 @@ fun view(model) {
     #     </c:otherwise>
     # </c:choose>
     #  MvuHTML.empty
+      };
+
+      var immunoCasesBox = {
+        fun renderRow(x) {
+          tr(class("info"),
+            td(a0, a(href(x.url), textNode(x.title))))
+        }
+
+        var immunoCases = ligandInfo.ligandImmunopaediaCases;
+        var renderedRows = MvuHTML.concatMap(renderRow, immunoCases);
+        if (not(listEmpty(immunoCases))) {
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            tr(a0,
+              td(class("category_immuno"),
+                textNode("Immunopaedia Case Studies Links"))) +*
+            renderedRows)
+        } else {
+          MvuHTML.empty
+        }
+      };
+
+      immunoCommentBox +*
+      immunoDiseasesBox +*
+      immunoCasesBox
     };
 
     var malariaPage = {
