@@ -6,6 +6,7 @@ open Tables;
 
 typename InteractionType = [|
   GPCR | IC | NHR | Enzyme | CatalyticReceptor | Transporter | Other
+  | TargetLigand
 |];
 
 typename InteractionAffinityVoltage =
@@ -149,30 +150,34 @@ fun displayAffinity(af, showUnits) {
   }
 }
 
-fun classifyInteractionType(objectID) {
-  # sig inTable: (TableHandle({ object_id: Int |r})) -> Bool
-  fun inTable(tbl) {
-    query {
-      length(
-        for (x <-- tbl)
-        where (x.object_id == objectID)
-          [x]) > 0
-    }
-  }
-  if (inTable(Tables.gpcr)) {
-    GPCR
-  } else if (inTable(Tables.vgic) || inTable(Tables.lgic) || inTable(Tables.other_ic)) {
-    IC
-  } else if (inTable(Tables.nhr)) {
-    NHR
-  } else if (inTable(Tables.enzyme)) {
-    Enzyme
-  } else if (inTable(Tables.catalytic_receptor)) {
-    CatalyticReceptor
-  } else if (inTable(Tables.transporter)) {
-    Transporter
+fun classifyInteractionType(objectID, targetLigandID) {
+  if (targetLigandID > 0) {
+    TargetLigand
   } else {
-    Other
+    # sig inTable: (TableHandle({ object_id: Int |r})) -> Bool
+    fun inTable(tbl) {
+      query {
+        length(
+          for (x <-- tbl)
+          where (x.object_id == objectID)
+            [x]) > 0
+      }
+    }
+    if (inTable(Tables.gpcr)) {
+      GPCR
+    } else if (inTable(Tables.vgic) || inTable(Tables.lgic) || inTable(Tables.other_ic)) {
+      IC
+    } else if (inTable(Tables.nhr)) {
+      NHR
+    } else if (inTable(Tables.enzyme)) {
+      Enzyme
+    } else if (inTable(Tables.catalytic_receptor)) {
+      CatalyticReceptor
+    } else if (inTable(Tables.transporter)) {
+      Transporter
+    } else {
+      Other
+    }
   }
 }
 

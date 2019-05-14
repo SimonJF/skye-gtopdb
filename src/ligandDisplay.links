@@ -84,7 +84,7 @@ typename TransporterSubstrate = (
 typename InteractionInfo = (
   interaction: Interaction,
   speciesShort: String,
-  objectName: String,
+  targetName: String,
   references: [ReferenceID],
   interactionType: InteractionType
 );
@@ -101,6 +101,7 @@ typename BioactivityTables = (
   enzymeInteractions: SortableTable(InteractionInfo, Message),
   catalyticReceptorInteractions: SortableTable(InteractionInfo, Message),
   transporterInteractions: SortableTable(InteractionInfo, Message),
+  targetLigandInteractions: SortableTable(InteractionInfo, Message),
   otherInteractions: SortableTable(InteractionInfo, Message)
 );
 
@@ -310,10 +311,16 @@ fun getInitialModel() {
 
       var interactions : [InteractionInfo] =
         map(fun(i) {
+            var targetName = switch ((i.objectName, i.targetLigandName)) {
+              case ([], []) -> ""
+              case (x :: _, _) -> x
+              case (_, x :: _) -> x
+            };
+
             (interaction = InteractionUtilities.makeInteraction(i.interaction),
              speciesShort = speciesShortName(i.interaction.species_id),
-             objectName = i.objectName,
-             interactionType = classifyInteractionType(i.interaction.object_id),
+             targetName = targetName,
+             interactionType = classifyInteractionType(i.interaction.object_id, i.interaction.target_ligand_id),
              references = i.references)
           },
           rawInfo.interactions);
@@ -331,7 +338,7 @@ fun getInitialModel() {
               case Nothing -> []
             };
           DataTable.makeTable(
-            [("Target", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.objectName, y.objectName) }))),
+            [("Target", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.targetName, y.targetName) }))),
              ("", ("", NotSortable)), ("", ("", NotSortable)),
              ("Sp.", ("keybox_header", Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
              ("Assay Description", ("assay_long_header",
@@ -366,6 +373,7 @@ fun getInitialModel() {
          enzymeInteractions = makeTable(Enzyme),
          catalyticReceptorInteractions = makeTable(CatalyticReceptor),
          transporterInteractions = makeTable(Transporter),
+         targetLigandInteractions = makeTable(TargetLigand),
          otherInteractions = makeTable(Other))
       };
 
@@ -429,10 +437,15 @@ fun getInitialModel() {
             interactions =
               for (i <-- Tables.interaction)
               where (i.ligand_id == ligandId)
-                for (o <-- Tables.object)
-                where (o.object_id == i.object_id)
                 [(interaction = i,
-                  objectName = o.name,
+                  objectName =
+                    for (o <-- Tables.object)
+                    where (o.object_id == i.object_id)
+                    [o.name],
+                  targetLigandName =
+                    for (l <-- Tables.ligand)
+                    where (l.ligand_id == i.target_ligand_id)
+                    [l.name],
                   references =
                     for (r <-- Tables.interaction_affinity_refs)
                     where (r.interaction_id == i.interaction_id)
@@ -796,12 +809,12 @@ fun view(model) {
 
     var biologicalActivityPage = {
       # TO DO:
-      # 1. Bioactivity comments
+      # 1. ~~~Bioactivity comments~~~ DONE!
       # 2. Endogenous targets
       # 3. Enzyme substrates
       # 4. Cofactor enzymes
       # 5. Transporters
-      # 6. Interactions
+      # 6. ~~~Interactions~~~ DONE!
       # 7. Rank potencies
       # 8. Targeting ligands
       var endogenousTargetsBox = {
@@ -823,18 +836,18 @@ fun view(model) {
           fun renderRow(row) {
             var i = row.interaction;
             var renderedTarget = {
-              if (i.objectID <> 0) {
-                a(href("/objectDisplay?objectId=" ^^ intToString(i.objectID)),
-                    textNode(row.objectName))
-              } else if (i.targetLigandID <> 0) {
+              if (i.targetLigandID > 0) {
                 a(href("/ligandDisplay?ligandId=" ^^ intToString(i.targetLigandID)),
-                    textNode("TODO: Resolve name" ^^ intToString(i.targetLigandID)))
+                    textNode(row.targetName))
+              } else if (i.objectID > 0) {
+                a(href("/objectDisplay?objectId=" ^^ intToString(i.objectID)),
+                    textNode(row.targetName))
               } else {
                 textNode("Unknown MOA")
               }
             };
 
-            fun mkRow(contents) { td(a0, contents) }
+            fun mkCol(contents) { td(a0, contents) }
             var renderedType = {
               textNode(i.interactionType) +*
               (if (i.ligandContext <> "") {
@@ -844,18 +857,18 @@ fun view(model) {
               })
             };
             tr(class("info"),
-              td(style("border-style: solid dotted solid solid;") +@ rowSpan(2),
+              td(style("border-style: solid dotted solid solid;"), #+@ rowSpan(2),
                 renderedTarget) +*
               boolImage(("/images/primary.png", i.primaryTarget, "Primary target of this compound")) +*
-              boolImage(("/images/endogenous.png", i.endogenous, "Ligand is endogenous in the given species")) +*
+              boolImage(("/images/endogenous.gif", i.endogenous, "Ligand is endogenous in the given species")) +*
               td(style("text-align:center;"), textNode(row.speciesShort)) +*
-              mkRow(renderM(i.assayDescription)) +*
-              mkRow(renderedType) +*
-              mkRow(textNode(i.interactionAction)) +*
-              mkRow(displayAffinity(i.affinity, true)) +*
-              mkRow(textNode(i.affinity.affinityUnits)) +*
-              mkRow(textNode(i.concentrationRange)) +*
-              mkRow(renderCitationList(row.references, ligandInfo.ligandReferences)))
+              mkCol(renderM(i.assayDescription)) +*
+              mkCol(renderedType) +*
+              mkCol(textNode(i.interactionAction)) +*
+              mkCol(displayAffinity(i.affinity, true)) +*
+              mkCol(textNode(i.affinity.affinityUnits)) +*
+              mkCol(textNode(i.concentrationRange)) +*
+              mkCol(renderCitationList(row.references, ligandInfo.ligandReferences)))
           }
 
           if (listEmpty(getTableData(tbl))) {
@@ -878,6 +891,7 @@ fun view(model) {
         renderIfNonempty("Selectivity at enzymes", tables.enzymeInteractions) +*
         renderIfNonempty("Selectivity at catalytic receptors", tables.catalyticReceptorInteractions) +*
         renderIfNonempty("Selectivity at transporters", tables.transporterInteractions) +*
+        renderIfNonempty("Selectivity at ligand targets", tables.targetLigandInteractions) +*
         renderIfNonempty("Selectivity at other protein targets", tables.otherInteractions)
       };
 
