@@ -10,6 +10,7 @@ open Template;
 open Species;
 open DataTable;
 open InteractionUtilities;
+open DbLinks;
 
 # Not implemented yet:
 # Drug / prodrug relations (prodrug table)
@@ -164,8 +165,7 @@ typename LigandInfo = (
   ligandSynonyms: [Synonym],
   ligandComments: Comments,
   ligandURLs: LigandURLs,
-  ligandDBLinks: (), # For now
-  #ligandInteractions: [Interaction],
+  ligandDBLinks: [DatabaseLink],
   ligandBioactivityTables: BioactivityTables,
   ligandReferences: [(ReferenceId, (ReferenceNumber, Reference))],
   ligandStructure: Maybe(LigandStructure),
@@ -458,7 +458,7 @@ fun getInitialModel() {
        ligandSynonyms = transformSynonyms(rawInfo.synonyms),
        ligandComments = comments,
        ligandURLs = urls,
-       ligandDBLinks = (),
+       ligandDBLinks = transformDatabaseLinks(rawInfo.databaseLinks),
        ligandStructure = transformStructure(rawInfo.structural_info),
        ligandImmuno = rawInfo.ligand.in_gtip,
        ligandMalaria = rawInfo.ligand.in_gtmp,
@@ -579,6 +579,10 @@ fun getInitialModel() {
                 for (o <-- Tables.object)
                 where (o.object_id == l.object_id)
                 [(id = o.object_id, name = o.name)],
+            databaseLinks =
+              for (dbl <-- Tables.ligand_database_link)
+                where (dbl.ligand_id == ligandId)
+                [dbl],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -892,9 +896,8 @@ fun view(model) {
               td(class("table_container"), renderedTable))))
       };
 
-      var dbLinksBox = {
-        MvuHTML.empty
-      };
+      var dbLinksBox =
+        renderDatabaseLinks(ligandInfo.ligandDBLinks, model.modelSpeciesMap);
 
       classificationTable +*
       iupacBox +*

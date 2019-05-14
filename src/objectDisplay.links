@@ -30,6 +30,7 @@ open Ligand;
 open Species;
 open ToggleBox;
 open AnnotationStatus;
+open DbLinks;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -179,15 +180,6 @@ typename DataTableBox = (
 );
 
 typename URL = String;
-
-typename DatabaseLink = (
-  dbID: Int,
-  dbName: String,
-  dbURL: URL,
-  dbSpecialist: Bool,
-  dbPrefix: String,
-  dbEntries: [(SpeciesID, String, URL)]
-);
 
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
 typename ObjectInfo = (
@@ -788,34 +780,7 @@ fun getInitialModel() {
       }
 
       fun transformDBLinks(dbls) {
-        var dbIDs = map(fun(x) { x.database_id }, dbls);
-        var dbPred = contains(dbIDs);
-        var dbMap = query {
-          for (db <-- Tables.tbl_database)
-            where (dbPred(db.database_id))
-              [(db.database_id, db)]
-        };
-        var groupedDBLs =
-          groupBy(fun(dbl) { dbl.database_id }, dbls);
-
-        var baseLinks =
-          listConcatMap(fun((dbID, dbls)) {
-            switch (lookup(dbID, dbMap)) {
-              case Nothing ->
-                debug("Invalid DB ID: " ^^ intToString(dbID));
-                []
-              case Just(db) ->
-                var entries =
-                  map(fun(dbl) { (dbl.species_id, dbl.placeholder,
-                        replacePlaceholder(db.url, dbl.placeholder)) }, dbls);
-
-                [(dbID = db.database_id,
-                  dbName = db.name, dbURL = db.url, dbSpecialist = db.specialist,
-                  dbPrefix = db."prefix",
-                  dbEntries = entries)]
-            }
-          }, groupedDBLs);
-
+        var baseLinks = transformDatabaseLinks(dbls);
         var extraLinks =
           listConcatMap(fun(dbl) {
             if (dbl.dbID == 15) {
@@ -1107,67 +1072,8 @@ fun view(model) {
       }
     };
 
-  # <a name="DatabaseLinks"></a>
-  #<table class="receptor_data_tables fullwidth">
-  #  <tr>
-  #      <td class="info category" colspan="2">Database Links <a style="color:#CCCCCC;" href="JavaScript:callRef('helpPagePopup.jsp#DBLinks', 800, 400)" title="Click here for help"><img id="logo" style="vertical-align:baseline;" src="images/help_blue_small_transparent_bkground.png" alt="Click here for help"/></a></td>
-  #  </tr>
-  #      <tr>
-  #          <td class="info" colspan="2" style="font-style: italic; font-weight: bold;">
-  #              Specialist databases
-  #          </td>
-  #      </tr>
-  #          <tr>
-  #              <td class="info" style="min-width:250px;max-width:250px;width:250px;">
-  #                  GPCRDB
-  #              </td>
-    var dbLinksBox = {
-      fun renderDBLink(dbl) {
-        fun renderLink((speciesID, code, url)) {
-          a(href(url),
-            textNode(dbl.dbPrefix ^^ code)) +*
-          textNode(" (" ^^ speciesShortName(speciesID) ^^ ")")
-        }
-        var renderedLinks =
-          MvuHTML.concat(
-            join([textNode(", ")],
-                  map(fun(l) { [renderLink(l)] }, dbl.dbEntries)));
-
-        tr(a0,
-          td(class("info") +@ style("min-width:250px;max-width:250px;width:250px;"),
-            textNode(dbl.dbName)) +*
-          td(class("info"), renderedLinks))
-      }
-
-      var (specialist, others) =
-        partition(fun(dbl) { dbl.dbSpecialist }, objectInfo.objectDatabaseLinks);
-      var specialist = sortBy(fun(db) { db.dbName }, specialist);
-      var others = sortBy(fun(db) { db.dbName }, others);
-      fun dbLinkHeader(text) {
-        tr(a0,
-          td(class("info") +@ colSpan(2) +@
-            style("font-style: italic; font-weight: bold;"),
-            textNode(text)))
-      }
-      var renderedSpecialists =
-        if (specialist == []) { MvuHTML.empty } else {
-          dbLinkHeader("Specialist Databases") +*
-          MvuHTML.concatMap(renderDBLink, specialist)
-        };
-      var renderedOthers =
-        if (others == []) { MvuHTML.empty } else {
-          dbLinkHeader("Other Databases") +*
-          MvuHTML.concatMap(renderDBLink, others)
-        };
-
-      a(name("DatabaseLinks"), h0) +*
-      table_(class("receptor_data_tables fullwidth"),
-        tr(a0,
-          td(class("info category") +@ colSpan(2), textNode("Database Links"))) +*
-        renderedSpecialists +*
-        renderedOthers)
-
-    };
+    var dbLinksBox =
+      renderDatabaseLinks(objectInfo.objectDatabaseLinks, objectInfo.objectSpeciesMap);
     var pdbStructureBox = MvuHTML.empty;
     var endogenousLigandsBox = {
       fun renderSummary(els) {
