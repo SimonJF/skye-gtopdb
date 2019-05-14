@@ -161,6 +161,8 @@ typename LigandInfo = (
   ligandBioactivityTables: BioactivityTables,
   ligandReferences: [(ReferenceId, (ReferenceNumber, Reference))],
   ligandStructure: Maybe(LigandStructure),
+  ligandImmuno: Bool,
+  ligandMalaria: Bool,
   ligandLigandRefs: [(Int, LigandName)]
 );
 
@@ -421,6 +423,8 @@ fun getInitialModel() {
        ligandURLs = urls,
        ligandDBLinks = (),
        ligandStructure = transformStructure(rawInfo.structural_info),
+       ligandImmuno = rawInfo.ligand.in_gtip,
+       ligandMalaria = rawInfo.ligand.in_gtmp,
        ligandReferences = refs,
        ligandLigandRefs = ligandRefs)
     }
@@ -1145,30 +1149,56 @@ fun view(model) {
     };
 
     var malariaPage = {
-      MvuHTML.empty
+      var malariaComments = ligandInfo.ligandComments.malariaComments;
+      if (markupEmpty(malariaComments)) {
+        table_(class("receptor_data_tables") +@ style("width:100%"),
+          tr(a0,
+            td(a0,
+              b(a0, renderM(ligandInfo.ligandName)) +*
+              textNode(" has been tagged as relevant to malaria") +*
+              textNode(" pharmacology and is awaiting detailed") +*
+              textNode(" curation for the Guide to MALARIA PHARMACOLOGY"))))
+      } else {
+        table_(id("malaria") +@ class("receptor_data_tables") +@ style("width:100%"),
+          tr(a0,
+            td(class("category_gtmp"), textNode("Guide to Malaria Pharmacology Comments"))) +*
+          tr(class("info"),
+            td(a0, renderM(malariaComments))))
+      }
     };
 
     var tabBox = {
+      var showBioActivity = true;
+      var showClinicalData = true;
+      var showReferences = not(listEmpty(ligandInfo.ligandReferences));
+      var showStructure = true;
+      var showSimilarLigands = true;
+      var showImmuno = ligandInfo.ligandImmuno;
+      var showMalaria = ligandInfo.ligandMalaria;
       var tabs = [
-        ("Summary", Summary),
-        ("Biological activity", BiologicalActivity),
-        ("Clinical data", ClinicalData),
-        ("References", References),
-        ("Structure", Structure),
-        ("Similar ligands", SimilarLigands),
-        ("Immunopharmacology", Immuno),
-        ("Malaria", Malaria)
+        ("Summary", Summary, true),
+        ("Biological activity", BiologicalActivity, showBioActivity),
+        ("Clinical data", ClinicalData, showClinicalData),
+        ("References", References, showReferences),
+        ("Structure", Structure, showStructure),
+        ("Similar ligands", SimilarLigands, showSimilarLigands),
+        ("Immunopharmacology", Immuno, showImmuno),
+        ("Malaria", Malaria, showMalaria)
       ];
 
-      fun renderTab((name, filter)) {
+      fun renderTab((name, filter, show)) {
         var attr =
           if (filter == model.modelTab) {
             class("active")
           } else {
             MvuAttrs.empty
           };
-        li(attr,
-          a(href("#") +@ onClick(fun() { ChangeTab(filter) }), textNode(name)))
+        if (show) {
+          li(attr,
+            a(href("#") +@ onClick(fun() { ChangeTab(filter) }), textNode(name)))
+        } else {
+          MvuHTML.empty
+        }
       }
 
       var renderedTabs = MvuHTML.concatMap(renderTab, tabs);
