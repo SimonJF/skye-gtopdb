@@ -535,7 +535,7 @@ fun getInitialModel() {
                 InteractionUtilities.sortAffinity(x.iLigandAffinity, y.iLigandAffinity)}))),
             ("Affinity Units", ("units_header", Sortable(fun(x, y) {
                 simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits) }))),
-            ("References", ("reference_header", NotSortable))
+            ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
           ];
           fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, colName, sortDir) }
           DataTable.makeTable(cols, interactions, sortMessage)

@@ -24,6 +24,7 @@ typename Tab =
 typename Message =
   [| ChangeTab:Tab | SortPrecursorTable:(ColumnName, SortDirection)
    | SortInteractionTable:(InteractionType, ColumnName, SortDirection)
+   | SortCofactorTable:(ColumnName, SortDirection)
    | NoOp
   |];
 
@@ -69,7 +70,7 @@ typename EnzymeSubstrate = (
 );
 
 typename CofactorEnzyme = (
-  enzyme: String,
+  enzyme: Markup,
   enzymeID: Int,
   references: [ReferenceID]
 );
@@ -367,6 +368,16 @@ fun getInitialModel() {
           makeTable([], [], fun(colName, dir) { NoOp }) # TODO: Temporary
         }
 
+        var cofactorTable = {
+          var transformedCofactors : [CofactorEnzyme] =
+            map(fun(c) { (enzyme = parseOrError(c.name),
+                  enzymeID = c.objectID, references = c.refs)}, rawInfo.cofactors);
+          DataTable.makeTable(
+            [("Enzyme", ("receptor_header", Sortable(fun(x, y) { markupCmp(x.enzyme, y.enzyme) }))),
+             ("Reference", ("reference_header", Sortable(fun(x, y) { referenceCmp(x.references, y.references) })))],
+            transformedCofactors, fun(col, dir) { SortCofactorTable(col, dir) })
+        };
+
         var grouped = groupBy(fun(i) { i.interactionType }, interactions);
         fun makeTable(type) {
           var data =
@@ -402,7 +413,7 @@ fun getInitialModel() {
         }
 
         (enzymeSubstrates = emptyTable(),
-         cofactorEnzymes = emptyTable(),
+         cofactorEnzymes = cofactorTable,
          transporterSubstrates = emptyTable(),
          gpcrInteractions = makeTable(GPCR),
          icInteractions = makeTable(IC),
@@ -583,6 +594,14 @@ fun getInitialModel() {
               for (dbl <-- Tables.ligand_database_link)
                 where (dbl.ligand_id == ligandId)
                 [dbl],
+            cofactors =
+              for (c <-- Tables.cofactor)
+                where (c.ligand_id == ligandId)
+                [(name = c.name, objectID = c.object_id,
+                  refs =
+                    for (r <-- Tables.cofactor_refs)
+                    where (r.cofactor_id == c.cofactor_id)
+                    [r.reference_id])],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -623,7 +642,45 @@ fun updt(msg, model) {
           updateSortStatus(model.modelLigand.ligandPrecursorTable, colName, dir);
         (model with modelLigand =
           (model.modelLigand with ligandPrecursorTable = sortedTable))
-      case SortInteractionTable(ty, colName, dir) -> model # TODO: Implement
+      case SortInteractionTable(ty, colName, dir) ->
+        var tables = model.modelLigand.ligandBioactivityTables;
+
+        var newTables =
+          switch (ty) {
+            case GPCR ->
+              (tables with gpcrInteractions =
+                updateSortStatus(tables.gpcrInteractions, colName, dir))
+            case IC ->
+              (tables with icInteractions =
+                updateSortStatus(tables.icInteractions, colName, dir))
+            case NHR ->
+              (tables with nhrInteractions =
+                updateSortStatus(tables.nhrInteractions, colName, dir))
+            case Enzyme ->
+              (tables with enzymeInteractions =
+                updateSortStatus(tables.enzymeInteractions, colName, dir))
+            case CatalyticReceptor ->
+              (tables with catalyticReceptorInteractions =
+                updateSortStatus(tables.catalyticReceptorInteractions, colName, dir))
+            case Transporter ->
+              (tables with transporterInteractions =
+                updateSortStatus(tables.transporterInteractions, colName, dir))
+            case Other ->
+              (tables with otherInteractions =
+                updateSortStatus(tables.otherInteractions, colName, dir))
+            case TargetLigand ->
+              (tables with targetLigandInteractions =
+                updateSortStatus(tables.targetLigandInteractions, colName, dir))
+          };
+        (model with modelLigand =
+          (model.modelLigand with ligandBioactivityTables = newTables))
+      case SortCofactorTable(colName, dir) ->
+        var tables = model.modelLigand.ligandBioactivityTables;
+        var newTables =
+          (tables with cofactorEnzymes =
+            updateSortStatus(tables.cofactorEnzymes, colName, dir));
+        (model with modelLigand =
+          (model.modelLigand with ligandBioactivityTables = newTables))
       case NoOp -> model #temp
     }
   }

@@ -132,7 +132,17 @@ fun partition(pred, xs) {
   go([], [], xs)
 }
 
-
+fun referenceCmp(rs1, rs2) {
+  switch((rs1, rs2)) {
+    case ([], []) -> 0
+    case (xs, []) -> (-1)
+    case ([], ys) -> 1
+    case (x :: xs, y :: ys) ->
+      if (x < y) { (-1) }
+      else if (x == y) { 0 }
+      else { 1 }
+  }
+}
 # This only works because we have arbitrary polymorphic comparisons.
 sig simpleCmp : forall a, e :: Row. (a, a) -e-> Int
 fun simpleCmp(s1, s2) {
