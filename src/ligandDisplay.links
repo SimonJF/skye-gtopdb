@@ -347,6 +347,14 @@ fun getInitialModel() {
       var (immunoDiseases, immunoDiseaseRefs, immunoDiseaseLigands) =
         transformImmunoDiseases(rawInfo.immunoDiseases);
 
+      var (transformedCofactors, cofactorRefs) =
+        fold_right(fun(c, (cfs, refs)) {
+            var cf =
+              (enzyme = parseOrError(c.name),
+               enzymeID = c.objectID, references = c.refs);
+            (cf :: cfs, c.refs ++ refs)
+        }, ([], []), rawInfo.cofactors);
+
       var interactions : [InteractionInfo] =
         map(fun(i) {
             var targetName = switch ((i.objectName, i.targetLigandName)) {
@@ -369,9 +377,6 @@ fun getInitialModel() {
         }
 
         var cofactorTable = {
-          var transformedCofactors : [CofactorEnzyme] =
-            map(fun(c) { (enzyme = parseOrError(c.name),
-                  enzymeID = c.objectID, references = c.refs)}, rawInfo.cofactors);
           DataTable.makeTable(
             [("Enzyme", ("receptor_header", Sortable(fun(x, y) { markupCmp(x.enzyme, y.enzyme) }))),
              ("Reference", ("reference_header", Sortable(fun(x, y) { referenceCmp(x.references, y.references) })))],
@@ -443,7 +448,13 @@ fun getInitialModel() {
 
       # Finally, resolve ligand and comment references
       var rawRefs =
-        uniquify(commentRefs ++ peptideRefs ++ interactionRefs ++ immunoDiseaseRefs);
+        uniquify(
+            commentRefs ++
+            peptideRefs ++
+            interactionRefs ++
+            immunoDiseaseRefs ++
+            cofactorRefs);
+
       var rawLigands =
         uniquify(commentLigands ++ peptideLigands ++ immunoDiseaseLigands);
 
@@ -597,11 +608,13 @@ fun getInitialModel() {
             cofactors =
               for (c <-- Tables.cofactor)
                 where (c.ligand_id == ligandId)
-                [(name = c.name, objectID = c.object_id,
-                  refs =
-                    for (r <-- Tables.cofactor_refs)
-                    where (r.cofactor_id == c.cofactor_id)
-                    [r.reference_id])],
+                  for (o <-- Tables.object)
+                  where (o.object_id == c.object_id)
+                  [(name = o.name, objectID = c.object_id,
+                    refs =
+                      for (r <-- Tables.cofactor_refs)
+                      where (r.cofactor_id == c.cofactor_id)
+                      [r.reference_id])],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -1010,7 +1023,30 @@ fun view(model) {
         MvuHTML.empty
       };
       var cofactorEnzymes = {
-        MvuHTML.empty
+        var tbl = ligandInfo.ligandBioactivityTables.cofactorEnzymes;
+        if (listEmpty(getTableData(tbl))) {
+          MvuHTML.empty
+        } else {
+
+          fun renderRow(cfe) {
+            tr(class("info"),
+              td(a0,
+                a(href("/objectDisplay?objectId=" ^^ intToString(cfe.enzymeID)),
+                  renderM(cfe.enzyme))) +*
+              td(a0,
+                renderCitationList(cfe.references, ligandInfo.ligandReferences)))
+          }
+
+          table_(class("receptor_data_tables") +@ style("width:100"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("category") +@ colSpan(2),
+                  textNode("Cofactor in Enzyme Reactions")))) +*
+            tbody(name("toggle"),
+              tr(a0,
+                td(class("table_container"),
+                  renderTable(tbl, renderRow)))))
+        }
       };
       var transporters = {
         MvuHTML.empty

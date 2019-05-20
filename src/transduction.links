@@ -1,6 +1,6 @@
 open Parser;
-open Tables;
-open RenderMarkup;
+import Tables;
+import RenderMarkup;
 open Reference;
 
 typename LigandID = Int;
