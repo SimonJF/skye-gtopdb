@@ -1,7 +1,7 @@
-open MvuAttrs;
-open MvuHTML;
-open Mvu;
-open Template;
+open import MvuAttrs;
+open import MvuHTML;
+open import Mvu;
+open import Template;
 
 typename Name = String;
 typename URL = String;

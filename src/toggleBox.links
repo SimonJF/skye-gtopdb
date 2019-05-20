@@ -1,5 +1,5 @@
-open MvuAttrs;
-open MvuHTML;
+open import MvuAttrs;
+open import MvuHTML;
 
 typename ContentBox(a) =
   (tboxName: String,  tboxVisible: Bool, tboxContents: a);

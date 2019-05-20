@@ -1,7 +1,7 @@
-open MvuHTML;
-open MvuAttrs;
-open Parser;
-open RenderMarkup;
+open import MvuHTML;
+open import MvuAttrs;
+open import Parser;
+open import RenderMarkup;
 
 typename Contributor =
   (contribId: Int, contribName: String,

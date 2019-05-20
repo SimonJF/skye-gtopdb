@@ -1,6 +1,6 @@
-open MvuHTML;
-open MvuAttrs;
-open Utility;
+open import MvuHTML;
+open import MvuAttrs;
+open import Utility;
 
 fun annotationDescription(id) {
     if(id == 1 || id == 2){

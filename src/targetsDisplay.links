@@ -1,4 +1,4 @@
-open Template;
+open import Template;
 
 var content =
   <#>

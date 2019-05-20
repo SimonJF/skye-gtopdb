@@ -1,16 +1,17 @@
-open Ligand;
-open MvuHTML;
-open MvuAttrs;
-open Mvu;
-open Reference;
-open Parser;
-open RenderMarkup;
-open Utility;
-open Template;
-open Species;
-open DataTable;
-open InteractionUtilities;
-open DbLinks;
+open import Ligand;
+open import Mvu;
+open import Reference;
+open import Parser;
+open import RenderMarkup;
+open import Utility;
+open import Template;
+open import Species;
+open import DataTable;
+open import InteractionUtilities;
+open import DbLinks;
+
+import MvuHTML;
+import MvuAttrs;
 
 # Not implemented yet:
 # Drug / prodrug relations (prodrug table)
@@ -444,7 +445,7 @@ fun getInitialModel() {
            ("Synonyms", ("header", Sortable(fun(x, y) { 0 })))
           ], precursors, fun(name, dir) { SortPrecursorTable(name, dir) });
 
-      var interactionRefs = listConcatMap(fun(x) { x.references }, interactions);
+      var interactionRefs = concatMap(fun(x) { x.references }, interactions);
 
       # Finally, resolve ligand and comment references
       var rawRefs =
@@ -703,8 +704,11 @@ fun updt(msg, model) {
   }
 }
 
-sig view : (Model) ~%~> HTML(Message)
+sig view : (Model) ~%~> MvuHTML.HTML(Message)
 fun view(model) {
+  open MvuHTML;
+  open MvuAttrs;
+
   fun viewModel(model) {
     var ligandInfo = model.modelLigand;
     var strId = intToString(ligandInfo.ligandID);
@@ -984,7 +988,7 @@ fun view(model) {
       # 1. ~~~Bioactivity comments~~~ DONE!
       # 2. ~~~Endogenous targets~~~ DONE!
       # 3. Enzyme substrates
-      # 4. Cofactor enzymes
+      # 4. ~~~Cofactor enzymes~~~ DONE!
       # 5. Transporters
       # 6. ~~~Interactions~~~ DONE!
       # 7. Rank potencies

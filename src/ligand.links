@@ -1,7 +1,7 @@
-open Parser;
-open Utility;
-open RenderMarkup;
-open Tables;
+open import Parser;
+open import Utility;
+open import RenderMarkup;
+open import Tables;
 
 typename LigandName = Markup;
 typename LigandId = Int;

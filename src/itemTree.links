@@ -1,6 +1,6 @@
-open MvuHTML;
-open MvuAttrs;
-open Tables;
+open import MvuHTML;
+open import MvuAttrs;
+open import Tables;
 
 typename ItemTreeNode(a) =
   [| ItemNode:a | ItemSubtree:(String, Bool, [ItemTreeNode(a)]) |];

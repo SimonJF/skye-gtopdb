@@ -1,11 +1,11 @@
-open Tables;
-open Mvu;
-open MvuHTML;
-open MvuAttrs;
-open MvuEvents;
-open Template;
-open Utility;
-open ItemTree;
+open import Tables;
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+open import MvuEvents;
+open import Template;
+open import Utility;
+open import ItemTree;
 
 # ADT describing the different types of target family.
 typename TargetFamily =

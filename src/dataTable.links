@@ -1,7 +1,7 @@
-open MvuHTML;
-open MvuAttrs;
-open MvuEvents;
-open Utility;
+import MvuHTML;
+import MvuAttrs;
+import MvuEvents;
+open import Utility;
 
 # A generic sortable table.
 typename ColumnName = String;
@@ -31,8 +31,10 @@ fun makeTable(cols, data, sortMsg) {
 
 sig renderTable :
   (SortableTable(data, msg),
-   (data) {}~> HTML(msg)) {}~> HTML(msg)
+   (data) {}~> MvuHTML.HTML(msg)) {}~> MvuHTML.HTML(msg)
 fun renderTable(tbl, renderRow) {
+  open MvuHTML;
+  open MvuAttrs;
   var a0 = MvuAttrs.empty;
   var sortedData = {
     fun sortByCol(colName) {

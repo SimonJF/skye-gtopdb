@@ -1,4 +1,4 @@
-open Tables;
+open import Tables;
 
 typename SpeciesID = Int;
 typename SpeciesShortName = String;

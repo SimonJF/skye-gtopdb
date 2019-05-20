@@ -1,7 +1,7 @@
-open Utility;
-open Species;
-open MvuHTML;
-open MvuAttrs;
+open import Utility;
+open import Species;
+import MvuHTML;
+import MvuAttrs;
 
 typename URL = String;
 typename DatabaseLink = (
@@ -43,6 +43,9 @@ fun transformDatabaseLinks(dbls) {
 }
 
 fun renderDatabaseLinks(dbLinks, speciesMap) {
+  open MvuHTML;
+  open MvuAttrs;
+
   var a0 = MvuAttrs.empty;
   var h0 = MvuHTML.empty;
 

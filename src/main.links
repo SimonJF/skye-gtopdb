@@ -1,15 +1,15 @@
-open FamilyDisplay;
-open ReceptorFamilies;
-open LigandFamilies;
-open Home;
-open NotImplemented;
-open Navigate;
-open TargetsDisplay;
-open LigandList;
-open DiseaseList;
-open DiseaseDisplay;
-open ObjectDisplay;
-open LigandDisplay;
+import FamilyDisplay;
+import ReceptorFamilies;
+import LigandFamilies;
+import Home;
+import NotImplemented;
+import Navigate;
+import TargetsDisplay;
+import LigandList;
+import DiseaseList;
+import DiseaseDisplay;
+import ObjectDisplay;
+import LigandDisplay;
 
 # Main routing table.
 fun main() {

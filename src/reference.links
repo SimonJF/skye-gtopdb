@@ -1,7 +1,7 @@
-open MvuHTML;
-open MvuAttrs;
-open Utility;
-open Tables;
+open import MvuHTML;
+open import MvuAttrs;
+open import Utility;
+open import Tables;
 
 typename ReferenceID = Int;
 typename ReferenceNumber = Int;

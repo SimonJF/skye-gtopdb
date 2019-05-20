@@ -1,5 +1,5 @@
-open MonadicParser;
-open Utility;
+open import MonadicParser;
+open import Utility;
 
 # A simple parser for the GtoPdb markup.
 # Limitations right now:

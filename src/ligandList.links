@@ -1,11 +1,11 @@
-open MvuHTML;
-open MvuAttrs;
-open Mvu;
-open Tables;
-open Template;
-open Parser;
-open RenderMarkup;
-open Utility;
+open import MvuHTML;
+open import MvuAttrs;
+open import Mvu;
+open import Tables;
+open import Template;
+open import Parser;
+open import RenderMarkup;
+open import Utility;
 
 # Data model
 typename Filter = [|

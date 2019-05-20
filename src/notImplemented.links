@@ -1,7 +1,7 @@
-open MvuHTML;
-open MvuAttrs;
-open Mvu;
-open Template;
+open import MvuHTML;
+open import MvuAttrs;
+open import Mvu;
+open import Template;
 
 fun view(_) {
   var hempty = MvuHTML.empty;

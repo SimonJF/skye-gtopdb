@@ -15,22 +15,22 @@
 # TODO: Voltage dependence field for VGICs.
 # Functional characteristics
 open Parser;
-open RenderMarkup;
-open Reference;
-open DataTable;
-open Contributor;
-open InteractionUtilities;
-open Transduction;
-open Utility;
-open MvuHTML;
-open MvuAttrs;
-open Mvu;
-open Template;
-open Ligand;
-open Species;
-open ToggleBox;
-open AnnotationStatus;
-open DbLinks;
+open import RenderMarkup;
+open import Reference;
+open import DataTable;
+open import Contributor;
+open import InteractionUtilities;
+open import Transduction;
+open import Utility;
+open import MvuHTML;
+open import MvuAttrs;
+open import Mvu;
+open import Template;
+open import Ligand;
+open import Species;
+open import ToggleBox;
+open import AnnotationStatus;
+open import DbLinks;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable

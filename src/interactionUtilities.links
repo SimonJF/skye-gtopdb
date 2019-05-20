@@ -1,8 +1,8 @@
 # Functionality for dealing with ligand<->object interactions.
 # This will grow as I abstract more out.
-open MvuHTML;
-open Parser;
-open Tables;
+open import MvuHTML;
+open import Parser;
+open import Tables;
 
 typename InteractionType = [|
   GPCR | IC | NHR | Enzyme | CatalyticReceptor | Transporter | Other

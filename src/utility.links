@@ -10,8 +10,8 @@ fun listConcatMap(f, xs) { concatMap(f, xs) }
 #     case x::xs -> fun (y) { x == y || contains(xs)(x) }
 #   }
 # }
-open MvuHTML;
-open MvuAttrs;
+open import MvuHTML;
+open import MvuAttrs;
 
 sig contains : ([a]) ~> ((a) {}-> Bool)
 fun contains(xs) {

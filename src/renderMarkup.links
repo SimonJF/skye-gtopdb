@@ -1,8 +1,8 @@
 # Renders markup as MVU HTML, as well as providing a list of reference IDs.
-open MvuAttrs;
-open MvuHTML;
-open Parser;
-open Reference;
+open import MvuAttrs;
+open import MvuHTML;
+open import Parser;
+open import Reference;
 
 typename LigandId = Int;
 typename ReferenceId = Int;
