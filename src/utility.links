@@ -203,3 +203,11 @@ fun groupBy(f, xs) {
 fun replacePlaceholder(url, code) {
   (url =~ s/\$PLACEHOLDER/{code}/ )
 }
+
+sig safeHead : ([a], a) ~> a
+fun safeHead(xs, def) {
+  switch(xs) {
+    case [] -> def
+    case x :: xs -> x
+  }
+}

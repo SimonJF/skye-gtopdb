@@ -13,10 +13,6 @@ open import DbLinks;
 import MvuHTML;
 import MvuAttrs;
 
-# Not implemented yet:
-# Drug / prodrug relations (prodrug table)
-
-
 typename Tab =
   [| Summary | BiologicalActivity | ClinicalData | References
    | Structure | SimilarLigands | Malaria | Immuno |];
@@ -86,10 +82,10 @@ typename TransporterSubstrate = (
 
 typename InteractionInfo = (
   interaction: Interaction,
-  speciesShort: String,
-  targetName: String,
-  references: [ReferenceID],
-  interactionType: InteractionType
+  renderedName: Markup,
+  renderedActionComment: Markup,
+  renderedAssayDescription: Markup,
+  speciesShort: String
 );
 
 typename BioactivityTables = (
@@ -356,21 +352,19 @@ fun getInitialModel() {
             (cf :: cfs, c.refs ++ refs)
         }, ([], []), rawInfo.cofactors);
 
+      # Transform raw interactions into more structured form
+      var interactions : [Interaction] =
+        map(makeInteraction, rawInfo.interactions);
+      # Augment with the data we need to parse
       var interactions : [InteractionInfo] =
         map(fun(i) {
-            var targetName = switch ((i.objectName, i.targetLigandName)) {
-              case ([], []) -> ""
-              case (x :: _, _) -> x
-              case (_, x :: _) -> x
-            };
-
-            (interaction = InteractionUtilities.makeInteraction(i.interaction),
-             speciesShort = speciesShortName(i.interaction.species_id),
-             targetName = targetName,
-             interactionType = classifyInteractionType(i.interaction.object_id, i.interaction.target_ligand_id),
-             references = i.references)
+            (interaction = i,
+             renderedName = parseOrError(i.targetName),
+             renderedActionComment = parseOrError(i.interactionActionComment),
+             renderedAssayDescription = parseOrError(i.assayDescription),
+             speciesShort = speciesShortName(i.speciesID))
           },
-          rawInfo.interactions);
+          interactions);
 
       var bioactivityTables = {
         fun emptyTable() {
@@ -384,7 +378,7 @@ fun getInitialModel() {
             transformedCofactors, fun(col, dir) { SortCofactorTable(col, dir) })
         };
 
-        var grouped = groupBy(fun(i) { i.interactionType }, interactions);
+        var grouped = groupBy(fun(i) { i.interaction.interactionType }, interactions);
         fun makeTable(type) {
           var data =
             switch(lookup(type, grouped)) {
@@ -392,11 +386,13 @@ fun getInitialModel() {
               case Nothing -> []
             };
           DataTable.makeTable(
-            [("Target", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.targetName, y.targetName) }))),
+            [("Target", ("receptor_header", Sortable(fun(x, y) {
+                  simpleCmp(x.interaction.targetName, y.interaction.targetName) }))),
              ("", ("", NotSortable)), ("", ("", NotSortable)),
-             ("Sp.", ("keybox_header", Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
+             ("Sp.", ("keybox_header", Sortable(fun(x, y) {
+                  simpleCmp(x.speciesShort, y.speciesShort) }))),
              ("Assay Description", ("assay_long_header",
-                Sortable(fun(x, y) { markupCmp(x.interaction.assayDescription,
+                Sortable(fun(x, y) { simpleCmp(x.interaction.assayDescription,
                     y.interaction.assayDescription) }))),
              ("Type", ("affinity_header", (Sortable(
                 fun(x, y) { simpleCmp(x.interaction.interactionType, y.interaction.interactionType) })))),
@@ -445,7 +441,7 @@ fun getInitialModel() {
            ("Synonyms", ("header", Sortable(fun(x, y) { 0 })))
           ], precursors, fun(name, dir) { SortPrecursorTable(name, dir) });
 
-      var interactionRefs = concatMap(fun(x) { x.references }, interactions);
+      var interactionRefs = concatMap(fun(x) { x.interaction.references }, interactions);
 
       # Finally, resolve ligand and comment references
       var rawRefs =
@@ -504,21 +500,7 @@ fun getInitialModel() {
               where (p.ligand_id == ligandId)
               [p],
             interactions =
-              for (i <-- Tables.interaction)
-              where (i.ligand_id == ligandId)
-                [(interaction = i,
-                  objectName =
-                    for (o <-- Tables.object)
-                    where (o.object_id == i.object_id)
-                    [o.name],
-                  targetLigandName =
-                    for (l <-- Tables.ligand)
-                    where (l.ligand_id == i.target_ligand_id)
-                    [l.name],
-                  references =
-                    for (r <-- Tables.interaction_affinity_refs)
-                    where (r.interaction_id == i.interaction_id)
-                    [r.reference_id])],
+              InteractionUtilities.interactionsForLigand(ligandId),
             precursors =
               for (p2p <-- Tables.precursor2peptide)
               where (p2p.ligand_id == ligandId)
@@ -1064,10 +1046,10 @@ fun view(model) {
             var renderedTarget = {
               if (i.targetLigandID > 0) {
                 a(href("/ligandDisplay?ligandId=" ^^ intToString(i.targetLigandID)),
-                    textNode(row.targetName))
+                    renderM(row.renderedName))
               } else if (i.objectID > 0) {
                 a(href("/objectDisplay?objectId=" ^^ intToString(i.objectID)),
-                    textNode(row.targetName))
+                    renderM(row.renderedName))
               } else {
                 textNode("Unknown MOA")
               }
@@ -1075,7 +1057,7 @@ fun view(model) {
 
             fun mkCol(contents) { td(a0, contents) }
             var renderedType = {
-              textNode(i.interactionType) +*
+              textNode(showInteractionType(i.interactionType)) +*
               (if (i.ligandContext <> "") {
                 textNode(i.ligandContext ^^ " ")
               } else {
@@ -1088,13 +1070,13 @@ fun view(model) {
               boolImage(("/images/primary.png", i.primaryTarget, "Primary target of this compound")) +*
               boolImage(("/images/endogenous.gif", i.endogenous, "Ligand is endogenous in the given species")) +*
               td(style("text-align:center;"), textNode(row.speciesShort)) +*
-              mkCol(renderM(i.assayDescription)) +*
+              mkCol(renderM(row.renderedAssayDescription)) +*
               mkCol(renderedType) +*
               mkCol(textNode(i.interactionAction)) +*
               mkCol(displayAffinity(i.affinity, true)) +*
               mkCol(textNode(i.affinity.affinityUnits)) +*
               mkCol(textNode(i.concentrationRange)) +*
-              mkCol(renderCitationList(row.references, ligandInfo.ligandReferences)))
+              mkCol(renderCitationList(i.references, ligandInfo.ligandReferences)))
           }
 
           if (listEmpty(getTableData(tbl))) {

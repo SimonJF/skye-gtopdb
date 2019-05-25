@@ -9,6 +9,13 @@ typename InteractionType = [|
   | TargetLigand
 |];
 
+fun showInteractionType(it) {
+  switch(it) {
+    case GPCR -> "GPCR"
+    case _ -> "TODO"
+  }
+}
+
 typename InteractionAffinityVoltage =
   (affinityVoltageHigh: Float,
    affinityVoltageMedian: Float,
@@ -33,9 +40,10 @@ typename Interaction =
   (interactionID: Int,
    ligandID: Int,
    objectID: Int,
-   interactionType: String,
+   targetName: String,
+   interactionType: InteractionType,
    interactionAction: String,
-   interactionActionComment: Markup,
+   interactionActionComment: String,
    speciesID: Int,
    endogenous: Bool,
    selective: Bool,
@@ -48,7 +56,7 @@ typename Interaction =
    selectivity: String,
    originalAffinity: InteractionAffinity,
    originalAffinityRelation: String,
-   assayDescription: Markup,
+   assayDescription: String,
    assayConditions: String,
    fromGrac: Bool,
    onlyGrac: Bool,
@@ -59,45 +67,88 @@ typename Interaction =
    primaryTarget: Bool,
    targetLigandID: Int,
    wholeOrganismAssay: Bool,
-   hide: Bool);
+   hide: Bool,
+   references: [Int]);
+
+fun classifyInteractionType(objectID, targetLigandID) {
+  if (targetLigandID > 0) {
+    TargetLigand
+  } else {
+    fun inTable(tbl) {
+      query {
+        length(
+          for (x <-- tbl)
+          where (x.object_id == objectID)
+            [x]) > 0
+      }
+    }
+    if (inTable(Tables.gpcr)) {
+      GPCR
+    } else if (inTable(Tables.vgic) || inTable(Tables.lgic) || inTable(Tables.other_ic)) {
+      IC
+    } else if (inTable(Tables.nhr)) {
+      NHR
+    } else if (inTable(Tables.enzyme)) {
+      Enzyme
+    } else if (inTable(Tables.catalytic_receptor)) {
+      CatalyticReceptor
+    } else if (inTable(Tables.transporter)) {
+      Transporter
+    } else {
+      Other
+    }
+  }
+}
 
 # Makes an interaction from raw DB data.
 fun makeInteraction(raw) {
-  (interactionID = raw.interaction_id,
-   ligandID = raw.ligand_id,
-   objectID = raw.object_id,
-   interactionType = raw.type,
-   interactionAction = raw.action,
-   interactionActionComment = parseOrError(raw.action_comment),
-   speciesID = raw.species_id,
-   endogenous = raw.endogenous,
-   selective = raw.selective,
-   useDependent = raw.use_dependent,
-   voltageDependent = raw.voltage_dependent,
-   affinity = mkAffinity(raw.affinity_units, raw.affinity_high, raw.affinity_median, raw.affinity_low),
-   concentrationRange = raw.concentration_range,
+  var targetName = switch ((raw.objectName, raw.targetLigandName)) {
+    case ([], []) -> ""
+    case (x :: _, _) -> x
+    case (_, x :: _) -> x
+  };
+
+  var i = raw.interaction;
+  var interactionType =
+    classifyInteractionType(i.object_id, i.target_ligand_id);
+
+  (interactionID = i.interaction_id,
+   ligandID = i.ligand_id,
+   objectID = i.object_id,
+   targetName = targetName,
+   interactionType = interactionType,
+   interactionAction = i.action,
+   interactionActionComment = i.action_comment,
+   speciesID = i.species_id,
+   endogenous = i.endogenous,
+   selective = i.selective,
+   useDependent = i.use_dependent,
+   voltageDependent = i.voltage_dependent,
+   affinity = mkAffinity(i.affinity_units, i.affinity_high, i.affinity_median, i.affinity_low),
+   concentrationRange = i.concentration_range,
    affinityVoltage =
-     mkAffinityVoltage(raw.affinity_voltage_high, raw.affinity_voltage_median,
-       raw.affinity_voltage_low, raw.affinity_physiological_voltage),
-   rank = raw.rank,
-   selectivity = raw.selectivity,
+     mkAffinityVoltage(i.affinity_voltage_high, i.affinity_voltage_median,
+       i.affinity_voltage_low, i.affinity_physiological_voltage),
+   rank = i.rank,
+   selectivity = i.selectivity,
    originalAffinity =
-    mkAffinity(raw.original_affinity_units,
-      raw.original_affinity_high_nm, raw.original_affinity_median_nm,
-      raw.original_affinity_low_nm),
-   originalAffinityRelation = raw.original_affinity_relation,
-   assayDescription = parseOrError(raw.assay_description),
-   assayConditions = raw.assay_conditions,
-   fromGrac = raw.from_grac,
-   onlyGrac = raw.only_grac,
-   receptorSite = raw.receptor_site,
-   ligandContext = raw.ligand_context,
-   percentActivity = raw.percent_activity,
-   assayURL = raw.assay_url,
-   primaryTarget = raw.primary_target,
-   targetLigandID = raw.target_ligand_id,
-   wholeOrganismAssay = raw.whole_organism_assay,
-   hide = raw.hide)
+    mkAffinity(i.original_affinity_units,
+      i.original_affinity_high_nm, i.original_affinity_median_nm,
+      i.original_affinity_low_nm),
+   originalAffinityRelation = i.original_affinity_relation,
+   assayDescription = i.assay_description,
+   assayConditions = i.assay_conditions,
+   fromGrac = i.from_grac,
+   onlyGrac = i.only_grac,
+   receptorSite = i.receptor_site,
+   ligandContext = i.ligand_context,
+   percentActivity = i.percent_activity,
+   assayURL = i.assay_url,
+   primaryTarget = i.primary_target,
+   targetLigandID = i.target_ligand_id,
+   wholeOrganismAssay = i.whole_organism_assay,
+   hide = i.hide,
+   references = raw.references)
 }
 
 #   original_affinity_low_nm: Float, original_affinity_median_nm: Float, original_affinity_high_nm: Float, original_affinity_units: String, original_affinity_relation: String, assay_description: String, assay_conditions: String, from_grac: Bool, only_grac: Bool, receptor_site: String, ligand_context: String, percent_activity: Float, assay_url: String, primary_target: Bool, target_ligand_id: Int, whole_organism_assay: Bool, hide: Bool)
@@ -150,34 +201,32 @@ fun displayAffinity(af, showUnits) {
   }
 }
 
-fun classifyInteractionType(objectID, targetLigandID) {
-  if (targetLigandID > 0) {
-    TargetLigand
-  } else {
-    # sig inTable: (TableHandle({ object_id: Int |r})) -> Bool
-    fun inTable(tbl) {
-      query {
-        length(
-          for (x <-- tbl)
-          where (x.object_id == objectID)
-            [x]) > 0
-      }
+fun queryInteractions(pred) {
+    query {
+      for (i <-- Tables.interaction)
+        where (pred(i))
+          [(interaction = i,
+            ligandName =
+              for (l <-- Tables.ligand)
+              where (l.ligand_id == i.ligand_id)
+              [l.name],
+            objectName =
+              for (o <-- Tables.object)
+              where (o.object_id == i.object_id)
+              [o.name],
+            targetLigandName =
+              for (l <-- Tables.ligand)
+              where (l.ligand_id == i.target_ligand_id)
+              [l.name],
+            references =
+              for (r <-- Tables.interaction_affinity_refs)
+              where (r.interaction_id == i.interaction_id)
+              [r.reference_id])]
     }
-    if (inTable(Tables.gpcr)) {
-      GPCR
-    } else if (inTable(Tables.vgic) || inTable(Tables.lgic) || inTable(Tables.other_ic)) {
-      IC
-    } else if (inTable(Tables.nhr)) {
-      NHR
-    } else if (inTable(Tables.enzyme)) {
-      Enzyme
-    } else if (inTable(Tables.catalytic_receptor)) {
-      CatalyticReceptor
-    } else if (inTable(Tables.transporter)) {
-      Transporter
-    } else {
-      Other
-    }
-  }
 }
+
+fun interactionsForLigand(ligandId) {
+  queryInteractions(fun(i) { i.ligand_id == ligandId})
+}
+
 

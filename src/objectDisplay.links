@@ -554,8 +554,8 @@ fun getInitialModel() {
                     y.iLigandAffinity.affinityMedian) }))),
             ("Parameter", ("units_header", Sortable(fun(x, y) {
                 simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)}))),
-             # FIXME: Need to fix these up when we have the right details in the model
-            ("Concentration range (M)", ("", NotSortable)), ("Holding voltage (mV)", ("", NotSortable)),
+            ("Concentration range (M)", ("", NotSortable)),
+            ("Holding voltage (mV)", ("", NotSortable)),
             ("References", ("reference_header", NotSortable))
           ];
 
@@ -1453,49 +1453,6 @@ fun view(model) {
           td(class("info category"), textNode("Cell Type Associations"))) +*
         renderedCTAs)
     };
-
-   #<a name="Processes"></a>
-   #<table class="receptor_data_tables fullwidth">
-   #  <tr name="hotspot" class="hotspot">
-   #    <td class="info category">Immuno Process Associations</td>
-   #  </tr>
-   #    <tr>
-   #      <td class="info">
-   #        <table class="inner_receptor_data_tables" style="width:70%;">
-   #          <tr>
-   #            <td class="key">Immuno Process:&nbsp;</td>
-   #            <td class="value"><a href="ObjectImmProcessListForward?immprocess=3">Antigen presentation</a></td>
-   #          </tr>
-   #          <tr>
-   #            <td class="key">GO Annotations:&nbsp;</td>
-   #            <td class="value">
-   #                Associated to 1 GO processes
-   #            </td>
-   #          </tr>
-   #          <tr>
-   #            <td></td>
-   #            <td>
-   #              <table id="go" class="tablesorter inner_receptor_data_tables">
-   #                    <tr>
-   #                      <td style="width:20%;">GO:0006909</td>
-   #                      <td style="width:70%;">phagocytosis</td>
-   #                      <td style="width:10%;">TAS</td>
-   #                    </tr>
-   #                    <tr>
-   #                      <td style="width:20%;"><a href="" title="Toggle GO associations with IEA evidence" class="toggle"><div class="arrow"></div></a></td>
-   #                      <td colspan="2" style="width:800%;"><i>click arrow to show/hide IEA associations</i></td>
-   #                    </tr>
-   #                    <tr class="tablesorter-childRow">
-   #                      <td style="width:20%;">GO:0002548</td>
-   #                      <td style="width:70%;">monocyte chemotaxis</td>
-   #                      <td style="width:10%;">IEA</td>
-   #                    </tr>
-   #              </table>
-   #            </td>
-   #          </tr>
-   #        </table>
-   #      </td>
-   #    </tr>
 
     var immunoProcessAssociationsBox = {
       fun renderProcess(proc) {
