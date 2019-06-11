@@ -24,36 +24,10 @@ typename ExternalRef = (
   refUrl: String
 );
 
-
-# typename Interaction = (
-#   interactionLigandId: Int,
-#   interactionLigandName: Markup,
-#   interactionType: String,
-#   interactionAction: String,
-#   interactionSelective: Bool,
-#   interactionLabelled: Bool,
-#   interactionSpeciesID: String,
-#   interactionReferences: [Int],
-#   interactionAffinity: InteractionAffinity
-# );
-
 typename InteractionInfo = (
     interaction: Interaction,
     parsedName: Markup
 );
-
-# fun makeInteraction(id, name, type, action, selectivity, labelled, endogenous, speciesId, references, affinity) {
-#   (interactionLigandId=id, interactionLigandName=name, interactionType=type, interactionAction=action,
-#    # TODO: Need to generalise -- "Family selective" is also a valid option
-#    # which results in a different category
-#    interactionSelective=(selectivity == "Selective"),
-#    interactionLabelled=labelled,
-#    interactionEndogenous=endogenous,
-#    interactionSpeciesID=speciesId,
-#    interactionReferences=references,
-#    interactionAffinity=affinity
-#   )
-# }
 
 typename Synonym = (synonymName: Markup, synonymOrder: Int, synonymReferences: [ReferenceId]);
 

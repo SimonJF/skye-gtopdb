@@ -112,27 +112,6 @@ typename InteractionInfo = (
   speciesShort: String
 );
 
-# typename Interaction = (
-#     iLigandId: Int,
-#     iLigandName: Markup,
-#     iLigandRawName: String,
-#     iLigandSize: LigandSize,
-#     iLigandApproved: Bool,
-#     iLigandPrimary: Bool,
-#     iLigandEndogenous: Bool,
-#     iLigandLabelled: Bool,
-#     iLigandRadioactive: Bool,
-#     iLigandSpecies: SpeciesID,
-#     iLigandAction: String,
-#     iLigandAffinity: InteractionAffinity,
-#     iLigandReferences: [ReferenceID],
-#     iLigandImmuno: Bool,
-#     iLigandSelective: Bool,
-#     iLigandSelectivity: String,
-#     iLigandPDB: Bool,
-#     iLigandDetailedAffinity: [(String, ReferenceID)]
-# );
-
 typename SortedInteractions = (
   agonists: SortableTable(InteractionInfo, Message),
   antagonists: SortableTable(InteractionInfo, Message),
