@@ -7,14 +7,13 @@
 # 6. Phenotypes etc.
 # 7. Expression datasets
 # 9. Activator / inhibitor tables with voltage information
-# 10. Annotation status
 # 11. Gene expression and pathophysiology + comments
 # 12. Clinically-relevant mutations and pathophysiology + comments
 
 
 # TODO: Voltage dependence field for VGICs.
 # Functional characteristics
-open Parser;
+open import Parser;
 open import RenderMarkup;
 open import Reference;
 open import DataTable;
@@ -105,36 +104,44 @@ typename ImmunoProcessAssociation = (
 
 typename LigandSize = [| Small | Peptide | OtherSize |];
 
-typename Interaction = (
-    iLigandId: Int,
-    iLigandName: Markup,
-    iLigandRawName: String,
-    iLigandSize: LigandSize,
-    iLigandApproved: Bool,
-    iLigandPrimary: Bool,
-    iLigandEndogenous: Bool,
-    iLigandLabelled: Bool,
-    iLigandRadioactive: Bool,
-    iLigandSpecies: SpeciesID,
-    iLigandAction: String,
-    iLigandAffinity: InteractionAffinity,
-    iLigandReferences: [ReferenceID],
-    iLigandImmuno: Bool,
-    iLigandSelective: Bool,
-    iLigandSelectivity: String,
-    iLigandPDB: Bool,
-    iLigandDetailedAffinity: [(String, ReferenceID)]
+
+typename InteractionInfo = (
+  interaction: Interaction,
+  parsedName: Markup,
+  ligandSize: LigandSize,
+  speciesShort: String
 );
 
+# typename Interaction = (
+#     iLigandId: Int,
+#     iLigandName: Markup,
+#     iLigandRawName: String,
+#     iLigandSize: LigandSize,
+#     iLigandApproved: Bool,
+#     iLigandPrimary: Bool,
+#     iLigandEndogenous: Bool,
+#     iLigandLabelled: Bool,
+#     iLigandRadioactive: Bool,
+#     iLigandSpecies: SpeciesID,
+#     iLigandAction: String,
+#     iLigandAffinity: InteractionAffinity,
+#     iLigandReferences: [ReferenceID],
+#     iLigandImmuno: Bool,
+#     iLigandSelective: Bool,
+#     iLigandSelectivity: String,
+#     iLigandPDB: Bool,
+#     iLigandDetailedAffinity: [(String, ReferenceID)]
+# );
+
 typename SortedInteractions = (
-  agonists: SortableTable(Interaction, Message),
-  antagonists: SortableTable(Interaction, Message),
-  allostericModulators: SortableTable(Interaction, Message),
-  activators: SortableTable(Interaction, Message),
-  inhibitors: SortableTable(Interaction, Message),
-  channelBlockers: SortableTable(Interaction, Message),
-  gatingInhibitors: SortableTable(Interaction, Message),
-  subunitSpecific: SortableTable(Interaction, Message));
+  agonists: SortableTable(InteractionInfo, Message),
+  antagonists: SortableTable(InteractionInfo, Message),
+  allostericModulators: SortableTable(InteractionInfo, Message),
+  activators: SortableTable(InteractionInfo, Message),
+  inhibitors: SortableTable(InteractionInfo, Message),
+  channelBlockers: SortableTable(InteractionInfo, Message),
+  gatingInhibitors: SortableTable(InteractionInfo, Message),
+  subunitSpecific: SortableTable(InteractionInfo, Message));
 
 typename Variant = (
     vId: Int,
@@ -348,22 +355,7 @@ fun getInitialModel() {
                         for (r <-- Tables.process_assoc_refs)
                         where (r.process_assoc_id == pa.process_assoc_id)
                         [r.reference_id])],
-             interactions =
-               for (i <-- Tables.interaction)
-                 where (i.object_id == objectId)
-                   for (l <-- Tables.ligand)
-                     where (l.ligand_id == i.ligand_id)
-                     [(interaction = i,
-                       ligand = l,
-                       hasPDB =
-                        length(
-                          for (pdb <-- Tables.pdb_structure)
-                            where (pdb.object_id == objectId && pdb.ligand_id == l.ligand_id)
-                            [pdb]) > 0,
-                       refs =
-                         for (iar <-- Tables.interaction_affinity_refs)
-                           where (iar.interaction_id == i.interaction_id)
-                           [iar.reference_id])],
+             interactions = InteractionUtilities.interactionsForObject(objectId),
              tissueDistribution =
                for (td <-- Tables.tissue_distribution)
                  where (td.object_id == objectId)
@@ -437,65 +429,48 @@ fun getInitialModel() {
            gatingInhibitors = [], subunitSpecific = [], endogenous = [],
            references = []);
 
-        fold_left(fun(acc, x) {
-          var i = x.interaction;
-          var l = x.ligand;
-          var refs = x.refs;
+        fold_left(fun(acc, i) {
+          # var i = x.interaction;
+          # var l = x.ligand;
+          # var refs = x.refs;
           var size = {
-            if (l.type == "Peptide" || l.type == "Antibody") {
+            var ty = i.interactionLigand.type;
+            if (ty == "Peptide" || ty == "Antibody") {
               Peptide
-            } else if (l.type == "Metabolite"
-                || l.type == "Synthetic organic" || l.type == "Natural product") {
+            } else if (ty == "Metabolite"
+                || ty == "Synthetic organic" || ty == "Natural product") {
               Small
             } else {
               OtherSize
             }
           };
 
-          var interaction_aff = (
-              affinityUnits = i.affinity_units,
-              affinityLow = i.affinity_low,
-              affinityMedian = i.affinity_median,
-              affinityHigh = i.affinity_high
-            );
+          var parsedName = parseOrError(getTargetName(i.interactionTarget));
 
-          var parsed = (
-            iLigandId = l.ligand_id,
-            iLigandName = parseOrError(l.name),
-            iLigandRawName = l.name,
-            iLigandSize = size,
-            iLigandApproved = l.approved,
-            iLigandPrimary = i.primary_target,
-            iLigandEndogenous = i.endogenous,
-            iLigandLabelled = l.labelled,
-            iLigandRadioactive = l.radioactive,
-            iLigandSpecies = i.species_id,
-            iLigandAction = i.action,
-            iLigandAffinity = interaction_aff,
-            iLigandReferences = refs,
-            iLigandImmuno = l.in_gtip,
-            iLigandSelective = i.selective,
-            iLigandSelectivity = i.selectivity,
-            iLigandPDB = x.hasPDB,
-            iLigandDetailedAffinity = []
+          var parsed : InteractionInfo = (
+            interaction = i,
+            parsedName = parsedName,
+            ligandSize = size,
+            speciesShort = speciesShortName(i.speciesID)
           );
 
+          # TODO: Maybe make this less stringly-typed?
           var acc =
-            if (i.type == "Agonist") {
+            if (i.interactionType == "Agonist") {
               (acc with agonists = ( parsed :: acc.agonists ))
-            } else if (i.type == "Antagonist") {
+            } else if (i.interactionType == "Antagonist") {
               (acc with antagonists = ( parsed :: acc.antagonists ))
-            } else if (i.type == "Allosteric modulator") {
+            } else if (i.interactionType == "Allosteric modulator") {
               (acc with allostericModulators = ( parsed :: acc.allostericModulators ))
-            } else if (i.type == "Activator") {
+            } else if (i.interactionType == "Activator") {
               (acc with activators = ( parsed :: acc.activators ))
-            } else if (i.type == "Inhibitor") {
+            } else if (i.interactionType == "Inhibitor") {
               (acc with inhibitors = ( parsed :: acc.inhibitors ))
-            } else if (i.type == "Channel blocker") {
+            } else if (i.interactionType == "Channel blocker") {
               (acc with channelBlockers = ( parsed :: acc.channelBlockers ))
-            } else if (i.type == "Gating inhibitor") {
+            } else if (i.interactionType == "Gating inhibitor") {
               (acc with gatingInhibitors = ( parsed :: acc.gatingInhibitors ))
-            } else if (i.type == "Subunit-specific") {
+            } else if (i.interactionType == "Subunit-specific") {
               (acc with subunitSpecific = ( parsed :: acc.subunitSpecific ))
             } else {
               acc
@@ -504,13 +479,13 @@ fun getInitialModel() {
           var acc =
             if (i.endogenous) {
               var els =
-                (elsName = parseOrError(l.name),
-                 elsSpeciesID = i.species_id,
-                 elsLigandID = i.ligand_id);
+                (elsName = parsedName,
+                 elsSpeciesID = i.speciesID,
+                 elsLigandID = i.ligandID);
               (acc with endogenous = els :: acc.endogenous)
             } else { acc };
 
-          (acc with references = (refs ++ acc.references))
+          (acc with references = (i.references ++ acc.references))
         }, emptyResult, rawInteractions)
       }
 
@@ -523,18 +498,23 @@ fun getInitialModel() {
 
         fun mkStandardInteractionTable(tableTy, interactions) {
           var cols = [
-            ("Ligand", ("", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) }))),
+            ("Ligand", ("", Sortable(fun(x, y) {
+                simpleCmp(getTargetName(x.interaction.interactionTarget),
+                    getTargetName(y.interaction.interactionTarget)) }))),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("Sp.", ("keybox_header",
-              Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) }))),
+              Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
             ("Action", ("action_header",
-              Sortable(fun(x, y) { simpleCmp(x.iLigandAction, y.iLigandAction) }))),
+              Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
+                  y.interaction.interactionAction) }))),
             ("Affinity", ("affinity_header", Sortable(fun(x, y) {
-                InteractionUtilities.sortAffinity(x.iLigandAffinity, y.iLigandAffinity)}))),
+                InteractionUtilities.sortAffinity(x.interaction.affinity,
+                    y.interaction.affinity)}))),
             ("Affinity Units", ("units_header", Sortable(fun(x, y) {
-                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits) }))),
+                simpleCmp(x.interaction.affinity.affinityUnits,
+                          y.interaction.affinity.affinityUnits) }))),
             ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
           ];
           fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, colName, sortDir) }
@@ -543,17 +523,20 @@ fun getInitialModel() {
 
         fun mkActivatorTable(tableTy, interactions) {
           var cols = [
-            ("Ligand", ("", Sortable(fun(x, y) { simpleCmp(x.iLigandRawName, y.iLigandRawName) }))),
+            ("Ligand", ("", Sortable(fun(x, y) {
+                simpleCmp(getTargetName(x.interaction.interactionTarget),
+                    getTargetName(y.interaction.interactionTarget)) }))),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("Species", ("keybox_header",
-              Sortable(fun(x, y) { simpleCmp(x.iLigandSpecies, y.iLigandSpecies) }))),
+              Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
             ("Affinity", ("affinity_header", Sortable(fun(x, y) {
-                simpleCmp(x.iLigandAffinity.affinityMedian,
-                    y.iLigandAffinity.affinityMedian) }))),
+                InteractionUtilities.sortAffinity(x.interaction.affinity,
+                    y.interaction.affinity)}))),
             ("Parameter", ("units_header", Sortable(fun(x, y) {
-                simpleCmp(x.iLigandAffinity.affinityUnits, y.iLigandAffinity.affinityUnits)}))),
+                simpleCmp(x.interaction.affinity.affinityUnits,
+                          y.interaction.affinity.affinityUnits) }))),
             ("Concentration range (M)", ("", NotSortable)),
             ("Holding voltage (mV)", ("", NotSortable)),
             ("References", ("reference_header", NotSortable))
@@ -563,7 +546,8 @@ fun getInitialModel() {
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
-        (agonists = mkStandardInteractionTable(AgonistsTable, parsedInteractions.agonists),
+        var res : SortedInteractions =
+          (agonists = mkStandardInteractionTable(AgonistsTable, parsedInteractions.agonists),
          antagonists = mkStandardInteractionTable(AntagonistsTable, parsedInteractions.antagonists),
          allostericModulators =
            mkStandardInteractionTable(AllostericModulatorsTable,
@@ -577,7 +561,8 @@ fun getInitialModel() {
          gatingInhibitors =
            mkActivatorTable(GatingInhibitorsTable, parsedInteractions.gatingInhibitors),
          subunitSpecific =
-           mkStandardInteractionTable(SubunitSpecificTable, parsedInteractions.subunitSpecific))
+           mkStandardInteractionTable(SubunitSpecificTable, parsedInteractions.subunitSpecific));
+        res
       }
 
       fun transformPDBs(rawPDBs) {
@@ -883,7 +868,9 @@ fun getInitialModel() {
 
       var (pdbData, pdbRefs, pdbLigands) = transformPDBs(raw.pdbData);
 
-      var interactions = transformInteractions(raw.interactions);
+      var interactions =
+        transformInteractions(
+            map(InteractionUtilities.makeInteraction, raw.interactions));
       var endogenousLigands = interactions.endogenous;
 
       var sortedInteractions = mkInteractionTables(interactions);
@@ -1102,10 +1089,12 @@ fun view(model) {
     var potencyOrderBox = MvuHTML.empty;
 
     var interactionsTables = {
-      fun renderRow(i) {
+      fun renderRow(x) {
+        var x : InteractionInfo = x;
+        var i = x.interaction;
         var imgCols = {
           var sizeCol = {
-            switch(i.iLigandSize) {
+            switch(x.ligandSize) {
               case Small ->
                 boolImage(("/images/benzene.gif", true,
                       "Small molecule or natural product"))
@@ -1117,22 +1106,25 @@ fun view(model) {
             }
           };
 
-          var approvedCol = boolImage(("/images/approved.png", i.iLigandApproved, "Approved ligand"));
-          var primaryCol = boolImage(("/images/primary.png", i.iLigandPrimary, "Primary interaction"));
+          var approvedCol = boolImage(("/images/approved.png", i.interactionLigand.approved, "Approved ligand"));
+          var primaryCol = boolImage(("/images/primary.png", i.primaryTarget, "Primary interaction"));
           var selectiveCol =
-            boolCol(i.iLigandSelective,
+            boolCol(i.selective,
               a(href("/ligandInteractions?ligandId=" ^^
-                  intToString(i.iLigandId) ^^ "&speciesId=" ^^ intToString(i.iLigandSpecies)), h0) +*
+                  intToString(i.ligandID) ^^ "&speciesId=" ^^ intToString(i.speciesID)), h0) +*
               img(src("/images/select.gif") +@ alt("Click here for species-specific selectivity table"), h0));
           var endogenousCol =
-            boolImage(("/images/endogenous.gif", i.iLigandEndogenous,
+            boolImage(("/images/endogenous.gif", i.endogenous,
                   "Ligand is endogenous in the given species"));
-          var labelled = boolImage(("/images/probe.png", i.iLigandEndogenous, "Ligand is labelled"));
-          var radioactive = boolImage(("/images/rad.gif", i.iLigandRadioactive, "Ligand is radioactive"));
+          var labelled = boolImage(("/images/probe.png", i.interactionLigand.labelled, "Ligand is labelled"));
+          var radioactive = boolImage(("/images/rad.gif", i.interactionLigand.radioactive, "Ligand is radioactive"));
+          # FIXME: We need to include the information about PDB structures here. I think the best way of doing this
+          # is likely to have some sort of "ligand summary" that can be loaded easily from the interactions rather
+          # than using the whole table.
           var hasPDB =
-            boolImage(("/images/protein_structure_icon.png", i.iLigandPDB, "Ligand has a PDB structure"));
+            boolImage(("/images/protein_structure_icon.png", false, "Ligand has a PDB structure"));
           var immuno =
-            boolImage(("/images/immuno_ligand.png", i.iLigandImmuno, "Immunopharmacology Ligand"));
+            boolImage(("/images/immuno_ligand.png", i.interactionLigand.in_gtip, "Immunopharmacology Ligand"));
 
           MvuHTML.concat([sizeCol, approvedCol, primaryCol, selectiveCol, endogenousCol,
               labelled, radioactive, hasPDB, immuno])
@@ -1140,22 +1132,22 @@ fun view(model) {
 
         var nameCol =
           td(a0,
-            a(href("/ligandDisplay?ligandId=" ^^ intToString(i.iLigandId)), renderM(i.iLigandName)));
+            a(href("/ligandDisplay?ligandId=" ^^ intToString(i.ligandID)), renderM(x.parsedName)));
 
         var speciesCol =
-          td(a0, textNode(speciesShortName(i.iLigandSpecies)));
+          td(a0, textNode(x.speciesShort));
 
         var actionCol =
-          td(a0, textNode(i.iLigandAction));
+          td(a0, textNode(i.interactionAction));
 
         var affinityCol =
-          td(a0, InteractionUtilities.displayAffinity(i.iLigandAffinity, false));
+          td(a0, InteractionUtilities.displayAffinity(i.affinity, false));
 
         var parameterCol =
-          td(a0, textNode(i.iLigandAffinity.affinityUnits));
+          td(a0, textNode(i.affinity.affinityUnits));
 
         var referenceCol =
-          td(a0, Reference.renderCitationList(i.iLigandReferences, objectInfo.objectReferences));
+          td(a0, Reference.renderCitationList(i.references, objectInfo.objectReferences));
 
         tr(class("info"),
           nameCol +*

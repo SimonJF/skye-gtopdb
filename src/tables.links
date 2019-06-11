@@ -181,7 +181,11 @@ var iuphar2tocris = table "iuphar2tocris" with (ligand_id: Int, cat_no: String, 
 
 var lgic = table "lgic" with (object_id: Int, ligand: String, selectivity_comments: String) from db;
 
-var ligand = table "ligand" with (ligand_id: Int, name: String, pubchem_sid: Int, radioactive: Bool, old_ligand_id: Int, type: String, approved: Bool, approved_source: String, iupac_name: String, comments: String, withdrawn_drug: Bool, verified: Bool, abbreviation: String, clinical_use: String, mechanism_of_action: String, absorption_distribution: String, metabolism: String, elimination: String, popn_pharmacokinetics: String, organ_function_impairment: String, emc_url: String, drugs_url: String, ema_url: String, bioactivity_comments: String, labelled: Bool, in_gtip: Bool, immuno_comments: String, in_gtmp: Bool, gtmp_comments: String) from db;
+
+typename RawLigand = (ligand_id: Int, name: String, pubchem_sid: Int, radioactive: Bool, old_ligand_id: Int, type: String, approved: Bool, approved_source: String, iupac_name: String, comments: String, withdrawn_drug: Bool, verified: Bool, abbreviation: String, clinical_use: String, mechanism_of_action: String, absorption_distribution: String, metabolism: String, elimination: String, popn_pharmacokinetics: String, organ_function_impairment: String, emc_url: String, drugs_url: String, ema_url:
+    String, bioactivity_comments: String, labelled: Bool, in_gtip: Bool, immuno_comments: String, in_gtmp: Bool, gtmp_comments: String);
+
+var ligand = table "ligand" with RawLigand from db;
 
 var ligand2family = table "ligand2family" with (ligand_id: Int, family_id: Int, display_order: Int) from db;
 
@@ -221,7 +225,8 @@ var mutation_refs = table "mutation_refs" with (mutation_id: Int, reference_id: 
 
 var nhr = table "nhr" with (object_id: Int, ligand: String, binding_partner_comments: String, coregulator_comments: String, dna_binding_comments: String, target_gene_comments: String) from db;
 
-var object = table "object" with (object_id: Int, name: String, last_modified: String, comments: String, structural_info_comments: String, old_object_id: Int, annotation_status: Int, only_iuphar: Bool, grac_comments: String, only_grac: Bool, no_contributor_list: Bool, abbreviation: String, systematic_name: String, quaternary_structure_comments: String, in_cgtp: Bool, in_gtip: Bool, gtip_comment: String, in_gtmp: Bool, gtmp_comment: String) from db;
+typename RawObject = (object_id: Int, name: String, last_modified: String, comments: String, structural_info_comments: String, old_object_id: Int, annotation_status: Int, only_iuphar: Bool, grac_comments: String, only_grac: Bool, no_contributor_list: Bool, abbreviation: String, systematic_name: String, quaternary_structure_comments: String, in_cgtp: Bool, in_gtip: Bool, gtip_comment: String, in_gtmp: Bool, gtmp_comment: String);
+var object = table "object" with RawObject from db;
 
 var object2go_process = table "object2go_process" with (object_id: Int, go_process_id: Int, go_evidence: String, comment: String) from db;
 

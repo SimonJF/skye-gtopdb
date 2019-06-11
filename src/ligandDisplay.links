@@ -20,7 +20,7 @@ typename Tab =
 
 typename Message =
   [| ChangeTab:Tab | SortPrecursorTable:(ColumnName, SortDirection)
-   | SortInteractionTable:(InteractionType, ColumnName, SortDirection)
+   | SortInteractionTable:(InteractionTargetType, ColumnName, SortDirection)
    | SortCofactorTable:(ColumnName, SortDirection)
    | NoOp
   |];
@@ -359,7 +359,7 @@ fun getInitialModel() {
       var interactions : [InteractionInfo] =
         map(fun(i) {
             (interaction = i,
-             renderedName = parseOrError(i.targetName),
+             renderedName = parseOrError(getTargetName(i.interactionTarget)),
              renderedActionComment = parseOrError(i.interactionActionComment),
              renderedAssayDescription = parseOrError(i.assayDescription),
              speciesShort = speciesShortName(i.speciesID))
@@ -378,16 +378,18 @@ fun getInitialModel() {
             transformedCofactors, fun(col, dir) { SortCofactorTable(col, dir) })
         };
 
-        var grouped = groupBy(fun(i) { i.interaction.interactionType }, interactions);
+        var grouped = groupBy(fun(i) { i.interaction.interactionTargetType }, interactions);
         fun makeTable(type) {
           var data =
             switch(lookup(type, grouped)) {
               case Just(xs) -> xs
               case Nothing -> []
             };
+
           DataTable.makeTable(
             [("Target", ("receptor_header", Sortable(fun(x, y) {
-                  simpleCmp(x.interaction.targetName, y.interaction.targetName) }))),
+                  simpleCmp(getTargetName(x.interaction.interactionTarget),
+                            getTargetName(y.interaction.interactionTarget)) }))),
              ("", ("", NotSortable)), ("", ("", NotSortable)),
              ("Sp.", ("keybox_header", Sortable(fun(x, y) {
                   simpleCmp(x.speciesShort, y.speciesShort) }))),
@@ -395,7 +397,7 @@ fun getInitialModel() {
                 Sortable(fun(x, y) { simpleCmp(x.interaction.assayDescription,
                     y.interaction.assayDescription) }))),
              ("Type", ("affinity_header", (Sortable(
-                fun(x, y) { simpleCmp(x.interaction.interactionType, y.interaction.interactionType) })))),
+                fun(x, y) { simpleCmp(x.interaction.interactionTargetType, y.interaction.interactionTargetType) })))),
              ("Action", ("affinity_header", Sortable(
                 fun(x, y) { simpleCmp(x.interaction.interactionAction, y.interaction.interactionAction) }))),
              ("Affinity", ("affinity_header", Sortable(
@@ -1057,7 +1059,7 @@ fun view(model) {
 
             fun mkCol(contents) { td(a0, contents) }
             var renderedType = {
-              textNode(showInteractionType(i.interactionType)) +*
+              textNode(showInteractionTargetType(i.interactionTargetType)) +*
               (if (i.ligandContext <> "") {
                 textNode(i.ligandContext ^^ " ")
               } else {

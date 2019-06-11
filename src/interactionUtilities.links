@@ -4,15 +4,23 @@ open import MvuHTML;
 open import Parser;
 open import Tables;
 
-typename InteractionType = [|
+typename InteractionTargetType = [|
   GPCR | IC | NHR | Enzyme | CatalyticReceptor | Transporter | Other
   | TargetLigand
 |];
 
-fun showInteractionType(it) {
+typename Target = [| TTargetLigand:RawLigand | TObject:RawObject | TNone |];
+
+fun showInteractionTargetType(it) {
   switch(it) {
     case GPCR -> "GPCR"
-    case _ -> "TODO"
+    case IC -> "IC"
+    case NHR -> "Nuclear Hormone Receptor"
+    case Enzyme -> "Enzyme"
+    case CatalyticReceptor -> "Catalytic Receptor"
+    case Transporter -> "Transporter"
+    case Other -> "Other"
+    case TargetLigand -> "Target Ligand"
   }
 }
 
@@ -38,10 +46,12 @@ fun mkAffinityVoltage(high, median, low, physio) {
 
 typename Interaction =
   (interactionID: Int,
+   interactionTarget: Target,
    ligandID: Int,
    objectID: Int,
-   targetName: String,
-   interactionType: InteractionType,
+   interactionType: String,
+   interactionLigand: RawLigand,
+   interactionTargetType: InteractionTargetType,
    interactionAction: String,
    interactionActionComment: String,
    speciesID: Int,
@@ -102,21 +112,23 @@ fun classifyInteractionType(objectID, targetLigandID) {
 
 # Makes an interaction from raw DB data.
 fun makeInteraction(raw) {
-  var targetName = switch ((raw.objectName, raw.targetLigandName)) {
-    case ([], []) -> ""
-    case (x :: _, _) -> x
-    case (_, x :: _) -> x
+  var interactionTarget = switch ((raw.object, raw.targetLigand)) {
+    case ([], []) -> TNone
+    case (x :: _, _) -> TObject(x)
+    case (_, x :: _) -> TTargetLigand(x)
   };
 
   var i = raw.interaction;
-  var interactionType =
+  var interactionTargetType =
     classifyInteractionType(i.object_id, i.target_ligand_id);
 
   (interactionID = i.interaction_id,
    ligandID = i.ligand_id,
    objectID = i.object_id,
-   targetName = targetName,
-   interactionType = interactionType,
+   interactionType = i.type,
+   interactionLigand = hd(raw.ligand),
+   interactionTarget = interactionTarget,
+   interactionTargetType = interactionTargetType,
    interactionAction = i.action,
    interactionActionComment = i.action_comment,
    speciesID = i.species_id,
@@ -206,18 +218,18 @@ fun queryInteractions(pred) {
       for (i <-- Tables.interaction)
         where (pred(i))
           [(interaction = i,
-            ligandName =
+            ligand =
               for (l <-- Tables.ligand)
               where (l.ligand_id == i.ligand_id)
-              [l.name],
-            objectName =
+              [l],
+            object =
               for (o <-- Tables.object)
               where (o.object_id == i.object_id)
-              [o.name],
-            targetLigandName =
+              [o],
+            targetLigand =
               for (l <-- Tables.ligand)
               where (l.ligand_id == i.target_ligand_id)
-              [l.name],
+              [l],
             references =
               for (r <-- Tables.interaction_affinity_refs)
               where (r.interaction_id == i.interaction_id)
@@ -229,4 +241,15 @@ fun interactionsForLigand(ligandId) {
   queryInteractions(fun(i) { i.ligand_id == ligandId})
 }
 
+fun interactionsForObject(objectId) {
+  queryInteractions(fun(i) { i.object_id == objectId })
+}
+
+fun getTargetName(target) {
+  switch (target) {
+    case TNone -> ""
+    case TTargetLigand(tl) -> tl.name
+    case TObject(o) -> o.name
+  }
+}
 
