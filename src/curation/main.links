@@ -1,14 +1,23 @@
+import MvuHTML;
+import MvuAttrs;
+import Mvu;
+import Template;
 
-var notImplemented =
-  page
-    <html>
-      <body>
-        <h1>Not yet</h1>
-      </body>
-    </html>;
+fun notImplemented() {
+  open MvuHTML;
+  open MvuAttrs;
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+  Mvu.runStatic("placeholder", (), fun (_) {
+      div(a0, h1(a0, textNode("Not implemented")))
+  });
+  Template.template()
+}
 
 fun main() {
-  addRoute("/", fun(_) { notImplemented });
+  addRoute("/", fun(_) { notImplemented() });
+  addStaticRoute("/css", "css", [("css", "text/css")]);
+  addStaticRoute("/js", "js", [("js", "text/javascript")]);
   servePages()
 }
 
