@@ -1,0 +1,15 @@
+
+var notImplemented =
+  page
+    <html>
+      <body>
+        <h1>Not yet</h1>
+      </body>
+    </html>;
+
+fun main() {
+  addRoute("/", fun(_) { notImplemented });
+  servePages()
+}
+
+main()

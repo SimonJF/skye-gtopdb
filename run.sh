@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-links --path=src src/main.links
+links --path=src:src/web src/web/main.links
