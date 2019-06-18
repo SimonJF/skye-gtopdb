@@ -83,7 +83,7 @@ var discoverx = table "discoverx" with (cat_no: String, url: String, name: Strin
 
 
 typename DbDisease = (disease_id: Int, name: String, description: String, type: String);
-var disease = table "disease" with DbDisease from db;
+var disease = table "disease" with DbDisease tablekeys [["disease_id"]] from db;
 
 var disease2category = table "disease2category" with (disease_id: Int, disease_category_id: Int, comment: String) from db;
 

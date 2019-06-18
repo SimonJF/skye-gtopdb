@@ -74,7 +74,7 @@ fun handleQueries(s) {
       var results = lensget selectLens;
       var diseaseInfo =
         switch (results) {
-          case [] -> cancel(s) # Shouldn't happen.
+          case [] -> raise # Shouldn't happen.
           case x :: _ -> x
         };
       var s = send(diseaseInfo, s);
@@ -83,7 +83,8 @@ fun handleQueries(s) {
       handleQueries(s);
     case Delete(s) ->
       var (id, s) = receive(s);
-      var selectLens = lensselect from diseasesLens by fun (x) { x.disease_id == id };
+      fun filterByDiseaseID(x) { x.disease_id == id }
+      var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
       var selectLens = lenscheck selectLens;
       lensput selectLens with [];
       handleQueries(s)
@@ -91,7 +92,7 @@ fun handleQueries(s) {
 }
 
 fun generatePage() {
-  var c : EditDisease = fork(handleQueries);
+  var c = fork(handleQueries);
   cancel(c)
 #  Mvu.runLinear(model, view, updt, fun(_) { SubEmpty }, extract);
 }
