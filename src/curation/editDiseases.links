@@ -1,7 +1,13 @@
 import Tables;
+import Mvu;
+import MvuHTML;
+import MvuAttrs;
+import Template;
 
 typename DiseaseID = Int;
 typename DiseaseName = String;
+
+typename HTML(a) = MvuHTML.HTML(a);
 
 # For now -- this will also contain synonym and xref info later
 typename DiseaseInfo = Tables.DbDisease;
@@ -25,8 +31,8 @@ mutual {
   typename EditDisease = ?[(DiseaseID, DiseaseName)].SelectDisease;
 
   typename SelectDisease =
-    [&| Edit: Editing,
-        Delete: !DiseaseID.EditDisease |&];
+    [+| Edit: Editing,
+        Delete: !DiseaseID.EditDisease |+];
 
   typename Editing = !DiseaseID.?DiseaseInfo.!DiseaseInfo.EditDisease;
 }
@@ -40,7 +46,7 @@ typename EditingInfo =
 
 typename Model = [|
     Waiting
-  | Selecting:(EditDisease, SelectingInfo)
+  | Selecting:(SelectDisease, SelectingInfo)
   | Editing:(Editing, EditingInfo)
 |];
 
@@ -50,8 +56,13 @@ typename UnrModel = [|
   | UEditing:EditingInfo
 |];
 
-fun updt(msg, model) { model }
+# TODO: Fill me in
+typename Message = ();
 
+sig updt: (Message, Model) ~> (Model, Mvu.Command(Message))
+fun updt(msg, model) { (model, NoCommand) }
+
+sig extract : (Model) ~> (Model, UnrModel)
 fun extract(model) {
   switch(model) {
     case Waiting -> (Waiting, UWaiting)
@@ -60,10 +71,52 @@ fun extract(model) {
   }
 }
 
+sig view : (UnrModel) ~> HTML(Message)
+fun view(unrModel) {
+  open MvuHTML;
+  open MvuAttrs;
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+
+  fun renderSelecting(si: SelectingInfo) {
+    var options =
+      MvuHTML.concatMap(fun((di, dn)) {
+          var selAttr =
+            if (di == si.selectedDisease) { MvuAttrs.attr("selected", "selected") }
+            else { MvuAttrs.empty };
+          var di = intToString(di);
+          option(value(di) +@ selAttr,
+              textNode(dn ^^ " [id: " ^^ di ^^ "]"))
+      }, si.diseases);
+
+    form(a0,
+      div(class("form-group row"),
+        label(for_("diseaseName") +@ class("col-sm-2 col-form-label"),
+          textNode("Disease Name")) +*
+        div(class("col-sm-10"),
+          select_(id("diseaseName"), options))) +*
+      div(class("form-group row"),
+        div(class("col-sm-10"),
+          button(type("button") +@ class("btn btn-primary"), textNode("Edit")) +*
+          button(type("button") +@ class("btn btn-primary"), textNode("Delete")))))
+  }
+
+  var body =
+    switch(unrModel) {
+      case UWaiting -> textNode("Loading...")
+      case USelecting(si) -> renderSelecting(si)
+      case UEditing(ei) -> textNode("Editing")
+    };
+
+  h1(a0, textNode("Edit Diseases")) +* body
+}
+
+
+sig handleQueries : (~EditDisease) ~> ()
 fun handleQueries(s) {
   # Query the list of diseases
   var diseasesLens = lens Tables.disease with { disease_id -> name };
-  var diseases = lensget diseasesLens;
+  var diseases = sortBy(fun(x) { x.name }, lensget diseasesLens);
   # TODO: Investigate dropLens
   var s = send(map(fun(d) { (d.disease_id, d.name) }, diseases), s);
   offer(s) {
@@ -91,8 +144,19 @@ fun handleQueries(s) {
   }
 }
 
-fun generatePage() {
+fun mainPage() {
   var c = fork(handleQueries);
-  cancel(c)
-#  Mvu.runLinear(model, view, updt, fun(_) { SubEmpty }, extract);
+  var (diseases, c) = receive(c);
+  var selectedID =
+    switch(diseases) {
+      case [] -> 0
+      case (id, _) :: xs -> id
+    };
+
+  var initialModel =
+    Selecting(c, (diseases = diseases,
+          selectedDisease = selectedID));
+
+  Mvu.runLinear("placeholder", initialModel, view, updt, fun(_) { SubEmpty }, extract);
+  Template.template()
 }

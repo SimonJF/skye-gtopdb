@@ -2,6 +2,7 @@ import MvuHTML;
 import MvuAttrs;
 import Mvu;
 import Template;
+import EditDiseases;
 
 fun notImplemented() {
   open MvuHTML;
@@ -19,6 +20,7 @@ fun main() {
   addRoute("/editDiseases", fun(_) { EditDiseases.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);
+  serveWebsockets();
   servePages()
 }
 
