@@ -16,6 +16,7 @@ fun notImplemented() {
 
 fun main() {
   addRoute("/", fun(_) { notImplemented() });
+  addRoute("/editDiseases", fun(_) { EditDiseases.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);
   servePages()

@@ -81,7 +81,9 @@ var deleted_family = table "deleted_family" with (family_id: Int, name: String, 
 
 var discoverx = table "discoverx" with (cat_no: String, url: String, name: String, description: String, species_id: Int) from db;
 
-var disease = table "disease" with (disease_id: Int, name: String, description: String, type: String) from db;
+
+typename DbDisease = (disease_id: Int, name: String, description: String, type: String);
+var disease = table "disease" with DbDisease from db;
 
 var disease2category = table "disease2category" with (disease_id: Int, disease_category_id: Int, comment: String) from db;
 

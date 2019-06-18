@@ -1,0 +1,97 @@
+import Tables;
+
+typename DiseaseID = Int;
+typename DiseaseName = String;
+
+# For now -- this will also contain synonym and xref info later
+typename DiseaseInfo = Tables.DbDisease;
+
+
+# The editing process first requires a disease to be selected.
+#
+# The lens reference only makes sense on the server, so needs to be
+# stored in a persistent process.
+#
+# We then select the disease, at which point we can either edit it, or
+# delete it.
+#
+# When we choose to edit it, we get the disease data back. We then send
+# the updated disease data, which gets committed by the lens.
+#
+# ...could this be... an actual, real-life, non-contrived use of session
+# types!?
+
+mutual {
+  typename EditDisease = ?[(DiseaseID, DiseaseName)].SelectDisease;
+
+  typename SelectDisease =
+    [&| Edit: Editing,
+        Delete: !DiseaseID.EditDisease |&];
+
+  typename Editing = !DiseaseID.?DiseaseInfo.!DiseaseInfo.EditDisease;
+}
+
+
+typename SelectingInfo =
+  (diseases: [(DiseaseID, DiseaseName)], selectedDisease: DiseaseID);
+
+typename EditingInfo =
+  (diseaseID: DiseaseID, diseaseInfo: DiseaseInfo);
+
+typename Model = [|
+    Waiting
+  | Selecting:(EditDisease, SelectingInfo)
+  | Editing:(Editing, EditingInfo)
+|];
+
+typename UnrModel = [|
+    UWaiting
+  | USelecting:SelectingInfo
+  | UEditing:EditingInfo
+|];
+
+fun updt(msg, model) { model }
+
+fun extract(model) {
+  switch(model) {
+    case Waiting -> (Waiting, UWaiting)
+    case Selecting(ed, si) -> (Selecting(ed, si), USelecting(si))
+    case Editing(ed, ei) -> (Editing(ed, ei), UEditing(ei))
+  }
+}
+
+fun handleQueries(s) {
+  # Query the list of diseases
+  var diseasesLens = lens Tables.disease with { disease_id -> name };
+  var diseases = lensget diseasesLens;
+  # TODO: Investigate dropLens
+  var s = send(map(fun(d) { (d.disease_id, d.name) }, diseases), s);
+  offer(s) {
+    case Edit(s) ->
+      var (id, s) = receive(s);
+      var selectLens = lensselect from diseasesLens by fun (x) { x.disease_id == id };
+      var selectLens = lenscheck selectLens;
+      var results = lensget selectLens;
+      var diseaseInfo =
+        switch (results) {
+          case [] -> cancel(s) # Shouldn't happen.
+          case x :: _ -> x
+        };
+      var s = send(diseaseInfo, s);
+      var (updatedInfo, s) = receive(s);
+      var _ = lensput selectLens with updatedInfo;
+      handleQueries(s);
+    case Delete(s) ->
+      var (id, s) = receive(s);
+      var selectLens = lensselect from diseasesLens by fun (x) { x.disease_id == id };
+      var selectLens = lenscheck selectLens;
+      lensput selectLens with [];
+      handleQueries(s)
+  }
+}
+
+fun generatePage() {
+  var c : EditDisease = fork(handleQueries);
+  cancel(c)
+#  Mvu.runLinear(model, view, updt, fun(_) { SubEmpty }, extract);
+}
