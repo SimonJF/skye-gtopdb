@@ -31,38 +31,35 @@ mutual {
   typename EditDisease = ?[(DiseaseID, DiseaseName)].SelectDisease;
 
   typename SelectDisease =
-    [+| Edit: Editing,
+    [+| Edit: !DiseaseID.
+          [&| OK: ?DiseaseInfo.Editing,
+              Error: EditDisease |&],
         Delete: !DiseaseID.EditDisease |+];
 
-  typename Editing = !DiseaseID.
-    [&| OK: ?DiseaseInfo.!DiseaseInfo.EditDisease,
-        Error: EditDisease |&];
+  typename Editing = !DiseaseInfo.EditDisease;
 }
 
 
 typename SelectingInfo =
   (diseases: [(DiseaseID, DiseaseName)], selectedDisease: DiseaseID);
 
-typename EditingInfo =
-  (diseaseID: DiseaseID, diseaseInfo: DiseaseInfo);
-
 typename Model = [|
     Waiting
   | Selecting:(SelectDisease, SelectingInfo)
-  | Editing:(Editing, EditingInfo)
+  | Editing:(Editing, DiseaseInfo)
 |];
 
 typename UnrModel = [|
     UWaiting
   | USelecting:SelectingInfo
-  | UEditing:EditingInfo
+  | UEditing:DiseaseInfo
 |];
 
-# TODO: Fill me in
 typename Message = [|
     NoOp
   | ChangeID:Int
   | DiseaseList:(SelectDisease, [(DiseaseID, DiseaseName)])
+  | DiseaseInformation:(Editing, DiseaseInfo)
   | SubmitEdit
   | SubmitDelete
 |];
@@ -77,6 +74,7 @@ fun cancelMsg(msg) {
     case SubmitEdit -> ()
     case SubmitDelete -> ()
     case DiseaseList(sd, _) -> cancel(sd); ()
+    case DiseaseInformation(e, _) -> cancel(e); ()
   }
 }
 
@@ -96,25 +94,53 @@ fun selectingModel(s, diseases) {
 sig updt: (Message, Model) ~> (Model, Mvu.Command(Message))
 fun updt(msg, model) {
   switch(model) {
+
     case Waiting ->
       switch(msg) {
-        case DiseaseList(sd, diseases) -> (selectingModel(sd, diseases), NoCommand)
-        case msg -> cancelMsg(msg); (Waiting, NoCommand)
+        case DiseaseList(sd, diseases) ->
+          (selectingModel(sd, diseases), NoCommand)
+        case DiseaseInformation(e, diseaseInfo) ->
+          (Editing(e, diseaseInfo), NoCommand)
+        case msg ->
+          cancelMsg(msg);
+          (Waiting, NoCommand)
       }
+
     case Selecting(s, si) ->
       switch((msg, s)) {
         case (NoOp, s) -> (Selecting(s, si), NoCommand)
+
         case (ChangeID(id), s) ->
           var newSi = (si with selectedDisease = id);
           (Selecting(s, newSi), NoCommand)
-        case (SubmitEdit, s) -> (Selecting(s, si), NoCommand) # Not implemented yet
+
+        case (SubmitEdit, s) ->
+          var s = select Edit s;
+          var s = send(si.selectedDisease, s);
+          (Waiting, SpawnLinear(
+            linfun() {
+              offer(s) {
+                case OK(s) ->
+                  var (diseaseInfo, s) = receive(s);
+                  DiseaseInformation(s, diseaseInfo)
+                case Error(s) ->
+                  var (diseases, s) = receive(s);
+                  DiseaseList(s, diseases)
+              }}))
+
         case (SubmitDelete, s) ->
           var s = select Delete s;
           var s = send(si.selectedDisease, s);
           (Waiting, SpawnLinear(
-            linfun() { var (diseases, s) = receive(s); DiseaseList(s, diseases) }))
+            linfun() {
+              var (diseases, s) = receive(s);
+              DiseaseList(s, diseases)
+            }))
+
         case (DiseaseList(sd, _), s) -> cancel(sd); (Selecting(s, si), NoCommand)
+        case (DiseaseInformation(e, _), s) -> cancel(e); (Selecting(s, si), NoCommand)
       }
+
     case Editing(e, ei) ->
       cancelMsg(msg);
       (Editing(e, ei), NoCommand)
@@ -225,9 +251,9 @@ fun handleQueries(s) {
       };
     case Delete(s) ->
       var (id, s) = receive(s);
-      var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
-      var selectLens = lenscheck selectLens;
-      lensput selectLens with [];
+#      var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
+#      var selectLens = lenscheck selectLens;
+#      lensput selectLens with [];
       handleQueries(s)
   }
 }
@@ -239,3 +265,4 @@ fun mainPage() {
   Mvu.runLinear("placeholder", initialModel, view, updt, fun(_) { SubEmpty }, extract);
   Template.template()
 }
+
