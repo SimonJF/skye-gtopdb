@@ -34,7 +34,9 @@ mutual {
     [+| Edit: Editing,
         Delete: !DiseaseID.EditDisease |+];
 
-  typename Editing = !DiseaseID.?DiseaseInfo.!DiseaseInfo.EditDisease;
+  typename Editing = !DiseaseID.
+    [&| OK: ?DiseaseInfo.!DiseaseInfo.EditDisease,
+        Error: EditDisease |&];
 }
 
 
@@ -57,10 +59,67 @@ typename UnrModel = [|
 |];
 
 # TODO: Fill me in
-typename Message = ();
+typename Message = [|
+    NoOp
+  | ChangeID:Int
+  | DiseaseList:(SelectDisease, [(DiseaseID, DiseaseName)])
+  | SubmitEdit
+  | SubmitDelete
+|];
+
+# SJF TODO: Need to generalise `cancel` to arbitrary messages in order to
+# avoid having to write this
+sig cancelMsg : (Message) ~> ()
+fun cancelMsg(msg) {
+  switch(msg) {
+    case NoOp -> ()
+    case ChangeID(_) -> ()
+    case SubmitEdit -> ()
+    case SubmitDelete -> ()
+    case DiseaseList(sd, _) -> cancel(sd); ()
+  }
+}
+
+sig selectingModel : (SelectDisease, [(DiseaseID, DiseaseName)]) ~> Model
+fun selectingModel(s, diseases) {
+  var selectedID =
+    switch(diseases) {
+      case [] -> 0
+      case (id, _) :: xs -> id
+    };
+
+  Selecting(s, (diseases = diseases,
+        selectedDisease = selectedID))
+}
+
 
 sig updt: (Message, Model) ~> (Model, Mvu.Command(Message))
-fun updt(msg, model) { (model, NoCommand) }
+fun updt(msg, model) {
+  switch(model) {
+    case Waiting ->
+      switch(msg) {
+        case DiseaseList(sd, diseases) -> (selectingModel(sd, diseases), NoCommand)
+        case msg -> cancelMsg(msg); (Waiting, NoCommand)
+      }
+    case Selecting(s, si) ->
+      switch((msg, s)) {
+        case (NoOp, s) -> (Selecting(s, si), NoCommand)
+        case (ChangeID(id), s) ->
+          var newSi = (si with selectedDisease = id);
+          (Selecting(s, newSi), NoCommand)
+        case (SubmitEdit, s) -> (Selecting(s, si), NoCommand) # Not implemented yet
+        case (SubmitDelete, s) ->
+          var s = select Delete s;
+          var s = send(si.selectedDisease, s);
+          (Waiting, SpawnLinear(
+            linfun() { var (diseases, s) = receive(s); DiseaseList(s, diseases) }))
+        case (DiseaseList(sd, _), s) -> cancel(sd); (Selecting(s, si), NoCommand)
+      }
+    case Editing(e, ei) ->
+      cancelMsg(msg);
+      (Editing(e, ei), NoCommand)
+  }
+}
 
 sig extract : (Model) ~> (Model, UnrModel)
 fun extract(model) {
@@ -91,14 +150,42 @@ fun view(unrModel) {
 
     form(a0,
       div(class("form-group row"),
+       # ID search field
+        label(for_("diseaseID") +@ class("col-sm-2 col-form-label"),
+          textNode("Search by ID")) +*
+        div(class("col-sm-10"),
+          input(type("text") +@
+            class("form-control") +@
+            id("diseaseID") +@
+            onKeyUp(fun(value) {
+              if (isInt(value)) {
+                ChangeID(stringToInt(value))
+              } else {
+                NoOp
+              }
+            }), h0))) +*
+       # Disease name list
+      div(class("form-group row"),
         label(for_("diseaseName") +@ class("col-sm-2 col-form-label"),
           textNode("Disease Name")) +*
         div(class("col-sm-10"),
-          select_(id("diseaseName"), options))) +*
+          select_(id("diseaseName") +@
+            onChange(
+              fun(value) {
+                if (isInt(value)) {
+                  ChangeID(stringToInt(value))
+                } else {
+                  NoOp
+                }
+              }), options))) +*
       div(class("form-group row"),
-        div(class("col-sm-10"),
-          button(type("button") +@ class("btn btn-primary"), textNode("Edit")) +*
-          button(type("button") +@ class("btn btn-primary"), textNode("Delete")))))
+        div(class("col-sm-2"), h0) +*
+        div(class("col-sm-1"),
+          button(type("button") +@ class("btn btn-primary") +@
+            onClick(fun() { SubmitEdit }), textNode("Edit"))) +*
+        div(class("col-sm-1"),
+          button(type("button") +@ class("btn btn-primary") +@
+            onClick(fun() { SubmitDelete }), textNode("Delete")))))
   }
 
   var body =
@@ -125,18 +212,19 @@ fun handleQueries(s) {
       var selectLens = lensselect from diseasesLens by fun (x) { x.disease_id == id };
       var selectLens = lenscheck selectLens;
       var results = lensget selectLens;
-      var diseaseInfo =
-        switch (results) {
-          case [] -> raise # Shouldn't happen.
-          case x :: _ -> x
-        };
-      var s = send(diseaseInfo, s);
-      var (updatedInfo, s) = receive(s);
-      var _ = lensput selectLens with updatedInfo;
-      handleQueries(s);
+      switch (results) {
+        case [] ->
+          var s = select Error s;
+          handleQueries(s) # Shouldn't happen.
+        case diseaseInfo :: _ ->
+          var s = select OK s;
+          var s = send(diseaseInfo, s);
+          var (updatedInfo, s) = receive(s);
+          var _ = lensput selectLens with updatedInfo;
+          handleQueries(s);
+      };
     case Delete(s) ->
       var (id, s) = receive(s);
-      fun filterByDiseaseID(x) { x.disease_id == id }
       var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
       var selectLens = lenscheck selectLens;
       lensput selectLens with [];
@@ -147,16 +235,7 @@ fun handleQueries(s) {
 fun mainPage() {
   var c = fork(handleQueries);
   var (diseases, c) = receive(c);
-  var selectedID =
-    switch(diseases) {
-      case [] -> 0
-      case (id, _) :: xs -> id
-    };
-
-  var initialModel =
-    Selecting(c, (diseases = diseases,
-          selectedDisease = selectedID));
-
+  var initialModel = selectingModel(c, diseases);
   Mvu.runLinear("placeholder", initialModel, view, updt, fun(_) { SubEmpty }, extract);
   Template.template()
 }
