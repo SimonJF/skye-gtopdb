@@ -36,7 +36,8 @@ mutual {
               Error: EditDisease |&],
         Delete: !DiseaseID.EditDisease |+];
 
-  typename Editing = !DiseaseInfo.EditDisease;
+  typename Editing =
+    [+| Submit:!DiseaseInfo.EditDisease, Cancel:EditDisease |+];
 }
 
 
@@ -61,7 +62,10 @@ typename Message = [|
   | DiseaseList:(SelectDisease, [(DiseaseID, DiseaseName)])
   | DiseaseInformation:(Editing, DiseaseInfo)
   | SubmitEdit
+  | SubmitCancel
   | SubmitDelete
+  | UpdateName:String
+  | UpdateDescription:String
 |];
 
 # SJF TODO: Need to generalise `cancel` to arbitrary messages in order to
@@ -75,6 +79,9 @@ fun cancelMsg(msg) {
     case SubmitDelete -> ()
     case DiseaseList(sd, _) -> cancel(sd); ()
     case DiseaseInformation(e, _) -> cancel(e); ()
+    case UpdateName(_) -> ()
+    case UpdateDescription(_) -> ()
+    case SubmitCancel(_) -> ()
   }
 }
 
@@ -93,6 +100,15 @@ fun selectingModel(s, diseases) {
 
 sig updt: (Message, Model) ~> (Model, Mvu.Command(Message))
 fun updt(msg, model) {
+
+  fun waitForDiseases(s) {
+    (Waiting, SpawnLinear(
+      linfun() {
+        var (diseases, s) = receive(s);
+        DiseaseList(s, diseases)
+      }))
+  }
+
   switch(model) {
 
     case Waiting ->
@@ -131,19 +147,32 @@ fun updt(msg, model) {
         case (SubmitDelete, s) ->
           var s = select Delete s;
           var s = send(si.selectedDisease, s);
-          (Waiting, SpawnLinear(
-            linfun() {
-              var (diseases, s) = receive(s);
-              DiseaseList(s, diseases)
-            }))
+          waitForDiseases(s)
 
-        case (DiseaseList(sd, _), s) -> cancel(sd); (Selecting(s, si), NoCommand)
-        case (DiseaseInformation(e, _), s) -> cancel(e); (Selecting(s, si), NoCommand)
+        case (msg, s) ->
+          cancelMsg(msg);
+          (Selecting(s, si), NoCommand)
       }
 
     case Editing(e, ei) ->
-      cancelMsg(msg);
-      (Editing(e, ei), NoCommand)
+      switch((msg, e)) {
+        case (UpdateName(name), e) ->
+          var newEi = (ei with name = name);
+          (Editing(e, newEi), NoCommand)
+        case (UpdateDescription(desc), e) ->
+          var newEi = (ei with description = desc);
+          (Editing(e, newEi), NoCommand)
+        case (SubmitEdit, e) ->
+          var e = select Submit e;
+          var e = send(ei, e);
+          waitForDiseases(e)
+        case (SubmitCancel, e) ->
+          var e = select Cancel e;
+          waitForDiseases(e)
+        case (msg, e) ->
+          cancelMsg(msg);
+          (Editing(e, ei), NoCommand)
+      }
   }
 }
 
@@ -192,10 +221,10 @@ fun view(unrModel) {
             }), h0))) +*
        # Disease name list
       div(class("form-group row"),
-        label(for_("diseaseName") +@ class("col-sm-2 col-form-label"),
+        label(for_("diseaseSel") +@ class("col-sm-2 col-form-label"),
           textNode("Disease Name")) +*
         div(class("col-sm-10"),
-          select_(id("diseaseName") +@
+          select_(id("diseaseSel") +@
             onChange(
               fun(value) {
                 if (isInt(value)) {
@@ -214,11 +243,64 @@ fun view(unrModel) {
             onClick(fun() { SubmitDelete }), textNode("Delete")))))
   }
 
+  fun renderEditing(ei) {
+   #<form>
+   #  <div class="form-group">
+   #    <label for="exampleInputEmail1">Email address</label>
+   #    <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="Enter email">
+   #    <small id="emailHelp" class="form-text text-muted">We'll never share your email with anyone else.</small>
+   #  </div>
+   #  <div class="form-group">
+   #    <label for="exampleInputPassword1">Password</label>
+   #    <input type="password" class="form-control" id="exampleInputPassword1" placeholder="Password">
+   #  </div>
+   #  <div class="form-group form-check">
+   #    <input type="checkbox" class="form-check-input" id="exampleCheck1">
+   #    <label class="form-check-label" for="exampleCheck1">Check me out</label>
+   #  </div>
+   #  <button type="submit" class="btn btn-primary">Submit</button>
+   #</form>
+
+    form(a0,
+      # Disease ID
+      div(class("form-group"),
+        label(for_("diseaseID"), textNode("Disease ID")) +*
+        input(type("text") +@
+          class("form-control") +@
+          id("diseaseID") +@
+          attr("readonly", "true") +@
+          placeholder(intToString(ei.disease_id)), h0)) +*
+      # Disease Name
+      div(class("form-group"),
+        label(for_("diseaseName"), textNode("Disease Name")) +*
+        input(type("text") +@
+          id("diseaseName") +@
+          class("form-control") +@
+          value(ei.name) +@
+          onInput(fun(name) { UpdateName(name) }), h0)) +*
+      # Disease Comments
+      div(class("form-group"),
+        label(for_("diseaseDescription"), textNode("Disease Description")) +*
+        textarea(id("diseaseDescription") +@
+          class("form-control") +@
+          value(ei.description) +@
+          onInput(fun(desc) { UpdateDescription(desc) }), h0)) +*
+      div(class("form-group row"),
+        div(class("col-sm-2"), h0) +*
+        div(class("col-sm-1"),
+          button(type("button") +@ class("btn btn-primary") +@
+            onClick(fun() { SubmitEdit }), textNode("Submit"))) +*
+        div(class("col-sm-1"),
+          button(type("button") +@ class("btn btn-primary") +@
+            onClick(fun() { SubmitCancel }), textNode("Cancel")))))
+
+  }
+
   var body =
     switch(unrModel) {
       case UWaiting -> textNode("Loading...")
       case USelecting(si) -> renderSelecting(si)
-      case UEditing(ei) -> textNode("Editing")
+      case UEditing(ei) -> renderEditing(ei)
     };
 
   h1(a0, textNode("Edit Diseases")) +* body
@@ -245,15 +327,19 @@ fun handleQueries(s) {
         case diseaseInfo :: _ ->
           var s = select OK s;
           var s = send(diseaseInfo, s);
-          var (updatedInfo, s) = receive(s);
-          var _ = lensput selectLens with updatedInfo;
-          handleQueries(s);
+          offer(s) {
+            case Submit(s) ->
+              var (updatedInfo, s) = receive(s);
+              var _ = lensput selectLens with [updatedInfo];
+              handleQueries(s);
+            case Cancel(s) -> handleQueries(s)
+          }
       };
     case Delete(s) ->
       var (id, s) = receive(s);
-#      var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
-#      var selectLens = lenscheck selectLens;
-#      lensput selectLens with [];
+      var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
+      var selectLens = lenscheck selectLens;
+      lensput selectLens with [];
       handleQueries(s)
   }
 }
