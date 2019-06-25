@@ -244,61 +244,53 @@ fun view(unrModel) {
   }
 
   fun renderEditing(ei) {
-   #<form>
-   #  <div class="form-group">
-   #    <label for="exampleInputEmail1">Email address</label>
-   #    <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="Enter email">
-   #    <small id="emailHelp" class="form-text text-muted">We'll never share your email with anyone else.</small>
-   #  </div>
-   #  <div class="form-group">
-   #    <label for="exampleInputPassword1">Password</label>
-   #    <input type="password" class="form-control" id="exampleInputPassword1" placeholder="Password">
-   #  </div>
-   #  <div class="form-group form-check">
-   #    <input type="checkbox" class="form-check-input" id="exampleCheck1">
-   #    <label class="form-check-label" for="exampleCheck1">Check me out</label>
-   #  </div>
-   #  <button type="submit" class="btn btn-primary">Submit</button>
-   #</form>
+    div(class("container"),
+      div(class("row mt-3"),
+        div(class("col-sm"),
+          div(class("card"),
+            div(class("card-header"), textNode("Basic information")) +*
+            div(class("card-body"),
+              form(a0,
+                # Disease ID
+                div(class("form-group"),
+                  label(a0, textNode("Disease ID")) +*
+                  textNode(intToString(ei.disease_id))) +*
+                # Disease Name
+                div(class("form-group"),
+                  label(for_("diseaseName"), textNode("Disease Name")) +*
+                  input(type("text") +@
+                    id("diseaseName") +@
+                    class("form-control") +@
+                    value(ei.name) +@
+                    onInput(fun(name) { UpdateName(name) }), h0)) +*
+                # Disease Comments
+                div(class("form-group"),
+                  label(for_("diseaseDescription"), textNode("Disease Description")) +*
+                  textarea(id("diseaseDescription") +@
+                    class("form-control") +@
+                    value(ei.description) +@
+                    onInput(fun(desc) { UpdateDescription(desc) }), h0))))))) +*
 
-    form(a0,
-      # Disease ID
-      div(class("form-group"),
-        label(for_("diseaseID"), textNode("Disease ID")) +*
-        input(type("text") +@
-          class("form-control") +@
-          id("diseaseID") +@
-          attr("readonly", "true") +@
-          placeholder(intToString(ei.disease_id)), h0)) +*
-      # Disease Name
-      div(class("form-group"),
-        label(for_("diseaseName"), textNode("Disease Name")) +*
-        input(type("text") +@
-          id("diseaseName") +@
-          class("form-control") +@
-          value(ei.name) +@
-          onInput(fun(name) { UpdateName(name) }), h0)) +*
-      # Disease Comments
-      div(class("form-group"),
-        label(for_("diseaseDescription"), textNode("Disease Description")) +*
-        textarea(id("diseaseDescription") +@
-          class("form-control") +@
-          value(ei.description) +@
-          onInput(fun(desc) { UpdateDescription(desc) }), h0)) +*
-      div(class("form-group row"),
-        div(class("col-sm-2"), h0) +*
-        div(class("col-sm-1"),
-          button(type("button") +@ class("btn btn-primary") +@
-            onClick(fun() { SubmitEdit }), textNode("Submit"))) +*
-        div(class("col-sm-1"),
-          button(type("button") +@ class("btn btn-primary") +@
-            onClick(fun() { SubmitCancel }), textNode("Cancel")))))
+      # Next up: DB refs panel
+      div(class("row mt-3"),
+        div(class("col-sm"),
+          div(class("card"),
+            div(class("card-header"), textNode("Database References")) +*
+            div(class("card-body"), textNode("TODO: CONTENT"))))) +*
 
+      div(class("row mt-5"),
+        div(class("col-sm"),
+              button(type("button") +@ class("btn btn-primary mr-2") +@
+                  onClick(fun() { SubmitEdit }), textNode("Submit")) +*
+              button(type("button") +@ class("btn btn-primary") +@
+                  onClick(fun() { SubmitCancel }), textNode("Cancel")))))
   }
 
   var body =
     switch(unrModel) {
-      case UWaiting -> textNode("Loading...")
+      case UWaiting ->
+        div(class("spinner-border") +@ role("status"),
+          span(class("sr-only"), textNode("Loading...")))
       case USelecting(si) -> renderSelecting(si)
       case UEditing(ei) -> renderEditing(ei)
     };

@@ -56,6 +56,7 @@ typename Target = (
     targetSideEffects: Markup,
     targetTherapeuticUse: Markup,
     targetReferences: [ReferenceId],
+    targetMutationCount: Int,
     targetInteractions: SortableTable(ImmunoTargetInteraction, Message)
   );
 
@@ -136,6 +137,11 @@ fun getModel(diseaseId) {
         [(id=o.object_id, name=o.name, comments=pp.comments,
           role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
           therapeuticUse=pp.use,
+          mutationCount =
+            length(
+              for (m <-- Tables.mutation)
+                where (m.pathophysiology_id == pp.pathophysiology_id)
+                [m]),
           references =
             for (pp_ref <-- Tables.pathophysiology_refs)
               where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
@@ -152,6 +158,7 @@ fun getModel(diseaseId) {
           [(id=o.object_id, name=o.name,
             comments=id2o.comment,
             role="", drugComments="", sideEffects="", therapeuticUse="",
+            mutationCount = 0,
             references =
               for (id2o_ref <-- Tables.immuno_disease2object_refs)
                 where (id2o_ref.immuno_disease2object_id == id2o.immuno_disease2object_id)
@@ -209,6 +216,13 @@ fun getModel(diseaseId) {
     var allTargets = rawResult.patho_targets ++ rawResult.immuno_targets;
     var groupedTargets = map(second, groupBy(fun(x) { x.id }, allTargets));
     # Now we've grouped, we need to merge
+    fun max2(x, y) {
+      switch(max([x, y])) {
+        case Some(z) -> z
+        case None -> x
+      }
+    }
+
     var targets = map(fun(group) {
         fun concatComments(x, y) {
           switch((x, y)) {
@@ -228,6 +242,7 @@ fun getModel(diseaseId) {
                 role=concatComments(x.role, y.role),
                 drugComments=concatComments(x.drugComments, y.drugComments),
                 sideEffects=concatComments(x.sideEffects, y.sideEffects),
+                mutationCount = max2(x.mutationCount, y.mutationCount),
                 therapeuticUse=concatComments(x.therapeuticUse, y.therapeuticUse),
                 references = x.references ++ y.references)
             }, x, xs)
@@ -289,6 +304,7 @@ fun getModel(diseaseId) {
            targetDrugComments = parseOrError(x.drugComments),
            targetSideEffects = parseOrError(x.sideEffects),
            targetTherapeuticUse = parseOrError(x.therapeuticUse),
+           targetMutationCount = x.mutationCount,
            targetReferences = x.references,
            targetInteractions = interactionsTable
           );
@@ -375,6 +391,7 @@ fun getInitialModel() {
 fun view(model) {
   var a0 = MvuAttrs.empty;
   fun viewModel(model) {
+    fun renderM(markup) { renderMarkup(markup, model.diReferences, []) }
     fun colspan(x) { MvuAttrs.attr("colSpan", x) }
     fun rowspan(x) { MvuAttrs.attr("rowSpan", x) }
     fun src(x) { MvuAttrs.attr("src", x) }
@@ -393,12 +410,43 @@ fun view(model) {
       var synonyms = MvuHTML.concat(join([textNode(" | ")],
             map(fun(x) { [RenderMarkup.renderSimple(x)] }, model.diSynonyms)));
 
-      var dbLinks =
-        MvuHTML.concat(map(fun(link) {
-          p(a0,
-              textNode(link.dbName ^^ ": ") +*
-              a(href(link.dbLinkText), textNode(link.dbLinkText)))
-        }, model.diDatabaseLinks));
+      fun infoBox(aName, heading, content) {
+        a(name(aName), MvuHTML.empty) +*
+          table_(class("receptor_data_tables fullwidth"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("info category"), textNode(heading)))) +*
+            tbody(name("toggle"),
+              tr(a0, td(class("info"), content))))
+      }
+
+      var synonymsBox =
+        if (listEmpty(model.diSynonyms)) {
+          MvuHTML.empty
+        } else {
+          infoBox("diseaseSynonyms", "Synonyms", synonyms)
+        };
+
+      var descriptionBox =
+        if (Parser.markupEmpty(model.diDescription)) {
+          MvuHTML.empty
+        } else {
+          infoBox("description", "Description", renderM(model.diDescription))
+        };
+
+      var dbLinksBox = {
+        if (listEmpty(model.diDatabaseLinks)) {
+          MvuHTML.empty
+        } else {
+          var dbLinks =
+            MvuHTML.concat(map(fun(link) {
+              p(a0,
+                  textNode(link.dbName ^^ ": ") +*
+                  a(href(link.dbLinkText), textNode(link.dbLinkText)))
+            }, model.diDatabaseLinks));
+          infoBox("diseaseLinks", "Database Links", dbLinks)
+        }
+      };
 
       h4(a0, renderedName) +*
       div(class("contentboxfullhelp"),
@@ -423,26 +471,15 @@ fun view(model) {
               td(width("180"), b(a0, textNode(intToString(immunoLigandCount))) +*
                 textNode(" immuno-relevant ligands")))) +*
         div(class("data_tables_container"),
-            a(name("diseaseSynonyms"), MvuHTML.empty) +*
-            table_(class("receptor_data_tables fullwidth"),
-              thead(a0,
-                tr(name("hotspot") +@ class("hotspot"),
-                  td(class("info category"), textNode("Synonyms")))) +*
-              tbody(name("toggle"),
-                tr(a0, td(class("info"), synonyms)))) +*
-            a(name("diseaseLinks"), MvuHTML.empty) +*
-            table_(class("receptor_data_tables fullwidth"),
-              thead(a0,
-                tr(name("hotspot") +@ class("hotspot"),
-                  td(class("info category"), textNode("Database Links")))) +*
-              tbody(name("toggle"),
-                tr(a0, td(class("info"), dbLinks))))))
+            synonymsBox +*
+            descriptionBox +*
+            dbLinksBox))
     };
 
     fun makeTargetTable(target) {
 
       fun mkTextRow((name, markup)) {
-        var renderedMarkup = renderMarkup(markup, model.diReferences, []);
+        var renderedMarkup = renderM(markup);
         if (renderedMarkup == MvuHTML.empty) {
           MvuHTML.empty
         } else {
@@ -456,6 +493,25 @@ fun view(model) {
         tr(a0,
             td(class("info"), textNode("References: ")) +*
             td(class("info"), renderCitationList(target.targetReferences, model.diReferences)));
+
+      var mutationsRow =
+        if (target.targetMutationCount > 0) {
+          var mutationOrMutations =
+            if (target.targetMutationCount > 1) { "mutations" } else { "mutation" };
+          tr(a0,
+              td(class("info"), textNode("Mutations: ")) +*
+              td(class("info"),
+                renderM(target.targetName) +*
+                textNode(" is associated with ") +*
+                b(a0,
+                  textNode(intToString(target.targetMutationCount)) +*
+                  textNode(" " ^^ mutationOrMutations ^^ ". ")) +*
+                a(href("/objectDisplay?objectId=" ^^ intToString(target.targetId)),
+                  textNode("Click here for details") +*
+                  img(attr("border", "none") +@ src("/images/go.jpg"), MvuHTML.empty))))
+        } else {
+          MvuHTML.empty
+        };
 
       var interactionsRow = {
         var data = DataTable.getTableData(target.targetInteractions);
@@ -502,6 +558,7 @@ fun view(model) {
           tbody(a0,
             textRows +*
             referencesRow +*
+            mutationsRow +*
             interactionsRow
           ))
     }
