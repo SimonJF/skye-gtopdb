@@ -564,12 +564,16 @@ fun view(model) {
     }
 
     var targetsBox = {
-      var targetTables = MvuHTML.concat(map(makeTargetTable, model.diTargets));
-      div(class("grid_16 alpha"),
-          h4(a0, textNode("Targets")) +*
-          div(class("contentboxfullhelp"),
-            div(class("disease_data_tables_container"),
-              targetTables)))
+      if (listEmpty(model.diTargets)) {
+        MvuHTML.empty
+      } else {
+        var targetTables = MvuHTML.concat(map(makeTargetTable, model.diTargets));
+        div(class("grid_16 alpha"),
+            h4(a0, textNode("Targets")) +*
+            div(class("contentboxfullhelp"),
+              div(class("disease_data_tables_container"),
+                targetTables)))
+      }
     };
 
     var ligandsBox = {
@@ -623,24 +627,28 @@ fun view(model) {
         commentsRow
       }
 
-      var ligandsTable =
-        DataTable.renderTable(model.diLigands, renderRow);
 
-      div(class("grid_16 alpha"),
-          h4(a0, textNode("Ligands")) +*
-          div(class("contentboxfullhelp"),
-            div(class("disease_ligand_data_tables_container"),
-              table_(class("receptor_data_tables_disease fullwidth"),
-                tbody(name("toggle"),
-                  tr(a0,
-                    td(class("table_instructions") +@ style("text-align:left; border-style: solid none solid solid;font-weight:bold;"),
-                      textNode("Key to terms and symbols")) +*
-                    td(class("table_instructions") +@ style("text-align:center; border-style: solid none solid none;font-size:105%;font-weight:bold;"),
-                      textNode("Click ligand name to view ligand summary")) +*
-                    td(class("table_instructions") +@ style("text-align:center; border-style: solid dolid solid none; text-align:right;"),
-                      textNode("Click column headers to sort"))) +*
-                  tr(a0,
-                    td(class("table_container") +@ colspan("3"), ligandsTable)))))))
+      if (tableEmpty(model.diLigands)) {
+        MvuHTML.empty
+      } else {
+        var ligandsTable =
+          DataTable.renderTable(model.diLigands, renderRow);
+        div(class("grid_16 alpha"),
+            h4(a0, textNode("Ligands")) +*
+            div(class("contentboxfullhelp"),
+              div(class("disease_ligand_data_tables_container"),
+                table_(class("receptor_data_tables_disease fullwidth"),
+                  tbody(name("toggle"),
+                    tr(a0,
+                      td(class("table_instructions") +@ style("text-align:left; border-style: solid none solid solid;font-weight:bold;"),
+                        textNode("Key to terms and symbols")) +*
+                      td(class("table_instructions") +@ style("text-align:center; border-style: solid none solid none;font-size:105%;font-weight:bold;"),
+                        textNode("Click ligand name to view ligand summary")) +*
+                      td(class("table_instructions") +@ style("text-align:center; border-style: solid dolid solid none; text-align:right;"),
+                        textNode("Click column headers to sort"))) +*
+                    tr(a0,
+                      td(class("table_container") +@ colspan("3"), ligandsTable)))))))
+      }
     };
 
     # TODO: This should be abstracted out to a different file

@@ -112,3 +112,6 @@ fun updateTableData(tbl, newData) {
 sig getTableData : (SortableTable(d, m)) ~> [d]
 fun getTableData(tbl) { tbl.tableRows }
 
+
+sig tableEmpty : (SortableTable(d, m)) ~> Bool
+fun tableEmpty(tbl) { listEmpty(tbl.tableRows) }
