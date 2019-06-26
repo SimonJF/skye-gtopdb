@@ -253,7 +253,7 @@ fun view(unrModel) {
               form(a0,
                 # Disease ID
                 div(class("form-group"),
-                  label(a0, textNode("Disease ID")) +*
+                  label(a0, textNode("Disease ID: ")) +*
                   textNode(intToString(ei.disease_id))) +*
                 # Disease Name
                 div(class("form-group"),

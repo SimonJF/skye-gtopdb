@@ -171,6 +171,8 @@ typename URL = String;
 typename ObjectInfo = (
     objectId: Int,
     objectName: Markup,
+    objectSystematicName: Maybe(Markup),
+    objectAbbreviation: Maybe(Markup),
     objectSynonyms: [Markup],
     objectFamily: Family,
     objectAnnotationStatus: AnnotationStatus,
@@ -247,6 +249,8 @@ fun getInitialModel() {
           where (rb.object_id == objectId)
             [(id = objectId,
              name = o.name,
+             abbreviation = o.abbreviation,
+             systematicName = o.systematic_name,
              comments = o.comments,
              grac_comments = o.grac_comments,
              immuno_comments = o.gtip_comment,
@@ -916,9 +920,21 @@ fun getInitialModel() {
       var ligandNames = Ligand.queryLigands(ligandIDs);
 
       var refs = Reference.mkReferenceData(Reference.queryReferences(refIDs));
+      fun parseIfNonempty(str) {
+        if (str == "") {
+          Nothing
+        } else {
+          Just(parseOrError(str))
+        }
+      }
+
+      var systematicName = parseIfNonempty(raw.systematicName);
+      var abbreviation = parseIfNonempty(raw.abbreviation);
 
       (objectId = objectId,
        objectName = parseOrError(raw.name),
+       objectSystematicName = systematicName,
+       objectAbbreviation = abbreviation,
        objectSynonyms = transformSynonyms(raw.synonyms),
        objectFamily = transformFamily(raw.family),
        objectGeneProteinInfo = geneProteinInfo,
@@ -983,6 +999,21 @@ fun view(model) {
         td(class("value"), val))
     }
 
+    fun renderIfJust(heading, x) {
+      switch(x) {
+        case Just(markup) ->
+          p(a0,
+            b(a0, textNode(heading ^^ ": ")) +*
+            renderM(markup))
+        case Nothing -> MvuHTML.empty
+      }
+    }
+
+    var sysNomenclature =
+      renderIfJust("Systematic Nomenclature", objectInfo.objectSystematicName);
+    var abbrev =
+      renderIfJust("Abbreviation", objectInfo.objectAbbreviation);
+
     var infoBox = {
     div(class("grid_16 alpha"),
       a(name("top"), MvuHTML.empty) +*
@@ -994,6 +1025,8 @@ fun view(model) {
           p(a0,
             b(a0, textNode("Nomenclature: ")) +*
             renderM(objectInfo.objectName)) +*
+          sysNomenclature +*
+          abbrev +*
           p(a0,
             b(a0, textNode("Family: ")) +*
             a(href("/familyDisplay?familyId=" ^^ intToString(objectInfo.objectFamily.familyId)),
@@ -1040,7 +1073,6 @@ fun view(model) {
 
     var dbLinksBox =
       renderDatabaseLinks(objectInfo.objectDatabaseLinks, objectInfo.objectSpeciesMap);
-    var pdbStructureBox = MvuHTML.empty;
     var endogenousLigandsBox = {
       fun renderSummary(els) {
         tr(class("info"),
@@ -1512,6 +1544,7 @@ fun view(model) {
             synonymsBox +*
             dbLinksBox +*
             pdbStructureBox +*
+            # associatedProteinsBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
             interactionsTables +*
