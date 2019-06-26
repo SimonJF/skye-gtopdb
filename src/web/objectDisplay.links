@@ -30,6 +30,7 @@ open import Species;
 open import ToggleBox;
 open import AnnotationStatus;
 open import DbLinks;
+open import Object;
 
 typename InteractionTable = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
@@ -185,6 +186,7 @@ typename URL = String;
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
 typename ObjectInfo = (
     objectId: Int,
+    objectType: ObjectType,
     objectName: Markup,
     objectSystematicName: Maybe(Markup),
     objectAbbreviation: Maybe(Markup),
@@ -1002,6 +1004,7 @@ fun getInitialModel() {
       var abbreviation = parseIfNonempty(raw.abbreviation);
 
       (objectId = objectId,
+       objectType = Object.classifyObject(objectId),
        objectName = parseOrError(raw.name),
        objectSystematicName = systematicName,
        objectAbbreviation = abbreviation,

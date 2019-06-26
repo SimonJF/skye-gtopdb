@@ -3,24 +3,18 @@
 open import MvuHTML;
 open import Parser;
 open import Tables;
+open import Object;
 
 typename InteractionTargetType = [|
-  GPCR | IC | NHR | Enzyme | CatalyticReceptor | Transporter | Other
-  | TargetLigand
+  TargetLigand | Object:ObjectType
 |];
 
 typename Target = [| TTargetLigand:RawLigand | TObject:RawObject | TNone |];
 
 fun showInteractionTargetType(it) {
   switch(it) {
-    case GPCR -> "GPCR"
-    case IC -> "IC"
-    case NHR -> "Nuclear Hormone Receptor"
-    case Enzyme -> "Enzyme"
-    case CatalyticReceptor -> "Catalytic Receptor"
-    case Transporter -> "Transporter"
-    case Other -> "Other"
     case TargetLigand -> "Target Ligand"
+    case Object(ot) -> showObjectType(ot)
   }
 }
 
@@ -84,29 +78,7 @@ fun classifyInteractionType(objectID, targetLigandID) {
   if (targetLigandID > 0) {
     TargetLigand
   } else {
-    fun inTable(tbl) {
-      query {
-        length(
-          for (x <-- tbl)
-          where (x.object_id == objectID)
-            [x]) > 0
-      }
-    }
-    if (inTable(Tables.gpcr)) {
-      GPCR
-    } else if (inTable(Tables.vgic) || inTable(Tables.lgic) || inTable(Tables.other_ic)) {
-      IC
-    } else if (inTable(Tables.nhr)) {
-      NHR
-    } else if (inTable(Tables.enzyme)) {
-      Enzyme
-    } else if (inTable(Tables.catalytic_receptor)) {
-      CatalyticReceptor
-    } else if (inTable(Tables.transporter)) {
-      Transporter
-    } else {
-      Other
-    }
+    Object(Object.classifyObject(objectID))
   }
 }
 

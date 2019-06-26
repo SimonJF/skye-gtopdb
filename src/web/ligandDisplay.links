@@ -419,14 +419,14 @@ fun getInitialModel() {
         (enzymeSubstrates = emptyTable(),
          cofactorEnzymes = cofactorTable,
          transporterSubstrates = emptyTable(),
-         gpcrInteractions = makeTable(GPCR),
-         icInteractions = makeTable(IC),
-         nhrInteractions = makeTable(NHR),
-         enzymeInteractions = makeTable(Enzyme),
-         catalyticReceptorInteractions = makeTable(CatalyticReceptor),
-         transporterInteractions = makeTable(Transporter),
+         gpcrInteractions = makeTable(Object(GPCR)),
+         icInteractions = makeTable(Object(IC)),
+         nhrInteractions = makeTable(Object(NHR)),
+         enzymeInteractions = makeTable(Object(Enzyme)),
+         catalyticReceptorInteractions = makeTable(Object(CatalyticReceptor)),
+         transporterInteractions = makeTable(Object(Transporter)),
          targetLigandInteractions = makeTable(TargetLigand),
-         otherInteractions = makeTable(Other))
+         otherInteractions = makeTable(Object(Other)))
       };
 
       var precursors = transformPrecursors(rawInfo.precursors);
@@ -645,25 +645,25 @@ fun updt(msg, model) {
 
         var newTables =
           switch (ty) {
-            case GPCR ->
+            case Object(GPCR) ->
               (tables with gpcrInteractions =
                 updateSortStatus(tables.gpcrInteractions, colName, dir))
-            case IC ->
+            case Object(IC) ->
               (tables with icInteractions =
                 updateSortStatus(tables.icInteractions, colName, dir))
-            case NHR ->
+            case Object(NHR) ->
               (tables with nhrInteractions =
                 updateSortStatus(tables.nhrInteractions, colName, dir))
-            case Enzyme ->
+            case Object(Enzyme) ->
               (tables with enzymeInteractions =
                 updateSortStatus(tables.enzymeInteractions, colName, dir))
-            case CatalyticReceptor ->
+            case Object(CatalyticReceptor) ->
               (tables with catalyticReceptorInteractions =
                 updateSortStatus(tables.catalyticReceptorInteractions, colName, dir))
-            case Transporter ->
+            case Object(Transporter) ->
               (tables with transporterInteractions =
                 updateSortStatus(tables.transporterInteractions, colName, dir))
-            case Other ->
+            case Object(Other) ->
               (tables with otherInteractions =
                 updateSortStatus(tables.otherInteractions, colName, dir))
             case TargetLigand ->
