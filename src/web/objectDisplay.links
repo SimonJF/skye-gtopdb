@@ -122,6 +122,18 @@ typename SortedInteractions = (
   gatingInhibitors: SortableTable(InteractionInfo, Message),
   subunitSpecific: SortableTable(InteractionInfo, Message));
 
+typename AssociatedProtein = (
+  name: Markup,
+  objectID : Maybe(Int),
+  references : [ReferenceID]
+);
+
+typename SortedAssociatedProteins = (
+  hpfSubunits: [AssociatedProtein],
+  auxiliarySubunits: [AssociatedProtein],
+  otherProteins: [AssociatedProtein]
+);
+
 typename Variant = (
     vId: Int,
     vType: String,
@@ -178,6 +190,7 @@ typename ObjectInfo = (
     objectAnnotationStatus: AnnotationStatus,
     objectGeneProteinInfo:
       (giComments: Markup, giEntries: [GeneProteinInfo]),
+    objectAssociatedProteins: SortedAssociatedProteins,
     # TODO: Suss this out and add it in
     # objectQuaternaryStructure: (),
     objectDatabaseLinks: [DatabaseLink],
@@ -255,6 +268,18 @@ fun getInitialModel() {
              grac_comments = o.grac_comments,
              immuno_comments = o.gtip_comment,
              malaria_comments = o.gtmp_comment,
+             associatedProteins =
+               for (ap <-- Tables.associated_protein)
+                 where (ap.object_id == objectId)
+                 [(protein = ap,
+                   assocObjects =
+                     for (ao <-- Tables.object)
+                       where (ao.object_id == ap.associated_object_id)
+                       [ao],
+                   refs =
+                     for (r <-- Tables.associated_protein_refs)
+                       where (r.associated_protein_id == ap.associated_protein_id)
+                       [r.reference_id])],
              synonyms =
                for (s <-- Tables.synonym)
                  where (s.object_id == objectId && s.display)
@@ -546,6 +571,37 @@ fun getInitialModel() {
          subunitSpecific =
            mkStandardInteractionTable(SubunitSpecificTable, parsedInteractions.subunitSpecific));
         res
+      }
+
+      fun transformAssociatedProteins(rawAPs) {
+        fun transformAP(ap) {
+          switch(ap.assocObjects) {
+            case [] ->
+              (name = parseOrError(ap.protein.name),
+               objectID = Nothing,
+               references = ap.refs)
+            case obj :: _ ->
+              (name = parseOrError(obj.name),
+               objectID = Just(obj.object_id),
+               references = ap.refs)
+          }
+        }
+
+        var emptySorted =
+          (hpfSubunits = [], auxiliarySubunits = [], otherProteins = []);
+
+        fold_left(fun ((aps, refs), x) {
+          var transformed = transformAP(x);
+          var newSorted =
+            if (x.protein.type == "Heteromeric Pore-forming Subunit") {
+              (aps with hpfSubunits = transformed :: aps.hpfSubunits)
+            } else if (x.protein.type == "Auxiliary Subunit") {
+              (aps with auxiliarySubunits = transformed :: aps.auxiliarySubunits)
+            } else {
+              (aps with otherProteins = transformed :: aps.otherProteins)
+            };
+          (newSorted, x.refs ++ refs)
+        }, (emptySorted, []), rawAPs)
       }
 
       fun transformPDBs(rawPDBs) {
@@ -849,6 +905,9 @@ fun getInitialModel() {
       var (variants, variantRefs, variantLigands) =
         transformVariants(raw.variants);
 
+      var (associatedProteins, associatedProteinRefs) =
+        transformAssociatedProteins(raw.associatedProteins);
+
       var (pdbData, pdbRefs, pdbLigands) = transformPDBs(raw.pdbData);
 
       var interactions =
@@ -902,6 +961,7 @@ fun getInitialModel() {
           tdRefs ++
           ctaRefs ++
           ipaRefs ++
+          associatedProteinRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -955,6 +1015,7 @@ fun getInitialModel() {
        objectTissueDistribution = tissueDistribution,
        objectCellTypeAssociations = cellTypeAssociations,
        objectImmunoProcessAssociations = immunoProcessAssociations,
+       objectAssociatedProteins = associatedProteins,
        objectSpeciesMap = speciesMap,
        objectContributors = transformContributors(raw.contributors))
     }
