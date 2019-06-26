@@ -153,6 +153,18 @@ typename EnzymeReaction = (
   specificReactions: [SpecificReaction]
 );
 
+typename Product = (
+  name: Markup,
+  ligandID: Int,
+  speciesName: String,
+  references: [ReferenceID]
+);
+
+typename Cofactor = (
+  name: Markup,
+  ligandID: Int,
+  speciesName: String
+);
 
 typename Variant = (
     vId: Int,
@@ -485,7 +497,27 @@ fun getInitialModel() {
               functionalCharacteristics =
                 for (gfc <-- Tables.grac_functional_characteristics)
                   where (gfc.object_id == objectId)
-                  [gfc.functional_characteristics]
+                  [gfc.functional_characteristics],
+              cofactors =
+                for (c <-- Tables.cofactor)
+                  where (c.object_id == objectId)
+                  [(cofactor = c,
+                    ligand =
+                      for (l <-- Tables.ligand)
+                      where (l.ligand_id == c.ligand_id)
+                      [l])],
+              products =
+                for (p <-- Tables.product)
+                  where (p.object_id == objectId)
+                  [(product = p,
+                    ligand =
+                      for (l <-- Tables.ligand)
+                      where (l.ligand_id == p.ligand_id)
+                      [l],
+                    refs =
+                      for (pr <-- Tables.product_refs)
+                      where (pr.product_id == p.product_id)
+                      [pr.reference_id])]
              )]
     };
 
