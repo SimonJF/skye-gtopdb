@@ -125,13 +125,16 @@ typename SortedInteractions = (
 typename AssociatedProtein = (
   name: Markup,
   objectID : Maybe(Int),
-  references : [ReferenceID]
+  references : [ReferenceID],
+  effect: Markup
 );
 
 typename SortedAssociatedProteins = (
   hpfSubunits: [AssociatedProtein],
   auxiliarySubunits: [AssociatedProtein],
-  otherProteins: [AssociatedProtein]
+  otherProteins: [AssociatedProtein],
+  gProteins: [AssociatedProtein],
+  interactingProteins: [AssociatedProtein]
 );
 
 typename Variant = (
@@ -579,16 +582,19 @@ fun getInitialModel() {
             case [] ->
               (name = parseOrError(ap.protein.name),
                objectID = Nothing,
-               references = ap.refs)
+               references = ap.refs,
+               effect = parseOrError(ap.protein.effect))
             case obj :: _ ->
               (name = parseOrError(obj.name),
                objectID = Just(obj.object_id),
-               references = ap.refs)
+               references = ap.refs,
+               effect = parseOrError(ap.protein.effect))
           }
         }
 
         var emptySorted =
-          (hpfSubunits = [], auxiliarySubunits = [], otherProteins = []);
+          (hpfSubunits = [], auxiliarySubunits = [], otherProteins = [],
+           gProteins = [], interactingProteins = []);
 
         fold_left(fun ((aps, refs), x) {
           var transformed = transformAP(x);
@@ -597,6 +603,10 @@ fun getInitialModel() {
               (aps with hpfSubunits = transformed :: aps.hpfSubunits)
             } else if (x.protein.type == "Auxiliary Subunit") {
               (aps with auxiliarySubunits = transformed :: aps.auxiliarySubunits)
+            } else if (x.protein.type == "G Protein") {
+              (aps with gProteins = transformed :: aps.gProteins)
+            } else if (x.protein.type == "Interacting Protein") {
+              (aps with interactingProteins = transformed :: aps.interactingProteins)
             } else {
               (aps with otherProteins = transformed :: aps.otherProteins)
             };
