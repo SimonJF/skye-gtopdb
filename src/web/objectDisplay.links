@@ -199,11 +199,12 @@ typename DataTableBox = (
 
 typename Substrate = (
     name: Markup,
+    ligandID: Int,
     endogenous: Bool,
-    species: SpeciesID,
+    species: String,
     property: Markup,
     value: Float,
-    units: String,
+    units: Markup,
     standardProperty: Markup,
     standardValue: Float,
     assayDescription: Markup,
@@ -1010,6 +1011,9 @@ fun getInitialModel() {
 
           var name =
             parseOrError(ligandOrDefault(fun(l) { l.name }, sub.name));
+          var ligandID =
+            ligandOrDefault(fun(l) { l.ligand_id }, (-1));
+
           var parsedProperty = parseOrError(sub.property);
           var parsedStandardProperty = parseOrError(sub.standard_property);
           var parsedAssayDescription = parseOrError(sub.assay_description);
@@ -1022,11 +1026,12 @@ fun getInitialModel() {
 
           var transformedSubstrate =
             (name = name,
+             ligandID = ligandID,
              endogenous = sub.endogenous,
-             species = sub.species_id,
+             species = speciesShortName(sub.species_id),
              property = parsedProperty,
              value = sub.value,
-             units = sub.units,
+             units = parseOrError(sub.units),
              standardProperty = parsedStandardProperty,
              standardValue = sub.standard_value,
              assayDescription = parsedAssayDescription,
@@ -1972,6 +1977,62 @@ fun view(model) {
 
     };
 
+    var substratesBox = {
+      if (objectInfo.objectType == Enzyme || objectInfo.objectType == Transporter &&
+          not(tableEmpty(objectInfo.objectSubstrates))) {
+        fun renderRow(subs) {
+          var nameCol =
+            if (subs.ligandID > 0) {
+              a(href("/objectDisplay?objectId=" ^^ intToString(subs.ligandID)),
+                  renderM(subs.name))
+            } else {
+              renderM(subs.name)
+            };
+          var endoCol =
+            if (subs.endogenous) {
+              img(src("/images/endogenous.gif") +@
+                  alt("Substrate is endogenous in the given species"), h0)
+            } else {
+              MvuHTML.empty
+            };
+
+          var standardValCol =
+            if (subs.standardValue == 0.0) {
+              MvuHTML.empty
+            } else {
+              textNode(floatToString(subs.standardValue))
+            };
+
+          tr(class("info"),
+            td(a0, nameCol) +*
+            td(a0, endoCol) +*
+            td(style("text-align:center;"), textNode(subs.species)) +*
+            td(a0, renderM(subs.property)) +*
+            td(a0, textNode(floatToString(subs.value))) +*
+            td(a0, renderM(subs.units)) +*
+            td(a0, renderM(subs.standardProperty)) +*
+            td(a0, standardValCol) +*
+            td(a0, renderM(subs.assayDescription)) +*
+            td(a0, renderM(subs.assayConditions)) +*
+            td(a0, renderM(subs.comments)) +*
+            td(a0, Reference.renderCitationList(subs.references, objectInfo.objectReferences)))
+        }
+
+        var renderedTable = renderTable(objectInfo.objectSubstrates, renderRow);
+
+        a(name("SubstrateKinetics"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(a0,
+              td(class("info category"), textNode("Substrates and Reaction Kinetics")))) +*
+          tbody(a0,
+            tr(a0,
+              td(class("table_container"), renderedTable))))
+      } else {
+        MvuHTML.empty
+      }
+    };
+
     var dataBoxes =
       div(class("grid_16 alpha"),
         div(class("contentboxfullhelp"),
@@ -1983,6 +2044,7 @@ fun view(model) {
             # Primary regulator data does not exist in the DB -- no point implementing
             enzymeReactionsBox +*
             associatedProteinsBox +*
+            substratesBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
             interactionsTables +*
