@@ -1597,6 +1597,86 @@ fun view(model) {
       }
     };
 
+    var associatedProteinsBox = {
+      var oaps = objectInfo.objectAssociatedProteins;
+      var comments = objectInfo.objectComments.associatedProteinsComments;
+
+      if (not(markupEmpty(comments) &&
+              listEmpty(oaps.hpfSubunits) &&
+              listEmpty(oaps.auxiliarySubunits) &&
+              listEmpty(oaps.otherProteins))) {
+
+        var comments = commentsBox("Associated Protein Comments", comments);
+        var renderedTables = {
+          fun renderRowsIfNonempty(data) {
+            fun renderRow(ap) {
+              var name =
+                switch(ap.objectID) {
+                  case Just(id) ->
+                    a(href("/objectDisplay?objectId=" ^^ intToString(id)), renderM(ap.name))
+                  case Nothing -> renderM(ap.name)
+                };
+              tr(a0,
+                td(class("info"), name) +*
+                td(class("info"), Reference.renderCitationList(ap.references, objectInfo.objectReferences)))
+            }
+
+            if (listEmpty(data)) {
+              tr(a0,
+                td(class("info") +@ colSpan(2), textNode("Not determined")))
+            } else {
+              MvuHTML.concatMap(renderRow, data)
+            }
+          }
+
+          fun renderTable(title, alignment, data) {
+            var renderedRows = renderRowsIfNonempty(data);
+            td(align(alignment) +@ valign("top") +@ class("info"),
+              table_(align("center") +@ class("receptor_data_tables")
+                +@ style("margin:0px;min-width:100%;"),
+                colgroup(a0,
+                  col(style("min-width:50%"), h0) +*
+                  col(style("min-width:50%"), h0)) +*
+                thead(a0,
+                  tr(a0,
+                    td(class("info category") +@ colSpan(2), textNode(title)))) +*
+                tbody(a0,
+                  tr(a0,
+                    td(class("info heading"), textNode("Name")) +*
+                    td(class("info heading"), textNode("References"))) +*
+                  renderedRows)))
+
+          }
+
+          var heteromericTable =
+            renderTable("Heteromeric Pore-forming Subunits", "left", oaps.hpfSubunits);
+          var auxSubunitTable =
+            renderTable("Auxiliary Subunits", "center", oaps.auxiliarySubunits);
+          var otherProteinTable =
+            renderTable("Other Associated Proteins", "right", oaps.otherProteins);
+
+          tbody(name("toggle"),
+            tr(valign("top"),
+              heteromericTable +*
+              auxSubunitTable +*
+              otherProteinTable))
+          };
+        a(name("AssociatedProteins"), MvuHTML.empty) +*
+        table_(class("receptor_data_tables fullwidth"),
+          colgroup(a0,
+            col(style("min-width:280px;"), h0) +*
+            col(style("min-width:280px;"), h0) +*
+            col(style("min-width:280px;"), h0)) +*
+          thead(a0,
+            tr(a0,
+              td(class("info category") +@ colSpan(3), textNode("Associated Proteins")))) +*
+          renderedTables) +*
+        comments
+      } else {
+        MvuHTML.empty
+      }
+    };
+
     var dataBoxes =
       div(class("grid_16 alpha"),
         div(class("contentboxfullhelp"),
@@ -1605,7 +1685,7 @@ fun view(model) {
             synonymsBox +*
             dbLinksBox +*
             pdbStructureBox +*
-            # associatedProteinsBox +*
+            associatedProteinsBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
             interactionsTables +*

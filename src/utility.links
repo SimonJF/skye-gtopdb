@@ -181,7 +181,7 @@ fun align(val) {
 }
 
 fun valign(val) {
-  MvuAttrs.attr("align", val)
+  MvuAttrs.attr("vAlign", val)
 }
 
 fun target(val) {
