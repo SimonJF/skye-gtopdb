@@ -1794,7 +1794,67 @@ fun view(model) {
       }
     };
 
-    var enzymeReactionsBox = MvuHTML.empty;
+    var enzymeReactionsBox = {
+      if (listEmpty(objectInfo.objectEnzymeReactions)) {
+        MvuHTML.empty
+      } else {
+        fun renderRow(reaction) {
+          var srs = reaction.specificReactions;
+
+          var renderedSRs = {
+            fun renderSR(sr) {
+              tr(class("info"),
+                td(a0, renderM(sr.description)) +*
+                td(a0, renderM(sr.reaction)) +*
+                td(a0, Reference.renderCitationList(sr.references, objectInfo.objectReferences)))
+            }
+
+            tr(class("info heading"),
+              td(a0, textNode("Description")) +*
+              td(a0, textNode("Reaction")) +*
+              td(a0, textNode("Reference"))) +*
+            MvuHTML.concatMap(renderSR, srs)
+          };
+
+
+          var rowspanAttr =
+            if (listEmpty(srs)) {
+              MvuAttrs.empty
+            } else {
+              rowSpan(length(srs) + 2)
+            };
+
+          var specificReactions =
+            if (listEmpty(srs)) {
+              MvuHTML.empty
+            } else {
+              renderedSRs
+            };
+
+          tr(class("info"),
+            td(rowspanAttr,
+              textNode("EC Number: ") +*
+              a(href("http://www.genome.jp/dbget-bin/www_bget?ec:" ^^ reaction.ecNumber),
+                textNode(reaction.ecNumber))) +*
+            td(colSpan(3), renderM(reaction.reaction))) +*
+            specificReactions
+        }
+
+        a(name("EnzymeReaction"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(a0,
+              td(class("info category"), textNode("Enzyme Reaction")))) +*
+          tbody(a0,
+            tr(a0,
+              td(class("table_container"),
+                table_(class("inner_receptor_data_tables"),
+                  thead(a0, h0) +*
+                  tbody(a0,
+                    MvuHTML.concatMap(renderRow, objectInfo.objectEnzymeReactions)))))))
+      }
+
+    };
 
     var dataBoxes =
       div(class("grid_16 alpha"),
