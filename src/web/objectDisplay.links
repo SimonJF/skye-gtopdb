@@ -138,6 +138,19 @@ typename SortedAssociatedProteins = (
   interactingProteins: [AssociatedProtein]
 );
 
+typename SpecificReaction = (
+  description: Markup,
+  reaction: Markup,
+  references: [ReferenceID]
+);
+
+typename EnzymeReaction = (
+  ecNumber: String,
+  reaction: Markup,
+  specificReactions: [SpecificReaction]
+);
+
+
 typename Variant = (
     vId: Int,
     vType: String,
@@ -196,6 +209,7 @@ typename ObjectInfo = (
     objectGeneProteinInfo:
       (giComments: Markup, giEntries: [GeneProteinInfo]),
     objectAssociatedProteins: SortedAssociatedProteins,
+    objectEnzymeReactions: [EnzymeReaction],
     # TODO: Suss this out and add it in
     # objectQuaternaryStructure: (),
     objectDatabaseLinks: [DatabaseLink],
@@ -295,6 +309,20 @@ fun getInitialModel() {
                    for (f <-- Tables.family)
                      where (f.family_id == r2f.family_id)
                      [(id=f.family_id, name=f.name)],
+             enzymeReactions =
+               for (o2r <-- Tables.object2reaction)
+                 where (o2r.object_id == objectId)
+                 for (r <-- Tables.reaction)
+                   where (r.reaction_id == o2r.reaction_id)
+                   [(reaction = r,
+                     specificReactions =
+                       for (sr <-- Tables.specific_reaction)
+                         where (sr.reaction_id == r.reaction_id && sr.object_id == objectId)
+                         [(sr = sr,
+                           refs =
+                             for (srr <-- Tables.specific_reaction_refs)
+                               where (srr.specific_reaction_id == sr.specific_reaction_id)
+                               [srr.reference_id])])],
              annotationStatus = o.annotation_status,
              generalComments = o.comments,
              gpcrComments =
@@ -616,6 +644,31 @@ fun getInitialModel() {
         }, (emptySorted, []), rawAPs)
       }
 
+      fun transformEnzymeReactions(rawERs) {
+          fun transformSpecificReactions(srs) {
+            fun transformSpecificReaction(sr) {
+              var parsedDesc = parseOrError(sr.sr.description);
+              var parsedReaction = parseOrError(sr.sr.reaction);
+              var (refs, ligands) = collectAllIds([parsedDesc, parsedReaction]);
+              ((description = parsedDesc, reaction = parsedReaction,
+                references = sr.refs), refs ++ sr.refs, ligands)
+            }
+
+            fold_left(fun((srs, srRefs, srLigands), sr) {
+                var (sr, refs, ligands) = transformSpecificReaction(sr);
+                (sr :: srs, refs ++ srRefs, ligands ++ srLigands)
+              }, ([], [], []), srs)
+          }
+
+          fold_left(fun ((reactions, refs, ligands), x) {
+              var parsedReaction = parseOrError(x.reaction.reaction);
+              var (rRefs, rLigands) = collectIds(parsedReaction);
+              var (srs, srRefs, srLigands) = transformSpecificReactions(x.specificReactions);
+              var er = (ecNumber = x.reaction.ec_number, reaction = parsedReaction, specificReactions = srs);
+            (er :: reactions, rRefs ++ srRefs ++ refs, rLigands ++ srLigands ++ ligands)
+          }, ([], [], []), rawERs)
+      }
+
       fun transformPDBs(rawPDBs) {
         fun transformPDB(rawPDB) {
           var pdb = rawPDB.pdb;
@@ -922,6 +975,9 @@ fun getInitialModel() {
 
       var (pdbData, pdbRefs, pdbLigands) = transformPDBs(raw.pdbData);
 
+      var (enzymeReactions, enzymeRefs, enzymeLigands) =
+        transformEnzymeReactions(raw.enzymeReactions);
+
       var interactions =
         transformInteractions(
             map(InteractionUtilities.makeInteraction, raw.interactions));
@@ -974,6 +1030,7 @@ fun getInitialModel() {
           ctaRefs ++
           ipaRefs ++
           associatedProteinRefs ++
+          enzymeRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -987,6 +1044,7 @@ fun getInitialModel() {
           gpiLigands ++
           tdLigands ++
           ctaLigands ++
+          enzymeLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -1013,6 +1071,7 @@ fun getInitialModel() {
        objectGeneProteinInfo = geneProteinInfo,
        objectDatabaseLinks = dbLinks,
        objectAnnotationStatus = raw.annotationStatus,
+       objectEnzymeReactions = enzymeReactions,
        objectPDBData = pdbData,
        objectEndogenousLigands = endogenousLigands,
        objectSortedInteractions = sortedInteractions,
@@ -1735,6 +1794,8 @@ fun view(model) {
       }
     };
 
+    var enzymeReactionsBox = MvuHTML.empty;
+
     var dataBoxes =
       div(class("grid_16 alpha"),
         div(class("contentboxfullhelp"),
@@ -1743,6 +1804,8 @@ fun view(model) {
             synonymsBox +*
             dbLinksBox +*
             pdbStructureBox +*
+            # Primary regulator data does not exist in the DB -- no point implementing
+            enzymeReactionsBox +*
             associatedProteinsBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
