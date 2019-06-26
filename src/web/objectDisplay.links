@@ -183,7 +183,9 @@ typename ReceptorComments = (
   gatingInhibitorsComments: Markup,
   generalComments: Markup,
   immunoComments: Markup,
-  malariaComments: Markup
+  malariaComments: Markup,
+  stoichiometryComments: Markup,
+  functionalCharacteristicsComments: Markup
 );
 
 typename DataTableEntry = (
@@ -475,7 +477,15 @@ fun getInitialModel() {
                  where (c2o.object_id == objectId)
                    for (c <-- Tables.contributor_copy)
                      where (c.contributor_id == c2o.contributor_id)
-                     [(c = c, order=c2o.display_order)]
+                     [(c = c, order=c2o.display_order)],
+              stoichiometry =
+                for (t <-- Tables.transporter)
+                  where (t.object_id == objectId)
+                  [t.grac_stoichiometry],
+              functionalCharacteristics =
+                for (gfc <-- Tables.grac_functional_characteristics)
+                  where (gfc.object_id == objectId)
+                  [gfc.functional_characteristics]
              )]
     };
 
@@ -747,7 +757,21 @@ fun getInitialModel() {
       }
 
 
-      fun transformReceptorComments(rb, general, immuno, malaria) {
+      fun transformReceptorComments() {
+        var rb = raw.receptorBasic;
+
+        #transformReceptorComments(raw.receptorBasic, raw.comments,
+        #    raw.immuno_comments, raw.malaria_comments, raw);
+        fun fromList(xs) {
+          switch(xs) {
+            case [] -> MarkupEmpty
+            case x :: _ -> parseOrError(x)
+          }
+        }
+
+        var stoic = fromList(raw.stoichiometry);
+        var fcs = fromList(raw.functionalCharacteristics);
+
         var res = (
           listComments = parseOrError(rb.list_comments),
           associatedProteinsComments = parseOrError(rb.associated_proteins_comments),
@@ -766,9 +790,12 @@ fun getInitialModel() {
           inhibitorsComments = parseOrError(rb.inhibitors_comments),
           channelBlockersComments = parseOrError(rb.channel_blockers_comments),
           gatingInhibitorsComments = parseOrError(rb.gating_inhibitors_comments),
-          generalComments = parseOrError(general),
-          immunoComments = parseOrError(immuno),
-          malariaComments = parseOrError(malaria));
+          generalComments = parseOrError(raw.comments),
+          immunoComments = parseOrError(raw.immuno_comments),
+          malariaComments = parseOrError(raw.malaria_comments),
+          stoichiometryComments = stoic,
+          functionalCharacteristicsComments = fcs
+          );
 
 
         var (commentRefs, commentLigands) = collectAllIds(
@@ -782,7 +809,9 @@ fun getInitialModel() {
             res.allostericModulatorsComments, res.activatorsComments,
             res.inhibitorsComments, res.channelBlockersComments,
             res.gatingInhibitorsComments, res.generalComments,
-            res.immunoComments, res.malariaComments]);
+            res.immunoComments, res.malariaComments, res.stoichiometryComments,
+            res.functionalCharacteristicsComments
+          ]);
         (res, commentRefs, commentLigands)
       }
 
@@ -1128,8 +1157,7 @@ fun getInitialModel() {
       # TODO: A few more comment fields (grac_comments, structural_info_comments, quanternary_structure_comments)
       # still to be handled
       var (receptorComments, commentRefs, commentLigands) =
-        transformReceptorComments(raw.receptorBasic, raw.comments,
-            raw.immuno_comments, raw.malaria_comments);
+        transformReceptorComments();
 
       var (substrateTbl, substrateRefs, substrateLigands) =
         transformSubstrates(raw.substrates);
@@ -2033,6 +2061,15 @@ fun view(model) {
       }
     };
 
+    var productsBox = MvuHTML.empty; # TODO: Implement
+    var cofactorsBox = MvuHTML.empty; # TODO: Implement
+
+    var stoichiometryBox =
+      commentsBox("Stoichiometry", objectInfo.objectComments.stoichiometryComments);
+    var fcsBox =
+      commentsBox("Functional Characteristics",
+          objectInfo.objectComments.functionalCharacteristicsComments);
+
     var dataBoxes =
       div(class("grid_16 alpha"),
         div(class("contentboxfullhelp"),
@@ -2045,6 +2082,10 @@ fun view(model) {
             enzymeReactionsBox +*
             associatedProteinsBox +*
             substratesBox +*
+            productsBox +*
+            cofactorsBox +*
+            stoichiometryBox +*
+            fcsBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
             interactionsTables +*
