@@ -318,7 +318,10 @@ var structural_info_refs = table "structural_info_refs" with (structural_info_id
 
 var subcommittee = table "subcommittee" with (contributor_id: Int, family_id: Int, role: String, display_order: Int) from db;
 
-var substrate = table "substrate" with (substrate_id: Int, object_id: Int, species_id: Int, ligand_id: Int, property: String, value: Float, units: String, assay_description: String, assay_conditions: String, comments: String, name: String, endogenous: Bool, in_iuphar: Bool, in_grac: Bool, standard_property: String, standard_value: Float) from db;
+
+typename RawSubstrate = (substrate_id: Int, object_id: Int, species_id: Int, ligand_id: Int, property: String, value: Float, units: String, assay_description: String, assay_conditions: String, comments: String, name: String, endogenous: Bool, in_iuphar: Bool, in_grac: Bool, standard_property: String, standard_value: Float);
+
+var substrate = table "substrate" with RawSubstrate from db;
 
 var substrate_refs = table "substrate_refs" with (substrate_id: Int, reference_id: Int) from db;
 

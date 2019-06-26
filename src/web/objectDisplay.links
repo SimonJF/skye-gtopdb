@@ -32,16 +32,19 @@ open import AnnotationStatus;
 open import DbLinks;
 open import Object;
 
-typename InteractionTable = [|
+typename Table = [|
+  # Interaction Tables
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
   | ActivatorsTable       | InhibitorsTable  | ChannelBlockersTable
   | GatingInhibitorsTable | SubunitSpecificTable
+  # Substrate table
+  | SubstratesTable
 |];
 
 typename ColumnName = String;
 
 typename Message = [|
-    SortInteractionTable:(InteractionTable, ColumnName, SortDirection)
+    SortTable:(Table, ColumnName, SortDirection)
   | ToggleReferences | ToggleContributors | ToggleShowIEA:Int
 |];
 
@@ -194,6 +197,21 @@ typename DataTableBox = (
     boxRows: [DataTableEntry]
 );
 
+typename Substrate = (
+    name: Markup,
+    endogenous: Bool,
+    species: SpeciesID,
+    property: Markup,
+    value: Float,
+    units: String,
+    standardProperty: Markup,
+    standardValue: Float,
+    assayDescription: Markup,
+    assayConditions: Markup,
+    comments: Markup,
+    references: [ReferenceID]
+);
+
 typename URL = String;
 
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
@@ -234,6 +252,7 @@ typename ObjectInfo = (
     objectReferences: [(ReferenceID, (ReferenceNumber, Reference.Reference))],
     objectLigandNames: [(LigandId, LigandName)],
     objectSpeciesMap: SpeciesMap,
+    objectSubstrates: SortableTable(Substrate, Message),
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -438,6 +457,18 @@ fun getInitialModel() {
                        for (vRef <-- Tables.variant_refs)
                          where (vRef.variant_id == v.variant_id)
                          [vRef.reference_id])],
+             substrates =
+               for (s <-- Tables.substrate)
+                 where (s.object_id == objectId)
+                   [(substrate = s,
+                     ligand =
+                       for (l <-- Tables.ligand)
+                       where (l.ligand_id == s.ligand_id)
+                       [l],
+                     refs =
+                       for (sr <-- Tables.substrate_refs)
+                         where (sr.substrate_id == s.substrate_id)
+                         [sr.reference_id])],
              contributors =
                for (c2o <-- Tables.contributor2object)
                  where (c2o.object_id == objectId)
@@ -530,14 +561,14 @@ fun getInitialModel() {
         }, emptyResult, rawInteractions)
       }
 
-      fun mkInteractionTables(parsedInteractions) {
+      fun mkTables(parsedInteractions) {
         # Columns are slightly different based on the type of interaction.
         # Agonists / antagonists / channel blockers / allosteric modulators:
         #  ligand, data cols, species, action, affinity, parameter, references
         # Activators / Inhibitors / Gating inhibitors:
         #  ligand, data cols, species, action, affinity, parameter, holding voltage, reference
 
-        fun mkStandardInteractionTable(tableTy, interactions) {
+        fun mkStandardTable(tableTy, interactions) {
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
                 simpleCmp(getTargetName(x.interaction.interactionTarget),
@@ -558,7 +589,7 @@ fun getInitialModel() {
                           y.interaction.affinity.affinityUnits) }))),
             ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
           ];
-          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, colName, sortDir) }
+          fun sortMessage(colName, sortDir) { SortTable(tableTy, colName, sortDir) }
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
@@ -583,15 +614,15 @@ fun getInitialModel() {
             ("References", ("reference_header", NotSortable))
           ];
 
-          fun sortMessage(colName, sortDir) { SortInteractionTable(tableTy, colName, sortDir) }
+          fun sortMessage(colName, sortDir) { SortTable(tableTy, colName, sortDir) }
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
         var res : SortedInteractions =
-          (agonists = mkStandardInteractionTable(AgonistsTable, parsedInteractions.agonists),
-         antagonists = mkStandardInteractionTable(AntagonistsTable, parsedInteractions.antagonists),
+          (agonists = mkStandardTable(AgonistsTable, parsedInteractions.agonists),
+         antagonists = mkStandardTable(AntagonistsTable, parsedInteractions.antagonists),
          allostericModulators =
-           mkStandardInteractionTable(AllostericModulatorsTable,
+           mkStandardTable(AllostericModulatorsTable,
              parsedInteractions.allostericModulators),
          activators =
            mkActivatorTable(ActivatorsTable, parsedInteractions.activators),
@@ -602,7 +633,7 @@ fun getInitialModel() {
          gatingInhibitors =
            mkActivatorTable(GatingInhibitorsTable, parsedInteractions.gatingInhibitors),
          subunitSpecific =
-           mkStandardInteractionTable(SubunitSpecificTable, parsedInteractions.subunitSpecific));
+           mkStandardTable(SubunitSpecificTable, parsedInteractions.subunitSpecific));
         res
       }
 
@@ -965,6 +996,85 @@ fun getInitialModel() {
         (reverse(ipasRev), ipaRefs)
       }
 
+      fun transformSubstrates(rawSubstrates) {
+
+        fun transformSubstrate(s) {
+          var sub = s.substrate;
+          #sig ligandOrDefault : forall a. ((Tables.RawLigand) ~%~> a, a) ~%~> a
+          fun ligandOrDefault(projectF, def) {
+            switch(s.ligand) {
+              case [] -> def
+              case x :: _ -> projectF(x)
+            }
+          }
+
+          var name =
+            parseOrError(ligandOrDefault(fun(l) { l.name }, sub.name));
+          var parsedProperty = parseOrError(sub.property);
+          var parsedStandardProperty = parseOrError(sub.standard_property);
+          var parsedAssayDescription = parseOrError(sub.assay_description);
+          var parsedAssayConditions = parseOrError(sub.assay_conditions);
+          var parsedComments = parseOrError(sub.comments);
+
+          var (refs, ligands) =
+            collectAllIds([parsedProperty, parsedStandardProperty,
+                parsedAssayDescription, parsedAssayConditions, parsedComments]);
+
+          var transformedSubstrate =
+            (name = name,
+             endogenous = sub.endogenous,
+             species = sub.species_id,
+             property = parsedProperty,
+             value = sub.value,
+             units = sub.units,
+             standardProperty = parsedStandardProperty,
+             standardValue = sub.standard_value,
+             assayDescription = parsedAssayDescription,
+             assayConditions = parsedAssayConditions,
+             comments = parsedComments,
+             references = s.refs);
+          (transformedSubstrate, refs, ligands)
+        }
+
+        var (transformedSubstrates, substrateRefs, substrateLigands) =
+          fold_left(fun((subs, refs, ligands), s) {
+            var (sub, sRefs, sLigands) = transformSubstrate(s);
+            (sub :: subs, sRefs ++ refs, sLigands ++ ligands)
+          }, ([], [], []), rawSubstrates);
+
+        var tbl = {
+          var cols = [
+            ("Substrate", ("substrate_header header", Sortable(fun(x, y) {
+                markupCmp(x.name, y.name) }))),
+            ("", ("", NotSortable)),
+            ("Sp.", ("keybox_header",
+              Sortable(fun(x, y) { simpleCmp(x.species, y.species) }))),
+            ("Property", ("units_header header",
+              Sortable(fun(x, y) { markupCmp(x.property, y.property) }))),
+            ("Value", ("units_header header sorter-decimals", Sortable(fun(x, y) {
+              simpleCmp(x.value, y.value)}))),
+            ("Units", ("units_header", Sortable(fun(x, y) {
+                simpleCmp(x.units,
+                          y.units) }))),
+            ("Standard property", ("units_header header sorter-decimals", Sortable(fun(x, y) {
+              markupCmp(x.standardProperty, y.standardProperty)}))),
+            ("Standard value", ("units_header header sorter-decimals", Sortable(fun(x, y) {
+              simpleCmp(x.standardValue, y.standardValue)}))),
+            ("Assay description", ("assay_header header", Sortable(fun(x, y) {
+              markupCmp(x.assayDescription, y.assayDescription)}))),
+            ("Assay conditions", ("assay_header header", Sortable(fun(x, y) {
+              markupCmp(x.assayConditions, y.assayConditions)}))),
+            ("Comments", ("assay_header header", Sortable(fun(x, y) {
+              markupCmp(x.comments, y.comments)}))),
+            ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
+          ];
+          fun sortMessage(colName, sortDir) { SortTable(SubstratesTable, colName, sortDir) }
+          DataTable.makeTable(cols, transformedSubstrates, sortMessage)
+        };
+
+        (tbl, substrateRefs, substrateLigands)
+      }
+
       var dbLinks = transformDBLinks(raw.databaseLinks);
 
       var (variants, variantRefs, variantLigands) =
@@ -983,7 +1093,7 @@ fun getInitialModel() {
             map(InteractionUtilities.makeInteraction, raw.interactions));
       var endogenousLigands = interactions.endogenous;
 
-      var sortedInteractions = mkInteractionTables(interactions);
+      var sortedInteractions = mkTables(interactions);
       var interactionRefs = interactions.references;
 
       var (transductions, transductionRefs, transductionLigands) =
@@ -1016,6 +1126,9 @@ fun getInitialModel() {
         transformReceptorComments(raw.receptorBasic, raw.comments,
             raw.immuno_comments, raw.malaria_comments);
 
+      var (substrateTbl, substrateRefs, substrateLigands) =
+        transformSubstrates(raw.substrates);
+
       var refIDs =
         uniquify(
           variantRefs ++
@@ -1031,6 +1144,7 @@ fun getInitialModel() {
           ipaRefs ++
           associatedProteinRefs ++
           enzymeRefs ++
+          substrateRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1045,6 +1159,7 @@ fun getInitialModel() {
           tdLigands ++
           ctaLigands ++
           enzymeLigands ++
+          substrateLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -1089,6 +1204,7 @@ fun getInitialModel() {
        objectImmunoProcessAssociations = immunoProcessAssociations,
        objectAssociatedProteins = associatedProteins,
        objectSpeciesMap = speciesMap,
+       objectSubstrates = substrateTbl,
        objectContributors = transformContributors(raw.contributors))
     }
 
@@ -1905,7 +2021,6 @@ fun view(model) {
   }
 }
 
-# TODO
 sig updt : (Message, Model) ~%~> Model
 fun updt(msg, model) {
   fun updtOI(objectInfo) {
@@ -1930,32 +2045,43 @@ fun updt(msg, model) {
       case ToggleShowIEA(procID) ->
         (objectInfo with
           objectImmunoProcessAssociations=toggleIEA(procID))
-      case SortInteractionTable(tableTy, colName, dir) ->
+      case SortTable(tableTy, colName, dir) ->
         var osi = objectInfo.objectSortedInteractions;
-        (objectInfo with
-          objectSortedInteractions =
-            switch(tableTy) {
-              case AgonistsTable ->
-                (osi with agonists = DataTable.updateSortStatus(osi.agonists, colName, dir))
-              case AntagonistsTable ->
-                (osi with antagonists = DataTable.updateSortStatus(osi.antagonists, colName, dir))
-              case AllostericModulatorsTable ->
-                (osi with allostericModulators =
-                   DataTable.updateSortStatus(osi.allostericModulators, colName, dir))
-              case ActivatorsTable ->
-                (osi with activators = DataTable.updateSortStatus(osi.activators, colName, dir))
-              case InhibitorsTable ->
-                (osi with inhibitors = DataTable.updateSortStatus(osi.inhibitors, colName, dir))
-              case ChannelBlockersTable ->
-                (osi with channelBlockers =
-                   DataTable.updateSortStatus(osi.channelBlockers, colName, dir))
-              case GatingInhibitorsTable ->
-                (osi with gatingInhibitors =
-                   DataTable.updateSortStatus(osi.gatingInhibitors, colName, dir))
-              case SubunitSpecificTable ->
-                (osi with subunitSpecific =
-                   DataTable.updateSortStatus(osi.subunitSpecific, colName, dir))
-            })
+        fun updateOSI(newOSI) {
+          (objectInfo with objectSortedInteractions = newOSI)
+        }
+        switch(tableTy) {
+          case AgonistsTable ->
+            updateOSI((osi with agonists = DataTable.updateSortStatus(osi.agonists, colName, dir)))
+          case AntagonistsTable ->
+            updateOSI(
+              (osi with antagonists = DataTable.updateSortStatus(osi.antagonists, colName, dir)))
+          case AllostericModulatorsTable ->
+            updateOSI(
+              (osi with allostericModulators =
+                 DataTable.updateSortStatus(osi.allostericModulators, colName, dir)))
+          case ActivatorsTable ->
+            updateOSI(
+              (osi with activators = DataTable.updateSortStatus(osi.activators, colName, dir)))
+          case InhibitorsTable ->
+            updateOSI(
+              (osi with inhibitors = DataTable.updateSortStatus(osi.inhibitors, colName, dir)))
+          case ChannelBlockersTable ->
+            updateOSI(
+              (osi with channelBlockers =
+                 DataTable.updateSortStatus(osi.channelBlockers, colName, dir)))
+          case GatingInhibitorsTable ->
+            updateOSI(
+              (osi with gatingInhibitors =
+                 DataTable.updateSortStatus(osi.gatingInhibitors, colName, dir)))
+          case SubunitSpecificTable ->
+            updateOSI(
+              (osi with subunitSpecific =
+                 DataTable.updateSortStatus(osi.subunitSpecific, colName, dir)))
+          case SubstratesTable ->
+            (objectInfo with objectSubstrates =
+              DataTable.updateSortStatus(objectInfo.objectSubstrates, colName, dir))
+        }
       case _ -> objectInfo
     }
   }
