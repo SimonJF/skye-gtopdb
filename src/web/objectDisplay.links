@@ -1617,12 +1617,24 @@ fun view(model) {
       if (not(markupEmpty(comments) &&
               listEmpty(oaps.hpfSubunits) &&
               listEmpty(oaps.auxiliarySubunits) &&
-              listEmpty(oaps.otherProteins))) {
+              listEmpty(oaps.otherProteins) &&
+              listEmpty(oaps.gProteins) &&
+              listEmpty(oaps.interactingProteins))) {
 
         var comments = commentsBox("Associated Protein Comments", comments);
+
+
         var renderedTables = {
-          fun renderRowsIfNonempty(data) {
+          fun renderRowsIfNonempty(data, showEffect) {
+            var cols = if (showEffect) { 3 } else { 2 };
             fun renderRow(ap) {
+              var effect =
+                if (showEffect) {
+                  td(class("info"), renderM(ap.effect))
+                } else {
+                  MvuHTML.empty
+                };
+
               var name =
                 switch(ap.objectID) {
                   case Just(id) ->
@@ -1631,19 +1643,20 @@ fun view(model) {
                 };
               tr(a0,
                 td(class("info"), name) +*
+                effect +*
                 td(class("info"), Reference.renderCitationList(ap.references, objectInfo.objectReferences)))
             }
 
             if (listEmpty(data)) {
               tr(a0,
-                td(class("info") +@ colSpan(2), textNode("Not determined")))
+                td(class("info") +@ colSpan(cols), textNode("Not determined")))
             } else {
               MvuHTML.concatMap(renderRow, data)
             }
           }
 
-          fun renderTable(title, alignment, data) {
-            var renderedRows = renderRowsIfNonempty(data);
+          fun renderICTable(title, alignment, data) {
+            var renderedRows = renderRowsIfNonempty(data, false);
             td(align(alignment) +@ valign("top") +@ class("info"),
               table_(align("center") +@ class("receptor_data_tables")
                 +@ style("margin:0px;min-width:100%;"),
@@ -1660,19 +1673,51 @@ fun view(model) {
                   renderedRows)))
 
           }
+          var tables = {
+            if (objectInfo.objectType == IC) {
+              # Render 3 specific IC tables
+              renderICTable("Heteromeric Pore-forming Subunits", "left", oaps.hpfSubunits) +*
+              renderICTable("Auxiliary Subunits", "center", oaps.auxiliarySubunits) +*
+              renderICTable("Other Associated Proteins", "right", oaps.otherProteins)
+            } else {
+              # Render G Proteins and interacting proteins table
+              var gProteinsTable =
+                if (not(listEmpty(oaps.gProteins))) {
+                  renderICTable("G Proteins", "right", oaps.gProteins)
+                } else {
+                  MvuHTML.empty
+                };
 
-          var heteromericTable =
-            renderTable("Heteromeric Pore-forming Subunits", "left", oaps.hpfSubunits);
-          var auxSubunitTable =
-            renderTable("Auxiliary Subunits", "center", oaps.auxiliarySubunits);
-          var otherProteinTable =
-            renderTable("Other Associated Proteins", "right", oaps.otherProteins);
+              var interactingProteinsTable = {
+                var renderedRows = renderRowsIfNonempty(oaps.interactingProteins, true);
+                if (not(listEmpty(oaps.interactingProteins))) {
+                  td(align("center") +@ valign("top") +@ class("info"),
+                    table_(align("center") +@ class("receptor_data_tables")
+                      +@ style("margin:0px;min-width:100%;"),
+                      colgroup(a0,
+                        col(style("min-width:35%"), h0) +*
+                        col(style("min-width:35%"), h0) +*
+                        col(style("min-width:30%"), h0)) +*
+                      thead(a0,
+                        tr(a0,
+                          td(class("info category") +@ colSpan(3), textNode("Interacting Proteins")))) +*
+                      tbody(a0,
+                        tr(a0,
+                          td(class("info heading"), textNode("Name")) +*
+                          td(class("info heading"), textNode("Effect")) +*
+                          td(class("info heading"), textNode("References"))) +*
+                        renderedRows)))
+                } else {
+                  MvuHTML.empty
+                }
+              };
+
+              gProteinsTable +* interactingProteinsTable
+            }
+          };
 
           tbody(name("toggle"),
-            tr(valign("top"),
-              heteromericTable +*
-              auxSubunitTable +*
-              otherProteinTable))
+            tr(valign("top"), tables))
           };
         a(name("AssociatedProteins"), MvuHTML.empty) +*
         table_(class("receptor_data_tables fullwidth"),
