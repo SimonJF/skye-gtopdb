@@ -164,7 +164,9 @@ typename Product = (
 typename Cofactor = (
   name: Markup,
   ligandID: Int,
-  speciesName: String
+  speciesName: String,
+  comments: Markup,
+  references: [ReferenceID]
 );
 
 typename Variant = (
@@ -508,7 +510,12 @@ fun getInitialModel() {
                     ligand =
                       for (l <-- Tables.ligand)
                       where (l.ligand_id == c.ligand_id)
-                      [l])],
+                      [l],
+                    refs =
+                      for (cr <-- Tables.cofactor_refs)
+                      where (cr.cofactor_id == c.cofactor_id)
+                      [cr.reference_id]
+                    )],
               products =
                 for (p <-- Tables.product)
                   where (p.object_id == objectId)
@@ -1174,18 +1181,33 @@ fun getInitialModel() {
             parseOrError(ligandOrDefault(fun(l) { l.name }, co.name, c.ligand));
           var ligandID =
             ligandOrDefault(fun(l) { l.ligand_id }, (-1), c.ligand);
-          (name = name, ligandID = ligandID, speciesName = speciesLongName(co.species_id))
+          var comments = parseOrError(co.comments);
+          var (cRefs, cLigands) = collectIds(comments);
+          var refs = c.refs;
+          ((name = name, ligandID = ligandID,
+           speciesName = speciesLongName(co.species_id),
+           comments = comments,
+           references = refs), refs ++ cRefs, cLigands)
         }
 
-        var data = map(transformCofactor, rawCofactors);
+        var (data, refs, ligands) =
+          fold_left(fun((acc, refs, ligands), x) {
+            var (c, cRefs, cLigands) = transformCofactor(x);
+            (c :: acc, cRefs ++ refs, cLigands ++ ligands)
+          }, ([], [], []), rawCofactors);
+
         var cols = [
             ("Cofactor", ("", Sortable(fun(x, y) {
                 markupCmp(x.name, y.name) }))),
-            ("Species", ("keybox_header",
-              Sortable(fun(x, y) { simpleCmp(x.speciesName, y.speciesName) })))
+            ("Species", ("keybox_header header",
+              Sortable(fun(x, y) { simpleCmp(x.speciesName, y.speciesName) }))),
+            ("Comments", ("keybox_header header",
+              Sortable(fun(x, y) { markupCmp(x.comments, y.comments) }))),
+            ("Species", ("reference_header header",
+              Sortable(fun(x, y) { 0 })))
           ];
           fun sortMessage(colName, sortDir) { SortTable(CofactorsTable, colName, sortDir) }
-          DataTable.makeTable(cols, data, sortMessage)
+          (DataTable.makeTable(cols, data, sortMessage), refs, ligands)
       }
 
       var dbLinks = transformDBLinks(raw.databaseLinks);
@@ -1242,7 +1264,8 @@ fun getInitialModel() {
         transformSubstrates(raw.substrates);
 
       var (products, productRefs) = transformProducts(raw.products);
-      var cofactors = transformCofactors(raw.cofactors);
+      var (cofactors, cofactorRefs, cofactorLigands) =
+        transformCofactors(raw.cofactors);
 
       var refIDs =
         uniquify(
@@ -1261,6 +1284,7 @@ fun getInitialModel() {
           enzymeRefs ++
           substrateRefs ++
           productRefs ++
+          cofactorRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1276,6 +1300,7 @@ fun getInitialModel() {
           ctaLigands ++
           enzymeLigands ++
           substrateLigands ++
+          cofactorLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
