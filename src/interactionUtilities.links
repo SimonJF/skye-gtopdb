@@ -161,6 +161,29 @@ fun sortAffinity(a1, a2) {
   }
 }
 
+fun sortAffinityVoltage(a1, a2) {
+  var a1Key =
+    if (a1.affinityVoltageLow <> 0.0) {
+      a1.affinityVoltageLow
+    } else {
+      a1.affinityVoltageMedian
+    };
+
+  var a2Key =
+    if (a2.affinityVoltageLow <> 0.0) {
+      a2.affinityVoltageLow
+    } else {
+      a2.affinityVoltageMedian
+    };
+
+  if (a1Key < a2Key) {
+    (-1)
+  } else if (a1Key == a2Key) {
+    0
+  } else {
+    1
+  }
+}
 sig displayAffinity : (InteractionAffinity, Bool) ~%~> HTML(a)
 fun displayAffinity(af, showUnits) {
   var units =
@@ -185,6 +208,25 @@ fun displayAffinity(af, showUnits) {
   }
 }
 
+fun displayAffinityVoltage(af, showUnits) {
+  var units =
+    if (showUnits) { textNode(" " ^^ af.affinityVoltageUnits) } else { MvuHTML.empty };
+  if ((af.affinityVoltageLow == 0.0) && (af.affinityVoltageMedian == 0.0) && (af.affinityVoltageHigh == 0.0)) {
+    # No information.
+    MvuHTML.empty
+  } else if ((af.affinityVoltageLow == 0.0) && (af.affinityVoltageHigh == 0.0)) {
+    # Only a median.
+    units +*
+    textNode(" ") +*
+    textNode(floatToString(af.affinityVoltageMedian))
+  } else {
+    # Range.
+    units +*
+    textNode(" ") +*
+    textNode(floatToString(af.affinityVoltageLow) ^^
+        " - " ^^ floatToString(af.affinityVoltageHigh))
+  }
+}
 fun queryInteractions(pred) {
     query {
       for (i <-- Tables.interaction)

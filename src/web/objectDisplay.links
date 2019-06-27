@@ -2,13 +2,64 @@
 # Detailed information about objects (i.e., ligand targets: receptors,
 # ion channels, etc.)
 
-# TODO (22nd April list):
-# 5. Immuno process associations (mostly done; still a bit to do)
-# 6. Phenotypes etc.
-# 7. Expression datasets
-# 9. Activator / inhibitor tables with voltage information
-# 11. Gene expression and pathophysiology + comments
-# 12. Clinically-relevant mutations and pathophysiology + comments
+
+### Done
+# Gene and protein information
+# Previous and unofficial names
+# Database Links
+# 3D structures
+# Associated Proteins
+# Primary regulators
+# Enzyme reactions
+# Substrates and Reaction Kinetics
+# Products
+# Cofactors
+# Functional Characteristics
+# Stoichiometry
+# immuno comments
+# immuno cell type assocs
+# immuno process assocs
+# immuno disease assocs
+# malaria comments
+# transduction mechanisms
+# biologically significant variants
+# general comments
+# agonists
+# antagonists
+# tissue distribution
+# functional assays
+# physiological functions
+# physiological consequences of altering (mutations)
+# Natural / endogenous ligands
+
+## Not done
+
+# Quaternary structure
+# Ion selectivity and conductance
+# Single channel conductance
+# voltage dependence
+# rank order lists
+## INTERACTIONS (simple clones with small tweaks):
+## activators
+## inhibitors
+## gating inhibitors
+## channel blockers
+## allosteric modulators
+## subunit-specific
+## antibodies
+## other binding ligands
+# whole organism assay data
+# screening data
+# dna binding
+# co-binding partners
+# main co-regulators
+# main target genes
+# expression datasets
+# xenobiotics
+# phenotypes, alleles, disease models
+# clinically-relevant mutations
+# gene expression / pathophysiology
+
 
 
 # TODO: Voltage dependence field for VGICs.
@@ -37,6 +88,7 @@ typename Table = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
   | ActivatorsTable       | InhibitorsTable  | ChannelBlockersTable
   | GatingInhibitorsTable | SubunitSpecificTable
+  | AntibodiesTable | OtherBindingLigandTable
   # Other Tables
   | SubstratesTable
   | CofactorsTable
@@ -125,6 +177,8 @@ typename SortedInteractions = (
   inhibitors: SortableTable(InteractionInfo, Message),
   channelBlockers: SortableTable(InteractionInfo, Message),
   gatingInhibitors: SortableTable(InteractionInfo, Message),
+  antibodies: SortableTable(InteractionInfo, Message),
+  other: SortableTable(InteractionInfo, Message),
   subunitSpecific: SortableTable(InteractionInfo, Message));
 
 typename AssociatedProtein = (
@@ -553,6 +607,7 @@ fun getInitialModel() {
           (agonists = [], antagonists = [], allostericModulators = [],
            activators = [], inhibitors = [], channelBlockers = [],
            gatingInhibitors = [], subunitSpecific = [], endogenous = [],
+           antibodies = [], other = [],
            references = []);
 
         fold_left(fun(acc, i) {
@@ -598,8 +653,10 @@ fun getInitialModel() {
               (acc with gatingInhibitors = ( parsed :: acc.gatingInhibitors ))
             } else if (i.interactionType == "Subunit-specific") {
               (acc with subunitSpecific = ( parsed :: acc.subunitSpecific ))
+            } else if (i.interactionType == "Antibody") {
+              (acc with antibodies = ( parsed :: acc.antibodies ))
             } else {
-              acc
+              (acc with other = ( parsed :: acc.other ))
             };
 
           var acc =
@@ -657,15 +714,23 @@ fun getInitialModel() {
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("Species", ("keybox_header",
               Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
-            ("Affinity", ("affinity_header", Sortable(fun(x, y) {
+            ("Action", ("keybox_header",
+              Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
+            ("Value", ("affinity_header", Sortable(fun(x, y) {
                 InteractionUtilities.sortAffinity(x.interaction.affinity,
                     y.interaction.affinity)}))),
             ("Parameter", ("units_header", Sortable(fun(x, y) {
                 simpleCmp(x.interaction.affinity.affinityUnits,
                           y.interaction.affinity.affinityUnits) }))),
-            ("Concentration range (M)", ("", NotSortable)),
-            ("Holding voltage (mV)", ("", NotSortable)),
-            ("References", ("reference_header", NotSortable))
+            ("Concentration range (M)", ("affinity_header",
+              Sortable(fun(x, y) {
+                simpleCmp(x.interaction.concentrationRange, y.interaction.concentrationRange)
+              }))),
+            ("Holding voltage (mV)", ("affinity_header", Sortable(fun(x, y) {
+                 InteractionUtilities.sortAffinityVoltage(x.interaction.affinityVoltage,
+                     y.interaction.affinityVoltage)
+              }))),
+            ("References", ("reference_header", Sortable(fun(x, y) { 0 } )))
           ];
 
           fun sortMessage(colName, sortDir) { SortTable(tableTy, colName, sortDir) }
@@ -687,7 +752,12 @@ fun getInitialModel() {
          gatingInhibitors =
            mkActivatorTable(GatingInhibitorsTable, parsedInteractions.gatingInhibitors),
          subunitSpecific =
-           mkStandardTable(SubunitSpecificTable, parsedInteractions.subunitSpecific));
+           mkStandardTable(SubunitSpecificTable, parsedInteractions.subunitSpecific),
+         antibodies =
+           mkActivatorTable(AntibodiesTable, parsedInteractions.antibodies),
+         other =
+           mkActivatorTable(GatingInhibitorsTable, parsedInteractions.other)
+           );
         res
       }
 
@@ -1112,7 +1182,7 @@ fun getInitialModel() {
              assayConditions = parsedAssayConditions,
              comments = parsedComments,
              references = s.refs);
-          (transformedSubstrate, refs, ligands)
+          (transformedSubstrate, refs ++ s.refs, ligands)
         }
 
         var (transformedSubstrates, substrateRefs, substrateLigands) =
@@ -1453,8 +1523,6 @@ fun view(model) {
     }
 
     var comments = objectInfo.objectComments;
-
-    var geneProteinInfoBox = MvuHTML.empty;
 
     var synonymsBox = {
       if (objectInfo.objectSynonyms == []) { MvuHTML.empty } else {
@@ -2369,6 +2437,14 @@ fun updt(msg, model) {
             updateOSI(
               (osi with subunitSpecific =
                  DataTable.updateSortStatus(osi.subunitSpecific, colName, dir)))
+          case AntibodiesTable ->
+            updateOSI(
+              (osi with subunitSpecific =
+                 DataTable.updateSortStatus(osi.antibodies, colName, dir)))
+          case OtherBindingLigandTable ->
+            updateOSI(
+              (osi with subunitSpecific =
+                 DataTable.updateSortStatus(osi.other, colName, dir)))
           case SubstratesTable ->
             (objectInfo with objectSubstrates =
               DataTable.updateSortStatus(objectInfo.objectSubstrates, colName, dir))
