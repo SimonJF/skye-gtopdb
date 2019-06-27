@@ -157,6 +157,7 @@ typename EnzymeReaction = (
 typename Product = (
   name: Markup,
   ligandID: Int,
+  endogenous: Bool,
   speciesName: String,
   references: [ReferenceID]
 );
@@ -1165,6 +1166,7 @@ fun getInitialModel() {
           ((name = name,
            ligandID = ligandID,
            speciesName = speciesLongName(prod.species_id),
+           endogenous = prod.endogenous,
            references = p.refs), p.refs)
         }
 
@@ -2171,7 +2173,49 @@ fun view(model) {
       }
     };
 
-    var productsBox = MvuHTML.empty; # TODO: Implement
+    var productsBox = {
+      fun renderRow(p) {
+        var renderedName =
+          if (p.ligandID == (-1)) {
+            renderM(p.name)
+          } else {
+            a(href("/ligandDisplay?ligandId=" ^^ intToString(p.ligandID)), renderM(p.name))
+          };
+
+        var endogImg =
+          if (p.endogenous) {
+            img(src("/images/endogenous.gif"), h0)
+          } else {
+            MvuHTML.empty
+          };
+        tr(class("info"),
+          td(style("border-style: solid dotted solid solid;"),
+            renderedName) +*
+          td(style("border-style: solid solid solid dotted;padding:1px;width:20px;text-align:center;"),
+            endogImg) +*
+          td(a0, textNode(p.speciesName)) +*
+          td(a0, Reference.renderCitationList(p.references, objectInfo.objectReferences)))
+      }
+      var renderedRows =
+        MvuHTML.concatMap(renderRow, objectInfo.objectProducts);
+
+      a(name("Products"), h0) +*
+      table_(class("receptor_data_tables fullwidth"),
+        thead(a0,
+          tr(a0,
+            td(class("info category"), textNode("Products")))) +*
+        tbody(a0,
+          tr(a0,
+            td(class("table_container"),
+              table_(id("products") +@ class("tablesorter inner_receptor_data_tables"),
+                thead(a0,
+                  tr(class("info heading"),
+                    th(class("substrate_header header") +@ colSpan(2), textNode("Product")) +*
+                    th(class("units_header header"), textNode("Species")) +*
+                    th(class("reference_header header"), textNode("References")))) +*
+                tbody(a0, renderedRows))))))
+    };
+
     var cofactorsBox = MvuHTML.empty; # TODO: Implement
 
     var stoichiometryBox =
