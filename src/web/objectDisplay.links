@@ -1205,7 +1205,7 @@ fun getInitialModel() {
               Sortable(fun(x, y) { simpleCmp(x.speciesName, y.speciesName) }))),
             ("Comments", ("keybox_header header",
               Sortable(fun(x, y) { markupCmp(x.comments, y.comments) }))),
-            ("Species", ("reference_header header",
+            ("References", ("reference_header header",
               Sortable(fun(x, y) { 0 })))
           ];
           fun sortMessage(colName, sortDir) { SortTable(CofactorsTable, colName, sortDir) }
@@ -2196,27 +2196,61 @@ fun view(model) {
           td(a0, textNode(p.speciesName)) +*
           td(a0, Reference.renderCitationList(p.references, objectInfo.objectReferences)))
       }
-      var renderedRows =
-        MvuHTML.concatMap(renderRow, objectInfo.objectProducts);
 
-      a(name("Products"), h0) +*
-      table_(class("receptor_data_tables fullwidth"),
-        thead(a0,
-          tr(a0,
-            td(class("info category"), textNode("Products")))) +*
-        tbody(a0,
-          tr(a0,
-            td(class("table_container"),
-              table_(id("products") +@ class("tablesorter inner_receptor_data_tables"),
-                thead(a0,
-                  tr(class("info heading"),
-                    th(class("substrate_header header") +@ colSpan(2), textNode("Product")) +*
-                    th(class("units_header header"), textNode("Species")) +*
-                    th(class("reference_header header"), textNode("References")))) +*
-                tbody(a0, renderedRows))))))
+      if (listEmpty(objectInfo.objectProducts)) {
+        MvuHTML.empty
+      } else {
+        var renderedRows =
+          MvuHTML.concatMap(renderRow, objectInfo.objectProducts);
+
+        a(name("Products"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(a0,
+              td(class("info category"), textNode("Products")))) +*
+          tbody(a0,
+            tr(a0,
+              td(class("table_container"),
+                table_(id("products") +@ class("tablesorter inner_receptor_data_tables"),
+                  thead(a0,
+                    tr(class("info heading"),
+                      th(class("substrate_header header") +@ colSpan(2), textNode("Product")) +*
+                      th(class("units_header header"), textNode("Species")) +*
+                      th(class("reference_header header"), textNode("References")))) +*
+                  tbody(a0, renderedRows))))))
+      }
     };
 
-    var cofactorsBox = MvuHTML.empty; # TODO: Implement
+    var cofactorsBox = {
+      if (tableEmpty(objectInfo.objectCofactors)) {
+        MvuHTML.empty
+      } else {
+        sig renderRow : (Cofactor) ~%~> HTML(Message)
+        fun renderRow(c) {
+          var renderedName =
+            if (c.ligandID == (-1)) {
+              renderM(c.name)
+            } else {
+              a(href("/ligandDisplay?ligandId=" ^^ intToString(c.ligandID)), renderM(c.name))
+            };
+          tr(class("info"),
+            td(a0, renderedName) +*
+            td(a0, textNode(c.speciesName)) +*
+            td(a0, renderM(c.comments)) +*
+            td(a0, Reference.renderCitationList(c.references, objectInfo.objectReferences)))
+        }
+
+        a(name("Cofactors"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(a0,
+              td(class("info category"), textNode("Cofactors")))) +*
+          tbody(a0,
+            tr(a0,
+              td(class("table_container"),
+                renderTable(objectInfo.objectCofactors, renderRow)))))
+      }
+    };
 
     var stoichiometryBox =
       commentsBox("Stoichiometry", objectInfo.objectComments.stoichiometryComments);
