@@ -37,8 +37,9 @@ typename Table = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
   | ActivatorsTable       | InhibitorsTable  | ChannelBlockersTable
   | GatingInhibitorsTable | SubunitSpecificTable
-  # Substrate table
+  # Other Tables
   | SubstratesTable
+  | CofactorsTable
 |];
 
 typename ColumnName = String;
@@ -268,6 +269,8 @@ typename ObjectInfo = (
     objectLigandNames: [(LigandId, LigandName)],
     objectSpeciesMap: SpeciesMap,
     objectSubstrates: SortableTable(Substrate, Message),
+    objectProducts: [Product],
+    objectCofactors: SortableTable(Cofactor, Message),
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -1058,22 +1061,24 @@ fun getInitialModel() {
         (reverse(ipasRev), ipaRefs)
       }
 
+      fun ligandOrDefault(projectF, def, ligands) {
+        switch(ligands) {
+          case [] -> def
+          case x :: _ -> projectF(x)
+        }
+      }
+
       fun transformSubstrates(rawSubstrates) {
 
         fun transformSubstrate(s) {
           var sub = s.substrate;
           #sig ligandOrDefault : forall a. ((Tables.RawLigand) ~%~> a, a) ~%~> a
-          fun ligandOrDefault(projectF, def) {
-            switch(s.ligand) {
-              case [] -> def
-              case x :: _ -> projectF(x)
-            }
-          }
 
           var name =
-            parseOrError(ligandOrDefault(fun(l) { l.name }, sub.name));
+            parseOrError(ligandOrDefault(fun(l) { l.name }, sub.name, s.ligand));
+
           var ligandID =
-            ligandOrDefault(fun(l) { l.ligand_id }, (-1));
+            ligandOrDefault(fun(l) { l.ligand_id }, (-1), s.ligand);
 
           var parsedProperty = parseOrError(sub.property);
           var parsedStandardProperty = parseOrError(sub.standard_property);
@@ -1141,6 +1146,48 @@ fun getInitialModel() {
         (tbl, substrateRefs, substrateLigands)
       }
 
+      fun transformProducts(rawProducts) {
+
+        fun transformProduct(p) {
+          var prod = p.product;
+          var name =
+            parseOrError(ligandOrDefault(fun(l) { l.name }, prod.name, p.ligand));
+          var ligandID =
+            ligandOrDefault(fun(l) { l.ligand_id }, (-1), p.ligand);
+
+          ((name = name,
+           ligandID = ligandID,
+           speciesName = speciesLongName(prod.species_id),
+           references = p.refs), p.refs)
+        }
+
+        fold_left(fun((prods, refs), p) {
+            var (prod, pRefs) = transformProduct(p);
+            (prod :: prods, pRefs ++ refs)
+        }, ([], []), rawProducts)
+      }
+
+      fun transformCofactors(rawCofactors) {
+        fun transformCofactor(c) {
+          var co = c.cofactor;
+          var name =
+            parseOrError(ligandOrDefault(fun(l) { l.name }, co.name, c.ligand));
+          var ligandID =
+            ligandOrDefault(fun(l) { l.ligand_id }, (-1), c.ligand);
+          (name = name, ligandID = ligandID, speciesName = speciesLongName(co.species_id))
+        }
+
+        var data = map(transformCofactor, rawCofactors);
+        var cols = [
+            ("Cofactor", ("", Sortable(fun(x, y) {
+                markupCmp(x.name, y.name) }))),
+            ("Species", ("keybox_header",
+              Sortable(fun(x, y) { simpleCmp(x.speciesName, y.speciesName) })))
+          ];
+          fun sortMessage(colName, sortDir) { SortTable(CofactorsTable, colName, sortDir) }
+          DataTable.makeTable(cols, data, sortMessage)
+      }
+
       var dbLinks = transformDBLinks(raw.databaseLinks);
 
       var (variants, variantRefs, variantLigands) =
@@ -1194,6 +1241,9 @@ fun getInitialModel() {
       var (substrateTbl, substrateRefs, substrateLigands) =
         transformSubstrates(raw.substrates);
 
+      var (products, productRefs) = transformProducts(raw.products);
+      var cofactors = transformCofactors(raw.cofactors);
+
       var refIDs =
         uniquify(
           variantRefs ++
@@ -1210,6 +1260,7 @@ fun getInitialModel() {
           associatedProteinRefs ++
           enzymeRefs ++
           substrateRefs ++
+          productRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1270,6 +1321,8 @@ fun getInitialModel() {
        objectAssociatedProteins = associatedProteins,
        objectSpeciesMap = speciesMap,
        objectSubstrates = substrateTbl,
+       objectProducts = products,
+       objectCofactors = cofactors,
        objectContributors = transformContributors(raw.contributors))
     }
 
@@ -2216,6 +2269,10 @@ fun updt(msg, model) {
           case SubstratesTable ->
             (objectInfo with objectSubstrates =
               DataTable.updateSortStatus(objectInfo.objectSubstrates, colName, dir))
+          case CofactorsTable ->
+            (objectInfo with objectCofactors =
+              DataTable.updateSortStatus(objectInfo.objectCofactors, colName, dir))
+
         }
       case _ -> objectInfo
     }
