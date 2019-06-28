@@ -120,13 +120,13 @@ fun renderPage(tree, familyName, urlPrefix) {
           li(class("liBullet"),
             span(class("bullet"), textNode(" ")) +*
             a(href(urlPrefix ^^ intToString(x.familyId)),
-              textNode(x.name))
+              unescapedTextNode(x.name))
           )
         case ItemSubtree(name, shown, children) ->
           var bulletClass = class(if (shown) { "liOpen" } else { "liClosed" });
           var renderedChildren = MvuHTML.concat(map(renderTreeNode, children));
           li(bulletClass,
-            span(class("bullet") +@ onClick(fun() { ToggleSubtree(name) }), textNode(" " ^^ name)) +*
+            span(class("bullet") +@ onClick(fun() { ToggleSubtree(name) }), unescapedTextNode(" " ^^ name)) +*
             ul(a0, renderedChildren))
       }
     }

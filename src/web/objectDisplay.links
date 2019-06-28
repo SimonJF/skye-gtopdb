@@ -681,8 +681,8 @@ fun getInitialModel() {
         fun mkStandardTable(tableTy, interactions) {
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
-                simpleCmp(getTargetName(x.interaction.interactionTarget),
-                    getTargetName(y.interaction.interactionTarget)) }))),
+                simpleCmp(x.interaction.interactionLigand.name,
+                    y.interaction.interactionLigand.name) }))),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
@@ -706,8 +706,8 @@ fun getInitialModel() {
         fun mkActivatorTable(tableTy, interactions) {
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
-                simpleCmp(getTargetName(x.interaction.interactionTarget),
-                    getTargetName(y.interaction.interactionTarget)) }))),
+                simpleCmp(x.interaction.interactionLigand.name,
+                    y.interaction.interactionLigand.name) }))),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
@@ -739,8 +739,8 @@ fun getInitialModel() {
         fun mkSubunitTable(interactions) {
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
-                simpleCmp(getTargetName(x.interaction.interactionTarget),
-                    getTargetName(y.interaction.interactionTarget)) }))),
+                simpleCmp(x.interaction.interactionLigand.name,
+                    y.interaction.interactionLigand.name) }))),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
             ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
