@@ -31,15 +31,6 @@
 # physiological functions
 # physiological consequences of altering (mutations)
 # Natural / endogenous ligands
-
-## Not done
-
-# Quaternary structure
-# Ion selectivity and conductance
-# Single channel conductance
-# voltage dependence
-# rank order lists
-## INTERACTIONS (simple clones with small tweaks):
 ## activators
 ## inhibitors
 ## gating inhibitors
@@ -48,6 +39,14 @@
 ## subunit-specific
 ## antibodies
 ## other binding ligands
+
+## Not done
+
+# Quaternary structure
+# Ion selectivity and conductance
+# Single channel conductance
+# voltage dependence
+# rank order lists
 # whole organism assay data
 # screening data
 # dna binding
@@ -626,7 +625,7 @@ fun getInitialModel() {
             }
           };
 
-          var parsedName = parseOrError(getTargetName(i.interactionTarget));
+          var parsedName = parseOrError(i.interactionLigand.name);
 
           var parsed : InteractionInfo = (
             interaction = i,
@@ -692,10 +691,10 @@ fun getInitialModel() {
             ("Action", ("action_header",
               Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
                   y.interaction.interactionAction) }))),
-            ("Affinity", ("affinity_header", Sortable(fun(x, y) {
+            ("Value", ("affinity_header", Sortable(fun(x, y) {
                 InteractionUtilities.sortAffinity(x.interaction.affinity,
                     y.interaction.affinity)}))),
-            ("Affinity Units", ("units_header", Sortable(fun(x, y) {
+            ("Parameter", ("units_header", Sortable(fun(x, y) {
                 simpleCmp(x.interaction.affinity.affinityUnits,
                           y.interaction.affinity.affinityUnits) }))),
             ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
@@ -737,11 +736,34 @@ fun getInitialModel() {
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
+        fun mkSubunitTable(interactions) {
+          var cols = [
+            ("Ligand", ("", Sortable(fun(x, y) {
+                simpleCmp(getTargetName(x.interaction.interactionTarget),
+                    getTargetName(y.interaction.interactionTarget)) }))),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("Action", ("action_header",
+              Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
+                  y.interaction.interactionAction) }))),
+            ("Subunit specificity", ("affinity_header", Sortable(fun(x, y) {
+                simpleCmp(x.interaction.interactionActionComment,
+                    y.interaction.interactionActionComment) }))),
+            ("Concentration range (M)", ("units_header", Sortable(fun(x, y) {
+                simpleCmp(x.interaction.affinity.affinityUnits,
+                          y.interaction.affinity.affinityUnits) }))),
+            ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
+          ];
+          fun sortMessage(colName, sortDir) { SortTable(SubunitSpecificTable, colName, sortDir) }
+          DataTable.makeTable(cols, interactions, sortMessage)
+        }
+
         var res : SortedInteractions =
           (agonists = mkStandardTable(AgonistsTable, parsedInteractions.agonists),
          antagonists = mkStandardTable(AntagonistsTable, parsedInteractions.antagonists),
          allostericModulators =
-           mkStandardTable(AllostericModulatorsTable,
+           mkActivatorTable(AllostericModulatorsTable,
              parsedInteractions.allostericModulators),
          activators =
            mkActivatorTable(ActivatorsTable, parsedInteractions.activators),
@@ -752,7 +774,7 @@ fun getInitialModel() {
          gatingInhibitors =
            mkActivatorTable(GatingInhibitorsTable, parsedInteractions.gatingInhibitors),
          subunitSpecific =
-           mkStandardTable(SubunitSpecificTable, parsedInteractions.subunitSpecific),
+           mkSubunitTable(parsedInteractions.subunitSpecific),
          antibodies =
            mkActivatorTable(AntibodiesTable, parsedInteractions.antibodies),
          other =
@@ -1562,80 +1584,79 @@ fun view(model) {
     var potencyOrderBox = MvuHTML.empty;
 
     var interactionsTables = {
-      fun renderRow(x) {
-        var x : InteractionInfo = x;
+      fun renderImgCols(x) {
         var i = x.interaction;
-        var imgCols = {
-          var sizeCol = {
-            switch(x.ligandSize) {
-              case Small ->
-                boolImage(("/images/benzene.gif", true,
-                      "Small molecule or natural product"))
-              case Peptide ->
-                boolImage(("/images/peptide_cartoon.png", true,
-                      "Peptide or antibody"))
-              case OtherSize ->
-                boolImage(("", false, ""))
-            }
-          };
 
-          var approvedCol = boolImage(("/images/approved.png", i.interactionLigand.approved, "Approved ligand"));
-          var primaryCol = boolImage(("/images/primary.png", i.primaryTarget, "Primary interaction"));
-          var selectiveCol =
-            boolCol(i.selective,
-              a(href("/ligandInteractions?ligandId=" ^^
-                  intToString(i.ligandID) ^^ "&speciesId=" ^^ intToString(i.speciesID)), h0) +*
-              img(src("/images/select.gif") +@ alt("Click here for species-specific selectivity table"), h0));
-          var endogenousCol =
-            boolImage(("/images/endogenous.gif", i.endogenous,
-                  "Ligand is endogenous in the given species"));
-          var labelled = boolImage(("/images/probe.png", i.interactionLigand.labelled, "Ligand is labelled"));
-          var radioactive = boolImage(("/images/rad.gif", i.interactionLigand.radioactive, "Ligand is radioactive"));
-          # FIXME: We need to include the information about PDB structures here. I think the best way of doing this
-          # is likely to have some sort of "ligand summary" that can be loaded easily from the interactions rather
-          # than using the whole table.
-          var hasPDB =
-            boolImage(("/images/protein_structure_icon.png", false, "Ligand has a PDB structure"));
-          var immuno =
-            boolImage(("/images/immuno_ligand.png", i.interactionLigand.in_gtip, "Immunopharmacology Ligand"));
-
-          MvuHTML.concat([sizeCol, approvedCol, primaryCol, selectiveCol, endogenousCol,
-              labelled, radioactive, hasPDB, immuno])
+        var sizeCol = {
+          switch(x.ligandSize) {
+            case Small ->
+              boolImage(("/images/benzene.gif", true,
+                    "Small molecule or natural product"))
+            case Peptide ->
+              boolImage(("/images/peptide_cartoon.png", true,
+                    "Peptide or antibody"))
+            case OtherSize ->
+              boolImage(("", false, ""))
+          }
         };
 
-        var nameCol =
-          td(a0,
-            a(href("/ligandDisplay?ligandId=" ^^ intToString(i.ligandID)), renderM(x.parsedName)));
+        var approvedCol = boolImage(("/images/approved.png", i.interactionLigand.approved, "Approved ligand"));
+        var primaryCol = boolImage(("/images/primary.png", i.primaryTarget, "Primary interaction"));
+        var selectiveCol =
+          boolCol(i.selective,
+            a(href("/ligandInteractions?ligandId=" ^^
+                intToString(i.ligandID) ^^ "&speciesId=" ^^ intToString(i.speciesID)), h0) +*
+            img(src("/images/select.gif") +@ alt("Click here for species-specific selectivity table"), h0));
+        var endogenousCol =
+          boolImage(("/images/endogenous.gif", i.endogenous,
+                "Ligand is endogenous in the given species"));
+        var labelled = boolImage(("/images/probe.png", i.interactionLigand.labelled, "Ligand is labelled"));
+        var radioactive = boolImage(("/images/rad.gif", i.interactionLigand.radioactive, "Ligand is radioactive"));
+        # FIXME: We need to include the information about PDB structures here. I think the best way of doing this
+        # is likely to have some sort of "ligand summary" that can be loaded easily from the interactions rather
+        # than using the whole table.
+        var hasPDB =
+          boolImage(("/images/protein_structure_icon.png", false, "Ligand has a PDB structure"));
+        var immuno =
+          boolImage(("/images/immuno_ligand.png", i.interactionLigand.in_gtip, "Immunopharmacology Ligand"));
 
-        var speciesCol =
-          td(a0, textNode(x.speciesShort));
-
-        var actionCol =
-          td(a0, textNode(i.interactionAction));
-
-        var affinityCol =
-          td(a0, InteractionUtilities.displayAffinity(i.affinity, false));
-
-        var parameterCol =
-          td(a0, textNode(i.affinity.affinityUnits));
-
-        var referenceCol =
-          td(a0, Reference.renderCitationList(i.references, objectInfo.objectReferences));
-
-        tr(class("info"),
-          nameCol +*
-          imgCols +*
-          speciesCol +*
-          actionCol +*
-          affinityCol +*
-          parameterCol +*
-          referenceCol)
+        MvuHTML.concat([sizeCol, approvedCol, primaryCol, selectiveCol, endogenousCol,
+            labelled, radioactive, hasPDB, immuno])
       }
 
       fun renderReceptorTable((tbl, label, commentsHeader, comments)) {
         if (DataTable.getTableData(tbl) == []) {
           MvuHTML.empty
         } else {
+
+          fun renderRow(x) {
+            var x : InteractionInfo = x;
+            var i = x.interaction;
+            var imgCols = renderImgCols(x);
+
+            var nameCol =
+              td(a0,
+                a(href("/ligandDisplay?ligandId=" ^^ intToString(i.ligandID)), renderM(x.parsedName)));
+            var speciesCol =
+              td(a0, textNode(x.speciesShort));
+            var actionCol =
+              td(a0, textNode(i.interactionAction));
+            var affinityCol =
+              td(a0, InteractionUtilities.displayAffinity(i.affinity, false));
+            var parameterCol =
+              td(a0, textNode(i.affinity.affinityUnits));
+            var referenceCol =
+              td(a0, Reference.renderCitationList(i.references, objectInfo.objectReferences));
+            tr(class("info"),
+              nameCol +*
+              imgCols +*
+              speciesCol +*
+              actionCol +*
+              affinityCol +*
+              parameterCol +*
+              referenceCol)
+          }
+
           dataBox(label, 1,
             a(name(label), h0) +*
             tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
@@ -1644,8 +1665,90 @@ fun view(model) {
         }
       }
 
-      fun renderChannelTable((tbl, label, commentsHeader, comments)) {
-        MvuHTML.empty # For now.
+      fun renderICTable((tbl, label, commentsHeader, comments)) {
+        if (DataTable.getTableData(tbl) == []) {
+          MvuHTML.empty
+        } else {
+
+          fun renderRow(x) {
+            var x : InteractionInfo = x;
+            var i = x.interaction;
+            var imgCols = renderImgCols(x);
+
+            var nameCol =
+              td(a0,
+                a(href("/ligandDisplay?ligandId=" ^^ intToString(i.ligandID)), renderM(x.parsedName)));
+            var speciesCol =
+              td(a0, textNode(x.speciesShort));
+            var actionCol =
+              td(a0, textNode(i.interactionAction));
+            var valueCol =
+              td(a0, InteractionUtilities.displayAffinity(i.affinity, false));
+            var parameterCol =
+              td(a0, textNode(i.affinity.affinityUnits));
+            var concentrationCol =
+              td(a0, textNode(i.concentrationRange));
+            var affinityVoltageCol =
+              td(a0, InteractionUtilities.displayAffinityVoltage(i.affinityVoltage));
+            var referenceCol =
+              td(a0, Reference.renderCitationList(i.references, objectInfo.objectReferences));
+
+            tr(class("info"),
+              nameCol +*
+              imgCols +*
+              speciesCol +*
+              actionCol +*
+              valueCol +*
+              parameterCol +*
+              concentrationCol +*
+              affinityVoltageCol +*
+              referenceCol)
+          }
+
+          dataBox(label, 1,
+            a(name(label), h0) +*
+            tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
+            DataTable.renderTable(tbl, renderRow)))) +*
+          commentsBox(commentsHeader, comments)
+        }
+      }
+
+      fun renderSubunitTable() {
+        var tbl = objectInfo.objectSortedInteractions.subunitSpecific;
+        if (DataTable.getTableData(tbl) == []) {
+          MvuHTML.empty
+        } else {
+
+          fun renderRow(x) {
+            var x : InteractionInfo = x;
+            var i = x.interaction;
+            var imgCols = renderImgCols(x);
+            var nameCol =
+              td(a0,
+                a(href("/ligandDisplay?ligandId=" ^^ intToString(i.ligandID)), renderM(x.parsedName)));
+            var actionCol =
+              td(a0, textNode(i.interactionAction));
+            var specificityCol =
+              td(a0, unescapedTextNode(i.interactionActionComment));
+            var concentrationCol =
+              td(a0, textNode(i.concentrationRange));
+            var referenceCol =
+              td(a0, Reference.renderCitationList(i.references, objectInfo.objectReferences));
+
+            tr(class("info"),
+              nameCol +*
+              imgCols +*
+              actionCol +*
+              specificityCol +*
+              concentrationCol +*
+              referenceCol)
+          }
+
+          dataBox("Subunit-specific Pharmacological Agents at Recombinant Receptors", 1,
+            a(name("SubunitSpecific"), h0) +*
+            tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
+            DataTable.renderTable(tbl, renderRow))))
+        }
       }
 
       var si = objectInfo.objectSortedInteractions;
@@ -1653,22 +1756,25 @@ fun view(model) {
       var receptorTables = [
         (si.agonists, "Agonists", "Agonist Comments", oc.agonistsComments),
         (si.antagonists, "Antagonists", "Antagonist Comments", oc.antagonistsComments),
-        (si.allostericModulators, "Allosteric Modulators",
-         "Allosteric Modulator Comments", oc.allostericModulatorsComments),
-        (si.subunitSpecific, "Subunit-specific",
-         "Subunit-specific Comments", MarkupEmpty)
+        (si.antibodies, "Antibodies", "Antibody Comments", oc.antibodyComments),
+        (si.other, "Other Binding Ligands", "", MarkupEmpty)
+        #(si.subunitSpecific, "Subunit-specific",
+        # "Subunit-specific Comments", MarkupEmpty)
       ];
 
       var channelTables = [
         (si.activators, "Activators", "Activator Comments", oc.activatorsComments),
         (si.inhibitors, "Inhibitors", "Inhibitor Comments", oc.inhibitorsComments),
         (si.channelBlockers, "Channel Blockers", "Channel Blocker Comments", oc.channelBlockersComments),
+        (si.allostericModulators, "Allosteric Modulators",
+           "Allosteric Modulator Comments", oc.allostericModulatorsComments),
         (si.gatingInhibitors, "Gating Inhibitors",
          "Gating Inhibitor Comments", oc.gatingInhibitorsComments)
       ];
 
       MvuHTML.concatMap(renderReceptorTable, receptorTables) +*
-      MvuHTML.concatMap(renderChannelTable, channelTables)
+      MvuHTML.concatMap(renderICTable, channelTables) +*
+      renderSubunitTable()
 
     };
 

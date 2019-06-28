@@ -208,20 +208,17 @@ fun displayAffinity(af, showUnits) {
   }
 }
 
-fun displayAffinityVoltage(af, showUnits) {
-  var units =
-    if (showUnits) { textNode(" " ^^ af.affinityVoltageUnits) } else { MvuHTML.empty };
+sig displayAffinityVoltage : (InteractionAffinityVoltage) ~%~> HTML(a)
+fun displayAffinityVoltage(af) {
   if ((af.affinityVoltageLow == 0.0) && (af.affinityVoltageMedian == 0.0) && (af.affinityVoltageHigh == 0.0)) {
     # No information.
     MvuHTML.empty
   } else if ((af.affinityVoltageLow == 0.0) && (af.affinityVoltageHigh == 0.0)) {
     # Only a median.
-    units +*
     textNode(" ") +*
     textNode(floatToString(af.affinityVoltageMedian))
   } else {
     # Range.
-    units +*
     textNode(" ") +*
     textNode(floatToString(af.affinityVoltageLow) ^^
         " - " ^^ floatToString(af.affinityVoltageHigh))
