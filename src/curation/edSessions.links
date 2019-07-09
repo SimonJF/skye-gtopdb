@@ -1,0 +1,346 @@
+import Tables;
+import Mvu;
+import MvuHTML;
+import MvuAttrs;
+import Template;
+
+typename DiseaseID = Int;
+typename DiseaseName = String;
+
+typename HTML(a) = MvuHTML.HTML(a);
+
+# For now -- this will also contain synonym and xref info later
+typename DiseaseInfo = Tables.DbDisease;
+
+
+# The editing process first requires a disease to be selected.
+#
+# The lens reference only makes sense on the server, so needs to be
+# stored in a persistent process.
+#
+# We then select the disease, at which point we can either edit it, or
+# delete it.
+#
+# When we choose to edit it, we get the disease data back. We then send
+# the updated disease data, which gets committed by the lens.
+#
+# ...could this be... an actual, real-life, non-contrived use of session
+# types!?
+
+mutual {
+  typename EditDisease = ?[(DiseaseID, DiseaseName)].SelectDisease;
+
+  typename SelectDisease =
+    [+| Edit: !DiseaseID.
+          [&| OK: ?DiseaseInfo.Editing,
+              Error: EditDisease |&],
+        Delete: !DiseaseID.EditDisease |+];
+
+  typename Editing =
+    [+| Submit:!DiseaseInfo.EditDisease, Cancel:EditDisease |+];
+}
+
+
+typename SelectingInfo =
+  (diseases: [(DiseaseID, DiseaseName)], selectedDisease: DiseaseID);
+
+typename Model = [|
+    Waiting
+  | Selecting:(SelectDisease, SelectingInfo)
+  | Editing:(Editing, DiseaseInfo)
+|];
+
+typename UnrModel = [|
+    UWaiting
+  | USelecting:SelectingInfo
+  | UEditing:DiseaseInfo
+|];
+
+typename Message = [|
+    NoOp
+  | ChangeID:Int
+  | DiseaseList:(SelectDisease, [(DiseaseID, DiseaseName)])
+  | DiseaseInformation:(Editing, DiseaseInfo)
+  | SubmitEdit
+  | SubmitCancel
+  | SubmitDelete
+  | UpdateName:String
+  | UpdateDescription:String
+|];
+
+# SJF TODO: Need to generalise `cancel` to arbitrary messages in order to
+# avoid having to write this
+sig cancelMsg : (Message) ~> ()
+fun cancelMsg(msg) {
+  switch(msg) {
+    case NoOp -> ()
+    case ChangeID(_) -> ()
+    case SubmitEdit -> ()
+    case SubmitDelete -> ()
+    case DiseaseList(sd, _) -> cancel(sd); ()
+    case DiseaseInformation(e, _) -> cancel(e); ()
+    case UpdateName(_) -> ()
+    case UpdateDescription(_) -> ()
+    case SubmitCancel(_) -> ()
+  }
+}
+
+sig selectingModel : (SelectDisease, [(DiseaseID, DiseaseName)]) ~> Model
+fun selectingModel(s, diseases) {
+  var selectedID =
+    switch(diseases) {
+      case [] -> 0
+      case (id, _) :: xs -> id
+    };
+
+  Selecting(s, (diseases = diseases,
+        selectedDisease = selectedID))
+}
+
+
+sig updt: (Message, Model) ~> (Model, Mvu.Command(Message))
+fun updt(msg, model) {
+
+  fun waitForDiseases(s) {
+    (Waiting, SpawnLinear(
+      linfun() {
+        var (diseases, s) = receive(s);
+        DiseaseList(s, diseases)
+      }))
+  }
+
+  switch(model) {
+
+    case Waiting ->
+      switch(msg) {
+        case DiseaseList(sd, diseases) ->
+          (selectingModel(sd, diseases), NoCommand)
+        case DiseaseInformation(e, diseaseInfo) ->
+          (Editing(e, diseaseInfo), NoCommand)
+        case msg ->
+          cancelMsg(msg);
+          (Waiting, NoCommand)
+      }
+
+    case Selecting(s, si) ->
+      switch((msg, s)) {
+        case (NoOp, s) -> (Selecting(s, si), NoCommand)
+
+        case (ChangeID(id), s) ->
+          var newSi = (si with selectedDisease = id);
+          (Selecting(s, newSi), NoCommand)
+
+        case (SubmitEdit, s) ->
+          var s = select Edit s;
+          var s = send(si.selectedDisease, s);
+          (Waiting, SpawnLinear(
+            linfun() {
+              offer(s) {
+                case OK(s) ->
+                  var (diseaseInfo, s) = receive(s);
+                  DiseaseInformation(s, diseaseInfo)
+                case Error(s) ->
+                  var (diseases, s) = receive(s);
+                  DiseaseList(s, diseases)
+              }}))
+
+        case (SubmitDelete, s) ->
+          var s = select Delete s;
+          var s = send(si.selectedDisease, s);
+          waitForDiseases(s)
+
+        case (msg, s) ->
+          cancelMsg(msg);
+          (Selecting(s, si), NoCommand)
+      }
+
+    case Editing(e, ei) ->
+      switch((msg, e)) {
+        case (UpdateName(name), e) ->
+          var newEi = (ei with name = name);
+          (Editing(e, newEi), NoCommand)
+        case (UpdateDescription(desc), e) ->
+          var newEi = (ei with description = desc);
+          (Editing(e, newEi), NoCommand)
+        case (SubmitEdit, e) ->
+          var e = select Submit e;
+          var e = send(ei, e);
+          waitForDiseases(e)
+        case (SubmitCancel, e) ->
+          var e = select Cancel e;
+          waitForDiseases(e)
+        case (msg, e) ->
+          cancelMsg(msg);
+          (Editing(e, ei), NoCommand)
+      }
+  }
+}
+
+sig extract : (Model) ~> (Model, UnrModel)
+fun extract(model) {
+  switch(model) {
+    case Waiting -> (Waiting, UWaiting)
+    case Selecting(ed, si) -> (Selecting(ed, si), USelecting(si))
+    case Editing(ed, ei) -> (Editing(ed, ei), UEditing(ei))
+  }
+}
+
+sig view : (UnrModel) ~> HTML(Message)
+fun view(unrModel) {
+  open MvuHTML;
+  open MvuAttrs;
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+
+  fun renderSelecting(si: SelectingInfo) {
+    var options =
+      MvuHTML.concatMap(fun((di, dn)) {
+          var selAttr =
+            if (di == si.selectedDisease) { MvuAttrs.attr("selected", "selected") }
+            else { MvuAttrs.empty };
+          var di = intToString(di);
+          option(value(di) +@ selAttr,
+              textNode(dn ^^ " [id: " ^^ di ^^ "]"))
+      }, si.diseases);
+
+    form(a0,
+      div(class("form-group row"),
+       # ID search field
+        label(for_("diseaseID") +@ class("col-sm-2 col-form-label"),
+          textNode("Search by ID")) +*
+        div(class("col-sm-10"),
+          input(type("text") +@
+            class("form-control") +@
+            id("diseaseID") +@
+            onKeyUp(fun(value) {
+              if (isInt(value)) {
+                ChangeID(stringToInt(value))
+              } else {
+                NoOp
+              }
+            }), h0))) +*
+       # Disease name list
+      div(class("form-group row"),
+        label(for_("diseaseSel") +@ class("col-sm-2 col-form-label"),
+          textNode("Disease Name")) +*
+        div(class("col-sm-10"),
+          select_(id("diseaseSel") +@
+            onChange(
+              fun(value) {
+                if (isInt(value)) {
+                  ChangeID(stringToInt(value))
+                } else {
+                  NoOp
+                }
+              }), options))) +*
+      div(class("form-group row"),
+        div(class("col-sm-2"), h0) +*
+        div(class("col-sm-1"),
+          button(type("button") +@ class("btn btn-primary") +@
+            onClick(fun() { SubmitEdit }), textNode("Edit"))) +*
+        div(class("col-sm-1"),
+          button(type("button") +@ class("btn btn-primary") +@
+            onClick(fun() { SubmitDelete }), textNode("Delete")))))
+  }
+
+  fun renderEditing(ei) {
+    div(class("container"),
+      div(class("row mt-3"),
+        div(class("col-sm"),
+          div(class("card"),
+            div(class("card-header"), textNode("Basic information")) +*
+            div(class("card-body"),
+              form(a0,
+                # Disease ID
+                div(class("form-group"),
+                  label(a0, textNode("Disease ID: ")) +*
+                  textNode(intToString(ei.disease_id))) +*
+                # Disease Name
+                div(class("form-group"),
+                  label(for_("diseaseName"), textNode("Disease Name")) +*
+                  input(type("text") +@
+                    id("diseaseName") +@
+                    class("form-control") +@
+                    value(ei.name) +@
+                    onInput(fun(name) { UpdateName(name) }), h0)) +*
+                # Disease Comments
+                div(class("form-group"),
+                  label(for_("diseaseDescription"), textNode("Disease Description")) +*
+                  textarea(id("diseaseDescription") +@
+                    class("form-control") +@
+                    value(ei.description) +@
+                    onInput(fun(desc) { UpdateDescription(desc) }), h0))))))) +*
+
+      # Next up: DB refs panel
+      div(class("row mt-3"),
+        div(class("col-sm"),
+          div(class("card"),
+            div(class("card-header"), textNode("Database References")) +*
+            div(class("card-body"), textNode("TODO: CONTENT"))))) +*
+
+      div(class("row mt-5"),
+        div(class("col-sm"),
+              button(type("button") +@ class("btn btn-primary mr-2") +@
+                  onClick(fun() { SubmitEdit }), textNode("Submit")) +*
+              button(type("button") +@ class("btn btn-primary") +@
+                  onClick(fun() { SubmitCancel }), textNode("Cancel")))))
+  }
+
+  var body =
+    switch(unrModel) {
+      case UWaiting ->
+        div(class("spinner-border") +@ role("status"),
+          span(class("sr-only"), textNode("Loading...")))
+      case USelecting(si) -> renderSelecting(si)
+      case UEditing(ei) -> renderEditing(ei)
+    };
+
+  h1(a0, textNode("Edit Diseases")) +* body
+}
+
+
+sig handleQueries : (~EditDisease) ~> ()
+fun handleQueries(s) {
+  # Query the list of diseases
+  var diseasesLens = lens Tables.disease with { disease_id -> name };
+  var diseases = sortBy(fun(x) { x.name }, lensget diseasesLens);
+  # TODO: Investigate dropLens
+  var s = send(map(fun(d) { (d.disease_id, d.name) }, diseases), s);
+  offer(s) {
+    case Edit(s) ->
+      var (id, s) = receive(s);
+      var selectLens = lensselect from diseasesLens by fun (x) { x.disease_id == id };
+      var selectLens = lenscheck selectLens;
+      var results = lensget selectLens;
+      switch (results) {
+        case [] ->
+          var s = select Error s;
+          handleQueries(s) # Shouldn't happen.
+        case diseaseInfo :: _ ->
+          var s = select OK s;
+          var s = send(diseaseInfo, s);
+          offer(s) {
+            case Submit(s) ->
+              var (updatedInfo, s) = receive(s);
+              var _ = lensput selectLens with [updatedInfo];
+              handleQueries(s);
+            case Cancel(s) -> handleQueries(s)
+          }
+      };
+    case Delete(s) ->
+      var (id, s) = receive(s);
+      var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
+      var selectLens = lenscheck selectLens;
+      lensput selectLens with [];
+      handleQueries(s)
+  }
+}
+
+fun mainPage() {
+  var c = fork(handleQueries);
+  var (diseases, c) = receive(c);
+  var initialModel = selectingModel(c, diseases);
+  Mvu.runLinear("placeholder", initialModel, view, updt, fun(_) { SubEmpty }, extract);
+  Template.template()
+}
+
