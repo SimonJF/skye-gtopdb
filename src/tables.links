@@ -72,8 +72,9 @@ var coregulator_gene = table "coregulator_gene" with (coregulator_gene_id: Int, 
 
 var coregulator_refs = table "coregulator_refs" with (coregulator_id: Int, reference_id: Int) from db;
 
-var tbl_database = table "database" with (database_id: Int, name: String, url: String, specialist: Bool, "prefix": String)
-from db;
+typename DbDatabase =
+  (database_id: Int, name: String, url: String, specialist: Bool, "prefix": String);
+var tbl_database = table "database" with DbDatabase from db;
 
 var database_link = table "database_link" with (database_link_id: Int, object_id: Int, species_id: Int, database_id: Int, placeholder: String) from db;
 
@@ -91,7 +92,9 @@ var disease2synonym = table "disease2synonym" with (disease2synonym_id: Int, dis
 
 var disease_category = table "disease_category" with (disease_category_id: Int, name: String, description: String) from db;
 
-var disease_database_link = table "disease_database_link" with (disease_database_link_id: Int, disease_id: Int, database_id: Int, placeholder: String) from db;
+typename DbDiseaseDatabaseLink =
+  (disease_database_link_id: Int, disease_id: Int, database_id: Int, placeholder: String);
+var disease_database_link = table "disease_database_link" with DbDiseaseDatabaseLink from db;
 
 var disease_synonym2database_link = table "disease_synonym2database_link" with (disease2synonym_id: Int, disease_database_link_id: Int) from db;
 

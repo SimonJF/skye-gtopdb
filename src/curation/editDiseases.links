@@ -10,7 +10,11 @@ typename DiseaseName = String;
 typename HTML(a) = MvuHTML.HTML(a);
 
 # For now -- this will also contain synonym and xref info later
-typename DiseaseInfo = Tables.DbDisease;
+typename DiseaseInfo =
+  (diseaseData: Tables.DbDisease,
+   databases: [Tables.DbDatabase],
+   dbLinks: [Tables.DbDiseaseDatabaseLink]);
+
 
 module Selecting {
   typename Model =
@@ -155,12 +159,17 @@ module Editing {
     fun updtModel(model) {
       switch(msg) {
         case UpdateName(name) ->
+          # Funnily enough, this is where we could do with _non_-relational lenses...
+          var diseaseData =
+            (model.diseaseInfo.diseaseData with name = name);
           var diseaseInfo =
-            (model.diseaseInfo with name = name);
+            (model.diseaseInfo with diseaseData = diseaseData);
           (model with diseaseInfo = diseaseInfo)
         case UpdateDescription(desc) ->
+          var diseaseData =
+            (model.diseaseInfo.diseaseData with description = desc);
           var diseaseInfo =
-            (model.diseaseInfo with description = desc);
+            (model.diseaseInfo with diseaseData = diseaseData);
           (model with diseaseInfo = diseaseInfo)
         case Submit ->
           model.submitDisease(model.diseaseInfo); model
@@ -183,7 +192,7 @@ module Editing {
     var a0 = MvuAttrs.empty;
 
     fun renderModel(model) {
-      var di = model.diseaseInfo;
+      var data = model.diseaseInfo.diseaseData;
       div(class("container"),
         div(class("row mt-3"),
           div(class("col-sm"),
@@ -194,21 +203,21 @@ module Editing {
                   # Disease ID
                   div(class("form-group"),
                     label(a0, textNode("Disease ID: ")) +*
-                    textNode(intToString(di.disease_id))) +*
+                    textNode(intToString(data.disease_id))) +*
                   # Disease Name
                   div(class("form-group"),
                     label(for_("diseaseName"), textNode("Disease Name")) +*
                     input(type("text") +@
                       id("diseaseName") +@
                       class("form-control") +@
-                      value(di.name) +@
+                      value(data.name) +@
                       onInput(fun(name) { UpdateName(name) }), h0)) +*
                   # Disease Comments
                   div(class("form-group"),
                     label(for_("diseaseDescription"), textNode("Disease Description")) +*
                     textarea(id("diseaseDescription") +@
                       class("form-control") +@
-                      value(di.description) +@
+                      value(data.description) +@
                       onInput(fun(desc) { UpdateDescription(desc) }), h0))))))) +*
 
         # Next up: DB refs panel
@@ -233,15 +242,28 @@ module Editing {
   }
 
   fun mainPage(diseaseID) {
+    # Disease lenses
     var diseasesLens = lens Tables.disease with { disease_id -> name };
-    var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == diseaseID };
-    var selectLens = lenscheck selectLens;
-    var diseases = lensget selectLens;
+    var diseaseSelectLens =
+      lenscheck (lensselect from diseasesLens by fun(x) { x.disease_id == diseaseID });
+    var diseases = lensget diseaseSelectLens;
+
+    # Database link lenses
+    var dbLens = lens Tables.tbl_database with { database_id -> name };
+    var dbs = lensget dbLens;
+
+    var dbLinksLens =
+      lens Tables.disease_database_link with
+        { disease_database_link_id -> disease_id database_id placeholder };
+    var dbLinksSelectLens =
+      lenscheck (lensselect from dbLinksLens by fun(x) { x.disease_id == diseaseID });
+    var dbLinks = lensget dbLinksSelectLens;
 
     var pid = spawn {
       receive {
         case Submit(diseaseInfo, pid) ->
-          var _ = lensput selectLens with [diseaseInfo];
+          lensput diseaseSelectLens with [diseaseInfo.diseaseData];
+          lensput dbLinksSelectLens with diseaseInfo.dbLinks;
           pid ! Done
       }
     };
@@ -255,11 +277,16 @@ module Editing {
       redirect("/editDiseases")
     }
 
-    var initialModel = {
+    var (initialModel: Model) = {
       switch(diseases) {
         case [] -> Nothing
         case d :: _ ->
-          Just((diseaseInfo = d, submitDisease = submitDisease))
+          var diseaseInfo =
+            (diseaseData = d,
+             databases = dbs,
+             dbLinks = dbLinks);
+
+          Just((diseaseInfo = diseaseInfo, submitDisease = submitDisease))
       }
     };
 
