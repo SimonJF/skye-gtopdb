@@ -398,7 +398,7 @@ module Editing {
 
           Just((diseaseInfo = diseaseInfo,
                 accessionID = "",
-                selectedDatabaseID = 0, # hack -- should do this properly
+                selectedDatabaseID = hd(dbs).database_id, # will fail if DBs are empty (which they aren't)
                 submitDisease = submitDisease))
       }
     };
