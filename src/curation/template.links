@@ -6,6 +6,7 @@ fun template() {
         <title>Links GtoPdb Curation Tool</title>
         <link href="/css/bootstrap.min.css" rel="stylesheet"></link>
         <link href="/css/curation.css" rel="stylesheet"></link>
+        <link href="/css/fontawesome/all.css" rel="stylesheet"></link>
       </head>
       <body>
         <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">

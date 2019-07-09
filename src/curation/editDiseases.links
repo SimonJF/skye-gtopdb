@@ -166,7 +166,7 @@ module Editing {
   typename Message =
     [| UpdateName:String | UpdateDescription:String | Submit
      | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:Int
-     | AddDBLink | DeleteDBLink:(Int, String)
+     | AddDBLink | DeleteDBLink:DatabaseLink
      |];
 
   sig updt : (Message, Model) {}~> Model
@@ -198,9 +198,9 @@ module Editing {
           var dbLinks = newLink :: model.diseaseInfo.dbLinks;
           var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
           (model with diseaseInfo = diseaseInfo)
-        case DeleteDBLink((id, accession)) ->
+        case DeleteDBLink(dbLink) ->
           var dbLinks =
-            filter(fun(x) { not(x.database_id == id && x.placeholder == accession) }, model.diseaseInfo.dbLinks);
+            filter(fun(x) { x <> dbLink }, model.diseaseInfo.dbLinks);
           var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
           (model with diseaseInfo = diseaseInfo)
         case Cancel ->
@@ -223,46 +223,128 @@ module Editing {
 
     fun renderModel(model) {
       var data = model.diseaseInfo.diseaseData;
-      div(class("container"),
+
+      fun panel(name, contents) {
         div(class("row mt-3"),
           div(class("col-sm"),
             div(class("card"),
-              div(class("card-header"), textNode("Basic information")) +*
-              div(class("card-body"),
-                form(a0,
-                  # Disease ID
-                  div(class("form-group"),
-                    label(a0, textNode("Disease ID: ")) +*
-                    textNode(intToString(data.disease_id))) +*
-                  # Disease Name
-                  div(class("form-group"),
-                    label(for_("diseaseName"), textNode("Disease Name")) +*
-                    input(type("text") +@
-                      id("diseaseName") +@
-                      class("form-control") +@
-                      value(data.name) +@
-                      onInput(fun(name) { UpdateName(name) }), h0)) +*
-                  # Disease Comments
-                  div(class("form-group"),
-                    label(for_("diseaseDescription"), textNode("Disease Description")) +*
-                    textarea(id("diseaseDescription") +@
-                      class("form-control") +@
-                      value(data.description) +@
-                      onInput(fun(desc) { UpdateDescription(desc) }), h0))))))) +*
+              div(class("card-header"), textNode(name)) +*
+              div(class("card-body"), contents))))
+      }
 
-        # Next up: DB refs panel
-        div(class("row mt-3"),
-          div(class("col-sm"),
-            div(class("card"),
-              div(class("card-header"), textNode("Database References")) +*
-              div(class("card-body"), textNode("TODO: CONTENT"))))) +*
+      var basicInfoPanel = {
+        panel("Basic Information",
+          form(a0,
+            # Disease ID
+            div(class("form-group"),
+              label(a0, textNode("Disease ID: ")) +*
+              textNode(intToString(data.disease_id))) +*
+            # Disease Name
+            div(class("form-group"),
+              label(for_("diseaseName"), textNode("Disease Name")) +*
+              input(type("text") +@
+                id("diseaseName") +@
+                class("form-control") +@
+                value(data.name) +@
+                onInput(fun(name) { UpdateName(name) }), h0)) +*
+            # Disease Comments
+            div(class("form-group"),
+              label(for_("diseaseDescription"), textNode("Disease Description")) +*
+              textarea(id("diseaseDescription") +@
+                class("form-control") +@
+                attr("rows", "5") +@
+                value(data.description) +@
+                onInput(fun(desc) { UpdateDescription(desc) }), h0))))
+      };
 
+      var dbLinksPanel = {
+        var dbDropdown = {
+          fun renderDropdownItem(x) {
+            option(value(intToString(x.database_id)), textNode(x.name))
+          }
+          var options =
+            MvuHTML.concatMap(renderDropdownItem, model.diseaseInfo.databases);
+          select_(
+              id("dbDropdown") +@
+              class("form-control") +@
+              onChange(fun(x) { UpdateSelectedDatabase(stringToInt(x)) } ), options)
+        };
+
+        var dbForm = {
+          h5(class("card-title"), textNode("Add a crossreference")) +*
+          form(a0,
+            div(class("form-group"),
+              label(for_("dbDropdown"), textNode("Database")) +*
+              dbDropdown) +*
+            div(class("form-group"),
+              label(for_("accession"), textNode("Accession")) +*
+              input(type("text") +@
+                class("form-control") +@
+                value(model.accessionID) +@
+                onInput(fun(x) { UpdateAccessionID(x) }), h0)) +*
+            div(class("form-group"),
+              button(type("button") +@ class("btn btn-primary mr-2") +@
+                  onClick(fun() { AddDBLink }), textNode("Add Crossreference"))))
+        };
+
+        var crossrefsTable = {
+          # It would have been nice to have this as a join -- but that makes
+          # adding new DB links more painful
+          fun getDBName(dbID, xs) {
+            switch(xs) {
+              case [] -> ""
+              case x :: xs ->
+                if (x.database_id == dbID) {
+                  x.name
+                } else {
+                  getDBName(dbID, xs)
+                }
+            }
+          }
+
+          fun renderRow(x) {
+            tr(a0,
+              td(a0, textNode(getDBName(x.database_id, model.diseaseInfo.databases))) +*
+              td(a0, textNode(x.placeholder)) +*
+              td(a0,
+                i(class("fas fa-trash") +@
+                  onClick(fun() { DeleteDBLink(x) }), h0))
+            )
+          }
+
+          var rows = MvuHTML.concatMap(renderRow, model.diseaseInfo.dbLinks);
+
+          h5(class("card-title"), textNode("Existing crossreferences")) +*
+          table_(class("table table-bordered"),
+            thead(a0,
+              tr(a0,
+                th(a0, textNode("Database")) +*
+                th(a0, textNode("Accession")) +*
+                th(a0, h0))) +*
+            tbody(a0, rows))
+        };
+
+
+
+        panel("Database References",
+            dbForm +* crossrefsTable)
+      };
+
+      var synonymsPanel = {
+        panel("Synonyms", textNode("TODO"))
+      };
+
+      var buttons = {
         div(class("row mt-5"),
           div(class("col-sm"),
-                button(type("button") +@ class("btn btn-primary mr-2") +@
-                    onClick(fun() { Submit }), textNode("Submit")) +*
-                button(type("button") +@ class("btn btn-primary") +@
-                    onClick(fun() { Cancel }), textNode("Cancel")))))
+            button(type("button") +@ class("btn btn-primary mr-2") +@
+                onClick(fun() { Submit }), textNode("Submit")) +*
+            button(type("button") +@ class("btn btn-primary") +@
+                onClick(fun() { Cancel }), textNode("Cancel"))))
+      };
+
+      div(class("container"),
+        basicInfoPanel +* dbLinksPanel +* synonymsPanel +* buttons)
     }
 
     switch(model) {
@@ -280,7 +362,7 @@ module Editing {
 
     # Database link lenses
     var dbLens = lens Tables.tbl_database with { database_id -> name };
-    var dbs = lensget dbLens;
+    var dbs = sortBy(fun(x) { x.name }, lensget dbLens);
 
     var dbLinksLens = lens dbLinkTable default;
     var dbLinksLens =
