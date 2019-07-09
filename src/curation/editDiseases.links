@@ -9,11 +9,20 @@ typename DiseaseName = String;
 
 typename HTML(a) = MvuHTML.HTML(a);
 
-# For now -- this will also contain synonym and xref info later
+# We need to be careful with auto-incrementing primary keys, so we
+# rewrite the Links representation of the disease_database_link tabl
+# _without_ the disease_database_link_id.
+typename DatabaseLink =
+  (disease_id: Int, database_id: Int, placeholder: String);
+
+var dbLinkTable =
+  table "disease_database_link" with DatabaseLink
+  tablekeys [["disease_id", "database_id", "placeholder"]] from Tables.db;
+
 typename DiseaseInfo =
   (diseaseData: Tables.DbDisease,
    databases: [Tables.DbDatabase],
-   dbLinks: [Tables.DbDiseaseDatabaseLink]);
+   dbLinks: [DatabaseLink]);
 
 
 module Selecting {
@@ -148,31 +157,52 @@ module Selecting {
 
 module Editing {
   typename Model =
-    Maybe((diseaseInfo: DiseaseInfo, submitDisease: (DiseaseInfo) {}~> ()));
+    Maybe(
+      (diseaseInfo: DiseaseInfo,
+       selectedDatabaseID: Int,
+       accessionID: String,
+       submitDisease: (DiseaseInfo) {}~> ()));
 
   typename Message =
     [| UpdateName:String | UpdateDescription:String | Submit
-     | Cancel  |];
+     | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:Int
+     | AddDBLink | DeleteDBLink:(Int, String)
+     |];
 
   sig updt : (Message, Model) {}~> Model
   fun updt(msg, model) {
     fun updtModel(model) {
+      var data = model.diseaseInfo.diseaseData;
       switch(msg) {
         case UpdateName(name) ->
-          # Funnily enough, this is where we could do with _non_-relational lenses...
-          var diseaseData =
-            (model.diseaseInfo.diseaseData with name = name);
           var diseaseInfo =
-            (model.diseaseInfo with diseaseData = diseaseData);
+            (model.diseaseInfo with diseaseData = (data with name = name));
           (model with diseaseInfo = diseaseInfo)
         case UpdateDescription(desc) ->
           var diseaseData =
-            (model.diseaseInfo.diseaseData with description = desc);
+            (data with description = desc);
           var diseaseInfo =
-            (model.diseaseInfo with diseaseData = diseaseData);
+            (model.diseaseInfo with diseaseData = (data with description = desc));
           (model with diseaseInfo = diseaseInfo)
         case Submit ->
           model.submitDisease(model.diseaseInfo); model
+        case UpdateAccessionID(str) ->
+          (model with accessionID = str)
+        case UpdateSelectedDatabase(dbID) ->
+          (model with selectedDatabaseID = dbID)
+        case AddDBLink ->
+          var newLink =
+            (disease_id = data.disease_id,
+             database_id = model.selectedDatabaseID,
+             placeholder = model.accessionID);
+          var dbLinks = newLink :: model.diseaseInfo.dbLinks;
+          var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
+          (model with diseaseInfo = diseaseInfo)
+        case DeleteDBLink((id, accession)) ->
+          var dbLinks =
+            filter(fun(x) { not(x.database_id == id && x.placeholder == accession) }, model.diseaseInfo.dbLinks);
+          var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
+          (model with diseaseInfo = diseaseInfo)
         case Cancel ->
           redirect("/editDiseases"); model
       }
@@ -252,18 +282,16 @@ module Editing {
     var dbLens = lens Tables.tbl_database with { database_id -> name };
     var dbs = lensget dbLens;
 
+    var dbLinksLens = lens dbLinkTable default;
     var dbLinksLens =
-      lens Tables.disease_database_link with
-        { disease_database_link_id -> disease_id database_id placeholder };
-    var dbLinksSelectLens =
       lenscheck (lensselect from dbLinksLens by fun(x) { x.disease_id == diseaseID });
-    var dbLinks = lensget dbLinksSelectLens;
+    var dbLinks = lensget dbLinksLens;
 
     var pid = spawn {
       receive {
         case Submit(diseaseInfo, pid) ->
           lensput diseaseSelectLens with [diseaseInfo.diseaseData];
-          lensput dbLinksSelectLens with diseaseInfo.dbLinks;
+          lensput dbLinksLens with diseaseInfo.dbLinks;
           pid ! Done
       }
     };
@@ -286,7 +314,10 @@ module Editing {
              databases = dbs,
              dbLinks = dbLinks);
 
-          Just((diseaseInfo = diseaseInfo, submitDisease = submitDisease))
+          Just((diseaseInfo = diseaseInfo,
+                accessionID = "",
+                selectedDatabaseID = 0, # hack -- should do this properly
+                submitDisease = submitDisease))
       }
     };
 
