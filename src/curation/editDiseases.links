@@ -143,8 +143,127 @@ module Selecting {
 }
 
 module Editing {
-  fun mainPage(x) {
-    ()
+  typename Model =
+    Maybe((diseaseInfo: DiseaseInfo, submitDisease: (DiseaseInfo) {}~> ()));
+
+  typename Message =
+    [| UpdateName:String | UpdateDescription:String | Submit
+     | Cancel  |];
+
+  sig updt : (Message, Model) {}~> Model
+  fun updt(msg, model) {
+    fun updtModel(model) {
+      switch(msg) {
+        case UpdateName(name) ->
+          var diseaseInfo =
+            (model.diseaseInfo with name = name);
+          (model with diseaseInfo = diseaseInfo)
+        case UpdateDescription(desc) ->
+          var diseaseInfo =
+            (model.diseaseInfo with description = desc);
+          (model with diseaseInfo = diseaseInfo)
+        case Submit ->
+          model.submitDisease(model.diseaseInfo); model
+        case Cancel ->
+          redirect("/editDiseases"); model
+      }
+    }
+
+    switch(model) {
+      case Just(model) -> Just(updtModel(model))
+      case Nothing -> Nothing
+    }
+  }
+
+  sig view : (Model) ~> MvuHTML.HTML(Message)
+  fun view(model) {
+    open MvuHTML;
+    open MvuAttrs;
+    var h0 = MvuHTML.empty;
+    var a0 = MvuAttrs.empty;
+
+    fun renderModel(model) {
+      var di = model.diseaseInfo;
+      div(class("container"),
+        div(class("row mt-3"),
+          div(class("col-sm"),
+            div(class("card"),
+              div(class("card-header"), textNode("Basic information")) +*
+              div(class("card-body"),
+                form(a0,
+                  # Disease ID
+                  div(class("form-group"),
+                    label(a0, textNode("Disease ID: ")) +*
+                    textNode(intToString(di.disease_id))) +*
+                  # Disease Name
+                  div(class("form-group"),
+                    label(for_("diseaseName"), textNode("Disease Name")) +*
+                    input(type("text") +@
+                      id("diseaseName") +@
+                      class("form-control") +@
+                      value(di.name) +@
+                      onInput(fun(name) { UpdateName(name) }), h0)) +*
+                  # Disease Comments
+                  div(class("form-group"),
+                    label(for_("diseaseDescription"), textNode("Disease Description")) +*
+                    textarea(id("diseaseDescription") +@
+                      class("form-control") +@
+                      value(di.description) +@
+                      onInput(fun(desc) { UpdateDescription(desc) }), h0))))))) +*
+
+        # Next up: DB refs panel
+        div(class("row mt-3"),
+          div(class("col-sm"),
+            div(class("card"),
+              div(class("card-header"), textNode("Database References")) +*
+              div(class("card-body"), textNode("TODO: CONTENT"))))) +*
+
+        div(class("row mt-5"),
+          div(class("col-sm"),
+                button(type("button") +@ class("btn btn-primary mr-2") +@
+                    onClick(fun() { Submit }), textNode("Submit")) +*
+                button(type("button") +@ class("btn btn-primary") +@
+                    onClick(fun() { Cancel }), textNode("Cancel")))))
+    }
+
+    switch(model) {
+      case Just(model) -> renderModel(model)
+      case Nothing -> textNode("Invalid Disease Specified")
+    }
+  }
+
+  fun mainPage(diseaseID) {
+    var diseasesLens = lens Tables.disease with { disease_id -> name };
+    var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == diseaseID };
+    var selectLens = lenscheck selectLens;
+    var diseases = lensget selectLens;
+
+    var pid = spawn {
+      receive {
+        case Submit(diseaseInfo, pid) ->
+          var _ = lensput selectLens with [diseaseInfo];
+          pid ! Done
+      }
+    };
+
+    sig submitDisease : (DiseaseInfo) {}~> ()
+    fun submitDisease(diseaseInfo) {
+      spawnWait {
+        pid ! Submit(diseaseInfo, self());
+        receive { case Done -> () }
+      };
+      redirect("/editDiseases")
+    }
+
+    var initialModel = {
+      switch(diseases) {
+        case [] -> Nothing
+        case d :: _ ->
+          Just((diseaseInfo = d, submitDisease = submitDisease))
+      }
+    };
+
+    Mvu.runSimple("placeholder", initialModel, view, updt)
   }
 }
 
@@ -154,7 +273,7 @@ fun mainPage() {
   switch(lookup("diseaseID", environment())) {
     case Just(id) ->
       if (isInt(id)) {
-        Editing.mainPage(id)
+        Editing.mainPage(stringToInt(id))
       } else {
         Selecting.mainPage()
       }
