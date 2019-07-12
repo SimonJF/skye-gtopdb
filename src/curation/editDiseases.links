@@ -12,12 +12,26 @@ typename HTML(a) = MvuHTML.HTML(a);
 # We need to be careful with auto-incrementing primary keys, so we
 # rewrite the Links representation of the disease_database_link tabl
 # _without_ the disease_database_link_id.
+
+var db = database "gtopdb";
+
+typename DiseaseData =
+  (disease_id: Int, name: String, description: String, type: String);
+
+var disease = table "disease" with DiseaseData tablekeys [["disease_id"]] from db;
+
+
 typename DatabaseLink =
   (disease_id: Int, database_id: Int, placeholder: String);
 
+typename ExternalDatabase =
+  (database_id: Int, name: String, url: String, specialist: Bool, "prefix": String);
+var tbl_database = table "database" with ExternalDatabase from db;
+
+
 var dbLinkTable =
   table "disease_database_link" with DatabaseLink
-  tablekeys [["disease_id", "database_id", "placeholder"]] from Tables.db;
+  tablekeys [["disease_id", "database_id", "placeholder"]] from db;
 
 typename Synonym =
   (disease_id: Int, synonym: String);
@@ -25,12 +39,12 @@ typename Synonym =
 var synonymTable =
   table "disease2synonym" with Synonym
   tablekeys [["disease_id", "synonym"]]
-  from Tables.db;
+  from db;
 
 
 typename DiseaseInfo =
-  (diseaseData: Tables.DbDisease,
-   databases: [Tables.DbDatabase],
+  (diseaseData: DiseaseData,
+   databases: [ExternalDatabase],
    dbLinks: [DatabaseLink],
    synonyms: [Synonym]);
 
