@@ -19,10 +19,20 @@ var dbLinkTable =
   table "disease_database_link" with DatabaseLink
   tablekeys [["disease_id", "database_id", "placeholder"]] from Tables.db;
 
+typename Synonym =
+  (disease_id: Int, synonym: String);
+
+var synonymTable =
+  table "disease2synonym" with Synonym
+  tablekeys [["disease_id", "synonym"]]
+  from Tables.db;
+
+
 typename DiseaseInfo =
   (diseaseData: Tables.DbDisease,
    databases: [Tables.DbDatabase],
-   dbLinks: [DatabaseLink]);
+   dbLinks: [DatabaseLink],
+   synonyms: [Synonym]);
 
 
 module Selecting {
@@ -161,12 +171,14 @@ module Editing {
       (diseaseInfo: DiseaseInfo,
        selectedDatabaseID: Int,
        accessionID: String,
+       newSynonym:String,
        submitDisease: (DiseaseInfo) {}~> ()));
 
   typename Message =
     [| UpdateName:String | UpdateDescription:String | Submit
      | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:Int
      | AddDBLink | DeleteDBLink:DatabaseLink
+     | AddSynonym | DeleteSynonym:String | UpdateNewSynonym:String
      |];
 
   sig updt : (Message, Model) {}~> Model
@@ -203,6 +215,17 @@ module Editing {
             filter(fun(x) { x <> dbLink }, model.diseaseInfo.dbLinks);
           var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
           (model with diseaseInfo = diseaseInfo)
+        case AddSynonym ->
+          var diseaseInfo = (model.diseaseInfo with synonyms =
+              ((disease_id = data.disease_id, synonym=model.newSynonym) :: model.diseaseInfo.synonyms));
+          (model with diseaseInfo = diseaseInfo, newSynonym = "")
+        case DeleteSynonym(synonym) ->
+          var synonyms =
+            filter(fun(x) { x.synonym <> synonym }, model.diseaseInfo.synonyms);
+          var diseaseInfo = (model.diseaseInfo with synonyms = synonyms);
+          (model with diseaseInfo = diseaseInfo)
+        case UpdateNewSynonym(synonym) ->
+          (model with newSynonym = synonym)
         case Cancel ->
           redirect("/editDiseases"); model
       }
@@ -331,7 +354,42 @@ module Editing {
       };
 
       var synonymsPanel = {
-        panel("Synonyms", textNode("TODO"))
+        fun renderRow(x) {
+          tr(a0,
+            td(a0, textNode(x.synonym)) +*
+            td(a0,
+              i(class("fas fa-trash") +@
+                onClick(fun() { DeleteSynonym(x.synonym) }), h0))
+          )
+        }
+
+        var rows = MvuHTML.concatMap(renderRow, model.diseaseInfo.synonyms);
+
+        var newSynonymForm = {
+          h5(class("card-title"), textNode("Add a synonym")) +*
+          form(a0,
+            div(class("form-group"),
+              label(for_("synonym"), textNode("Synonym")) +*
+              input(type("text") +@
+                class("form-control") +@
+                id("synonym") +@
+                value(model.newSynonym) +@
+                onInput(fun(x) { UpdateNewSynonym(x) }), h0)) +*
+            div(class("form-group"),
+              button(type("button") +@ class("btn btn-primary mr-2") +@
+                  onClick(fun() { AddSynonym }), textNode("Add Synonym"))))
+
+        };
+        var tbl =
+          h5(class("card-title"), textNode("Existing synonyms")) +*
+          table_(class("table table-bordered"),
+            thead(a0,
+              tr(a0,
+                th(a0, textNode("Synonym")) +*
+                th(a0, h0))) +*
+            tbody(a0, rows));
+
+        panel("Synonyms", newSynonymForm +* tbl)
       };
 
       var buttons = {
@@ -354,10 +412,15 @@ module Editing {
   }
 
   fun mainPage(diseaseID) {
+    # Row types let us abstract over the table, as long as it has a diseaseID
+    # field
+
+    fun filter(x) { x.disease_id == diseaseID }
+
     # Disease lenses
     var diseasesLens = lens Tables.disease with { disease_id -> name };
     var diseaseSelectLens =
-      lenscheck (lensselect from diseasesLens by fun(x) { x.disease_id == diseaseID });
+      lenscheck (lensselect from diseasesLens by filter);
     var diseases = lensget diseaseSelectLens;
 
     # Database link lenses
@@ -366,14 +429,22 @@ module Editing {
 
     var dbLinksLens = lens dbLinkTable default;
     var dbLinksLens =
-      lenscheck (lensselect from dbLinksLens by fun(x) { x.disease_id == diseaseID });
+      lenscheck (lensselect from dbLinksLens by filter);
     var dbLinks = lensget dbLinksLens;
+
+    # Synonym lenses
+    var synonymsLens = lens synonymTable default;
+    var synonymsLens =
+      lenscheck (lensselect from synonymsLens by filter);
+    var synonyms = lensget synonymsLens;
+
 
     var pid = spawn {
       receive {
         case Submit(diseaseInfo, pid) ->
           lensput diseaseSelectLens with [diseaseInfo.diseaseData];
           lensput dbLinksLens with diseaseInfo.dbLinks;
+          lensput synonymsLens with diseaseInfo.synonyms;
           pid ! Done
       }
     };
@@ -394,10 +465,12 @@ module Editing {
           var diseaseInfo =
             (diseaseData = d,
              databases = dbs,
-             dbLinks = dbLinks);
+             dbLinks = dbLinks,
+             synonyms = synonyms);
 
           Just((diseaseInfo = diseaseInfo,
                 accessionID = "",
+                newSynonym = "",
                 selectedDatabaseID = hd(dbs).database_id, # will fail if DBs are empty (which they aren't)
                 submitDisease = submitDisease))
       }
