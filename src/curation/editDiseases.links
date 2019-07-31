@@ -10,7 +10,7 @@ typename DiseaseName = String;
 typename HTML(a) = MvuHTML.HTML(a);
 
 # We need to be careful with auto-incrementing primary keys, so we
-# rewrite the Links representation of the disease_database_link tabl
+# rewrite the Links representation of the disease_database_link table
 # _without_ the disease_database_link_id.
 
 var db = database "gtopdb";
@@ -24,9 +24,13 @@ var disease = table "disease" with DiseaseData tablekeys [["disease_id"]] from d
 typename DatabaseLink =
   (disease_id: Int, database_id: Int, placeholder: String);
 
+typename JoinedDatabaseLink =
+  (disease_id: Int, database_id: Int, placeholder: String,
+   name: String, url: String, specialist: Bool, "prefix": String);
+
 typename ExternalDatabase =
   (database_id: Int, name: String, url: String, specialist: Bool, "prefix": String);
-var tbl_database = table "database" with ExternalDatabase from db;
+var tbl_database = table "database" with ExternalDatabase tablekeys [["database_id"]] from db;
 
 
 var dbLinkTable =
@@ -45,7 +49,7 @@ var synonymTable =
 typename DiseaseInfo =
   (diseaseData: DiseaseData,
    databases: [ExternalDatabase],
-   dbLinks: [DatabaseLink],
+   dbLinks: [JoinedDatabaseLink],
    synonyms: [Synonym]);
 
 
@@ -183,15 +187,15 @@ module Editing {
   typename Model =
     Maybe(
       (diseaseInfo: DiseaseInfo,
-       selectedDatabaseID: Int,
+       selectedDatabase: ExternalDatabase,
        accessionID: String,
        newSynonym:String,
        submitDisease: (DiseaseInfo) {}~> ()));
 
   typename Message =
     [| UpdateName:String | UpdateDescription:String | Submit
-     | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:Int
-     | AddDBLink | DeleteDBLink:DatabaseLink
+     | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:ExternalDatabase
+     | AddDBLink | DeleteDBLink:JoinedDatabaseLink
      | AddSynonym | DeleteSynonym:String | UpdateNewSynonym:String
      |];
 
@@ -214,13 +218,19 @@ module Editing {
           model.submitDisease(model.diseaseInfo); model
         case UpdateAccessionID(str) ->
           (model with accessionID = str)
-        case UpdateSelectedDatabase(dbID) ->
-          (model with selectedDatabaseID = dbID)
+        case UpdateSelectedDatabase(db) ->
+          (model with selectedDatabase = db)
         case AddDBLink ->
+ # (disease_id: Int, database_id: Int, placeholder: String,
+ #  name: String, url: String, specialist: Bool, "prefix": String);
           var newLink =
             (disease_id = data.disease_id,
-             database_id = model.selectedDatabaseID,
-             placeholder = model.accessionID);
+             database_id = model.selectedDatabase.database_id,
+             placeholder = model.accessionID,
+             name = model.selectedDatabase.name,
+             url = model.selectedDatabase.url,
+             specialist = model.selectedDatabase.specialist,
+             "prefix" = model.selectedDatabase."prefix");
           var dbLinks = newLink :: model.diseaseInfo.dbLinks;
           var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
           (model with diseaseInfo = diseaseInfo)
@@ -304,7 +314,24 @@ module Editing {
           select_(
               id("dbDropdown") +@
               class("form-control") +@
-              onChange(fun(x) { UpdateSelectedDatabase(stringToInt(x)) } ), options)
+              onChange(fun(x) {
+                var dbID = stringToInt(x);
+                fun lookupDB(dbID, dbs) {
+                  switch(dbs) {
+                    case [] ->
+                      # Not found (shouldn't happen) -- default case is to
+                      # use the first DB in the list (which should be nonempty)
+                      hd(model.diseaseInfo.databases)
+                    case x :: xs ->
+                      if (x.database_id == dbID) {
+                        x
+                      } else {
+                        lookupDB(dbID, xs)
+                      }
+                  }
+                }
+                var db = lookupDB(dbID, model.diseaseInfo.databases);
+                UpdateSelectedDatabase(db) } ), options)
         };
 
         var dbForm = {
@@ -325,8 +352,6 @@ module Editing {
         };
 
         var crossrefsTable = {
-          # It would have been nice to have this as a join -- but that makes
-          # adding new DB links more painful
           fun getDBName(dbID, xs) {
             switch(xs) {
               case [] -> ""
@@ -429,27 +454,29 @@ module Editing {
     # Row types let us abstract over the table, as long as it has a diseaseID
     # field
 
-    fun filter(x) { x.disease_id == diseaseID }
+    fun diseaseFilter(x) { x.disease_id == diseaseID }
 
     # Disease lenses
     var diseasesLens = lens Tables.disease with { disease_id -> name };
     var diseaseSelectLens =
-      lenscheck (lensselect from diseasesLens by filter);
+      lenscheck (lensselect from diseasesLens by diseaseFilter);
     var diseases = lensget diseaseSelectLens;
 
     # Database link lenses
-    var dbLens = lens Tables.tbl_database with { database_id -> name };
+    var dbLens = lens tbl_database with { database_id -> name url specialist "prefix" };
     var dbs = sortBy(fun(x) { x.name }, lensget dbLens);
 
     var dbLinksLens = lens dbLinkTable default;
     var dbLinksLens =
-      lenscheck (lensselect from dbLinksLens by filter);
-    var dbLinks = lensget dbLinksLens;
+      lenscheck (lensselect from dbLinksLens by diseaseFilter);
+    var dbLinksJoinLens =
+      lenscheck (lensjoin dbLinksLens with dbLens on database_id delete_left);
+    var dbLinks = lensget dbLinksJoinLens;
 
     # Synonym lenses
     var synonymsLens = lens synonymTable default;
     var synonymsLens =
-      lenscheck (lensselect from synonymsLens by filter);
+      lenscheck (lensselect from synonymsLens by diseaseFilter);
     var synonyms = lensget synonymsLens;
 
 
@@ -457,7 +484,7 @@ module Editing {
       receive {
         case Submit(diseaseInfo, pid) ->
           lensput diseaseSelectLens with [diseaseInfo.diseaseData];
-          lensput dbLinksLens with diseaseInfo.dbLinks;
+          lensput dbLinksJoinLens with diseaseInfo.dbLinks;
           lensput synonymsLens with diseaseInfo.synonyms;
           pid ! Done
       }
@@ -485,7 +512,7 @@ module Editing {
           Just((diseaseInfo = diseaseInfo,
                 accessionID = "",
                 newSynonym = "",
-                selectedDatabaseID = hd(dbs).database_id, # will fail if DBs are empty (which they aren't)
+                selectedDatabase = hd(dbs), # will fail if DBs are empty (which they aren't)
                 submitDisease = submitDisease))
       }
     };
