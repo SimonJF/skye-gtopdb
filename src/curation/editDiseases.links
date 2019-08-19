@@ -478,38 +478,65 @@ module Editing {
             }
           }
 
-          fun syncCrossrefs(dbLinks) {
-            # True if a given DB link has changed from the original DB capture
-            fun isChanged(dbLink) {
-              fun go(oldLinks) {
-                switch(oldLinks) {
-                  case [] -> false
-                  case x :: xs ->
-                    if (x.disease_database_link_id == dbLink.disease_database_link_id) {
-                      dbLink <> x
-                    } else {
-                      go(xs)
+          fun resolveSynonyms(synonyms, xrefMap) {
+            map(fun(s) {
+              var resolvedLinks =
+                map(fun(l) {
+                  # Only resolve "virtual" IDs
+                  if (l < 0) {
+                    switch(lookup(l, xrefMap)) {
+                      case Just(x) -> x
+                      case Nothing -> error("Unresolvable ID " ^^ intToString(l))
                     }
-                }
+                  } else {
+                    l
+                  }
+                }, s.dbLinkIDs);
+              (s with dbLinkIDs = resolvedLinks)
+            }, synonyms)
+          }
+
+          # True if a given DB link has changed from the original DB capture
+          fun isChanged(proj, newVal, oldVals) {
+            fun go(oldLinks) {
+              switch(oldLinks) {
+                case [] -> false
+                case x :: xs ->
+                  if (proj(x) == proj(newVal)) {
+                    newVal <> x
+                  } else {
+                    go(xs)
+                  }
               }
-              go(oldData.dbLinks)
+            }
+            go(oldVals)
+          }
+
+          fun deletedIDs(proj, oldVals, newVals) {
+            Utility.filterMap(fun(old) {
+                var searchRes =
+                  search(
+                    fun(newX) {
+                      proj(old) == proj(newX)
+                    }, newVals);
+
+                switch (searchRes) {
+                  case Just(x) -> Nothing
+                  case Nothing -> Just(proj(old))
+                }
+              }, oldVals)
+          }
+
+          fun syncCrossrefs(dbLinks) {
+
+            fun crossrefChanged(dbLink) {
+              isChanged(fun(x) { x.disease_database_link_id }, dbLink, oldData.dbLinks)
             }
 
             # True if a given DB link is in the old DB but not in the new
             # (TODO: This would be better using set difference -- rewrite when implemented in stdlib)
-            var deletedIDs = {
-              Utility.filterMap(fun(oldDBL) {
-                var searchRes =
-                  search(
-                    fun(newDBL) {
-                      oldDBL.disease_database_link_id == newDBL.disease_database_link_id
-                    }, dbLinks);
-
-                switch (searchRes) {
-                  case Just(x) -> Nothing
-                  case Nothing -> Just(oldDBL.disease_database_link_id)
-                }
-              }, oldData.dbLinks)
+            var deletedCrossrefIDs = {
+              deletedIDs(fun(x) { x.disease_database_link_id }, oldData.dbLinks, dbLinks)
             };
 
             # If the PK is negative, we need to insert, otherwise update.
@@ -517,10 +544,13 @@ module Editing {
               partition(fun(x) { x.disease_database_link_id > 0 }, dbLinks);
             # We only need to generate an update query if part of the DB link
             # (for example, accession ID) has changed.
-            var toUpdate = filter(isChanged, toUpdate);
+            var toUpdate = filter(crossrefChanged, toUpdate);
 
-            # First, do the required deletions
-            var deletePred = Utility.contains(deletedIDs);
+            # First, do the required deletions: need to firstly clear out any synonym
+            # references, before deleting the link itself
+            var deletePred = Utility.contains(deletedCrossrefIDs);
+            delete (dsdl <-- Tables.disease_synonym2database_link)
+              where (deletePred(dsdl.disease_database_link_id));
             delete (ddl <-- Tables.disease_database_link)
               where (deletePred(ddl.disease_database_link_id));
 
@@ -545,6 +575,85 @@ module Editing {
             }, toInsert)
           }
 
+         fun syncSynonyms(synonyms) {
+           # Mainly same stuff as above
+
+           fun synonymChanged(s) {
+             isChanged(fun(x) { x.synonym.disease2synonym_id }, s, oldData.synonyms)
+           }
+
+           var deletedSynonyms =
+             deletedIDs(fun(x) { x.synonym.disease2synonym_id }, oldData.synonyms, synonyms);
+
+            var (toUpdate, toInsert) =
+              partition(fun(x) { x.synonym.disease2synonym_id > 0 }, synonyms);
+            var toUpdate = filter(synonymChanged, toUpdate);
+
+            # OK, right -- first off, delete everything that needs to be deleted
+            var deletePred = Utility.contains(deletedSynonyms);
+            delete (dsdl <-- Tables.disease_synonym2database_link)
+              where (deletePred(dsdl.disease2synonym_id));
+            delete (d2s <-- Tables.disease2synonym)
+              where (deletePred(d2s.disease2synonym_id));
+
+            # Next up -- update each synonym
+            fun updateSynonym(syn) {
+              # Update synonym name
+              update (d2s <-- Tables.disease2synonym)
+                where (d2s.disease2synonym_id == syn.synonym.disease2synonym_id)
+                set (synonym = syn.synonym.synonym);
+
+              # TODO: cleaner, faster, and safer to zip old and new synonyms in toUpdate
+              # (this is a hack.)
+              var oldSynonym =
+                hd(filter(fun(x) {
+                  x.synonym.disease2synonym_id == syn.synonym.disease2synonym_id
+                }, oldData.synonyms));
+
+              # Update DB links. Do same tedious diffing dance
+              # Deleted: in old DB links, but not this one
+              var deleted =
+                filter(fun(x) { not(Utility.listContains(x, syn.dbLinkIDs)) }, oldSynonym.dbLinkIDs);
+
+               #Utility.filterMap(fun(x) {
+               #  if (not(Utility.listContains(x, syn.dbLinks))) {
+               #    Just(x.disease_database_link_id)
+               #  } else {
+               #    Nothing
+               #  }
+               #}, oldData.dbLinks);
+              # Inserted: in new DB links, but not old one
+              var inserted =
+                filter(fun(x) { not(Utility.listContains(x, oldSynonym.dbLinkIDs)) }, syn.dbLinkIDs);
+
+              # Delete all that need to be deleted
+              var deletePred = Utility.contains(deleted);
+
+              delete (dsdl <-- Tables.disease_synonym2database_link)
+                where (deletePred(dsdl.disease_database_link_id));
+
+              # Insert all DB links that need to be inserted
+              iter(fun(x) {
+                assert (x > 0, "Attempting to insert virtual ID");
+                insert Tables.disease_synonym2database_link
+                values [(disease2synonym_id = syn.synonym.disease2synonym_id,
+                         disease_database_link_id = x)]
+              }, inserted)
+            }
+
+            iter(updateSynonym, toUpdate);
+
+            # Finally, insert each new synonym (I don't believe we actually need
+            # the returned synonym IDs).
+            iter(fun(x) {
+              insert Tables.disease2synonym values
+                [(disease_id = diseaseID, synonym = x.synonym.synonym)]
+            }, toInsert)
+
+         }
+
+
+
           # First, the easy stuff: Update the disease information (name, desc)
           update (d <-- Tables.disease)
             where (d.disease_id == diseaseID)
@@ -554,6 +663,11 @@ module Editing {
           var xrefMap = syncCrossrefs(diseaseInfo.dbLinks);
 
           # With crossrefs synchronised, we can synchronise synonyms.
+          # First, need to resolve all "virtual" IDs for Xrefs.
+          var synonyms = resolveSynonyms(diseaseInfo.synonyms, xrefMap);
+          syncSynonyms(synonyms);
+
+
           pid ! Done
       }
     };

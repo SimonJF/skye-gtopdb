@@ -220,3 +220,15 @@ fun filterMap(f, xs) {
     }
   }, xs)
 }
+
+fun listContains(x, xs) {
+  switch(xs) {
+    case [] -> false
+    case y :: ys ->
+      if (x == y) {
+        true
+      } else {
+        listContains(x, ys)
+      }
+  }
+}
