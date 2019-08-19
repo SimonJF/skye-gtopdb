@@ -88,7 +88,8 @@ var disease = table "disease" with DbDisease tablekeys [["disease_id"]] from db;
 
 var disease2category = table "disease2category" with (disease_id: Int, disease_category_id: Int, comment: String) from db;
 
-var disease2synonym = table "disease2synonym" with (disease2synonym_id: Int, disease_id: Int, synonym: String) from db;
+typename DbDisease2Synonym = (disease2synonym_id: Int, disease_id: Int, synonym: String);
+var disease2synonym = table "disease2synonym" with DbDisease2Synonym from db;
 
 var disease_category = table "disease_category" with (disease_category_id: Int, name: String, description: String) from db;
 

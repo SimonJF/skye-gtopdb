@@ -15,12 +15,42 @@ typename HTML(a) = MvuHTML.HTML(a);
 
 var db = database "gtopdb";
 
+typename DiseaseData =
+  (disease_id: Int, name: String, description: String, type: String);
+
+var disease = table "disease" with DiseaseData tablekeys [["disease_id"]] from db;
+
+
+typename DatabaseLink =
+  (disease_id: Int, database_id: Int, placeholder: String);
+
+typename JoinedDatabaseLink =
+  (disease_id: Int, database_id: Int, placeholder: String,
+   name: String, url: String, specialist: Bool, "prefix": String);
+
+typename ExternalDatabase =
+  (database_id: Int, name: String, url: String, specialist: Bool, "prefix": String);
+var tbl_database = table "database" with ExternalDatabase tablekeys [["database_id"]] from db;
+
+
+var dbLinkTable =
+  table "disease_database_link" with DatabaseLink
+  tablekeys [["disease_id", "database_id", "placeholder"]] from db;
+
+typename Synonym =
+  (disease_id: Int, synonym: String);
+
+var synonymTable =
+  table "disease2synonym" with Synonym
+  tablekeys [["disease_id", "synonym"]]
+  from db;
+
+
 typename DiseaseInfo =
-  (disease: Tables.DbDisease,
-   synonyms: [(synonym: Tables.DbDisease2Synonym, dbLinkIDs: [Int])],
-   dbLinks: [Tables.DbDiseaseDatabaseLink],
-   databases: [Tables.DbDatabase]
-  );
+  (diseaseData: DiseaseData,
+   databases: [ExternalDatabase],
+   dbLinks: [JoinedDatabaseLink],
+   synonyms: [Synonym]);
 
 
 module Selecting {
@@ -157,99 +187,67 @@ module Editing {
   typename Model =
     Maybe(
       (diseaseInfo: DiseaseInfo,
-       selectedDatabaseID: Int,
+       selectedDatabase: ExternalDatabase,
        accessionID: String,
-       newSynonym: String,
+       newSynonym:String,
        submitDisease: (DiseaseInfo) {}~> ()));
 
   typename Message =
     [| UpdateName:String | UpdateDescription:String | Submit
-     | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:Int
-     | AddDBLink | DeleteDBLink:Int
-     | AddSynonym | DeleteSynonym:Int | UpdateNewSynonym:String
+     | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:ExternalDatabase
+     | AddDBLink | DeleteDBLink:JoinedDatabaseLink
+     | AddSynonym | DeleteSynonym:String | UpdateNewSynonym:String
      |];
-
-
-  # Boy, do I wish we had references.
-  var idSource = spawn {
-    fun go(id) {
-      receive {
-        case FreshIDReq(pid) ->
-          pid ! FreshIDResp(id);
-          go(id - 1)
-      }
-    }
-    go((-1))
-  };
-
-  # Returns a fresh negative ID.
-  fun freshID() {
-    spawnWait {
-      idSource ! FreshIDReq(self());
-      receive {
-        case FreshIDResp(id) -> id
-      }
-    }
-  }
 
   sig updt : (Message, Model) {}~> Model
   fun updt(msg, model) {
-
     fun updtModel(model) {
-      var data = model.diseaseInfo.disease;
+      var data = model.diseaseInfo.diseaseData;
       switch(msg) {
         case UpdateName(name) ->
           var diseaseInfo =
-            (model.diseaseInfo with disease = (data with name = name));
-          (model with =diseaseInfo)
-        case UpdateDescription(description) ->
-          var disease = (data with =description);
-          var diseaseInfo = (model.diseaseInfo with =disease);
-          (model with =diseaseInfo)
+            (model.diseaseInfo with diseaseData = (data with name = name));
+          (model with diseaseInfo = diseaseInfo)
+        case UpdateDescription(desc) ->
+          var diseaseData =
+            (data with description = desc);
+          var diseaseInfo =
+            (model.diseaseInfo with diseaseData = (data with description = desc));
+          (model with diseaseInfo = diseaseInfo)
         case Submit ->
           model.submitDisease(model.diseaseInfo); model
         case UpdateAccessionID(str) ->
           (model with accessionID = str)
-        case UpdateSelectedDatabase(dbID) ->
-          (model with selectedDatabaseID = dbID)
+        case UpdateSelectedDatabase(db) ->
+          (model with selectedDatabase = db)
         case AddDBLink ->
-          var newLinkID = freshID();
+ # (disease_id: Int, database_id: Int, placeholder: String,
+ #  name: String, url: String, specialist: Bool, "prefix": String);
           var newLink =
-            (disease_database_link_id = newLinkID,
-             disease_id = data.disease_id,
-             database_id = model.selectedDatabaseID,
-             placeholder = model.accessionID);
+            (disease_id = data.disease_id,
+             database_id = model.selectedDatabase.database_id,
+             placeholder = model.accessionID,
+             name = model.selectedDatabase.name,
+             url = model.selectedDatabase.url,
+             specialist = model.selectedDatabase.specialist,
+             "prefix" = model.selectedDatabase."prefix");
           var dbLinks = newLink :: model.diseaseInfo.dbLinks;
-          var diseaseInfo = (model.diseaseInfo with =dbLinks);
-          (model with =diseaseInfo, accessionID = "")
-        case DeleteDBLink(dbLinkID) ->
+          var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
+          (model with diseaseInfo = diseaseInfo)
+        case DeleteDBLink(dbLink) ->
           var dbLinks =
-            filter(fun(x) { x.disease_database_link_id <> dbLinkID }, model.diseaseInfo.dbLinks);
-          # Ensure we don't have any orphan DB links in synonyms
-          var synonyms =
-            map(fun(s) {
-              (s with dbLinkIDs =
-                filter(fun(x) { x <> dbLinkID }, s.dbLinkIDs))
-            }, model.diseaseInfo.synonyms);
-
-          var diseaseInfo = (model.diseaseInfo with =dbLinks, =synonyms);
-          (model with =diseaseInfo)
+            filter(fun(x) { x <> dbLink }, model.diseaseInfo.dbLinks);
+          var diseaseInfo = (model.diseaseInfo with dbLinks = dbLinks);
+          (model with diseaseInfo = diseaseInfo)
         case AddSynonym ->
-          var newSynonymID = freshID();
-          var newSynonymInfo =
-            (disease2synonym_id = newSynonymID,
-             disease_id = data.disease_id,
-             synonym = model.newSynonym);
-          var newSynonym =
-            (synonym = newSynonymInfo, dbLinkIDs = []);
           var diseaseInfo = (model.diseaseInfo with synonyms =
-              (newSynonym :: model.diseaseInfo.synonyms));
-          (model with =diseaseInfo, newSynonym = "")
-        case DeleteSynonym(synonymID) ->
+              ((disease_id = data.disease_id, synonym=model.newSynonym) :: model.diseaseInfo.synonyms));
+          (model with diseaseInfo = diseaseInfo, newSynonym = "")
+        case DeleteSynonym(synonym) ->
           var synonyms =
-            filter(fun(x) { x.synonym.disease2synonym_id <> synonymID }, model.diseaseInfo.synonyms);
-          var diseaseInfo = (model.diseaseInfo with =synonyms);
-          (model with =diseaseInfo)
+            filter(fun(x) { x.synonym <> synonym }, model.diseaseInfo.synonyms);
+          var diseaseInfo = (model.diseaseInfo with synonyms = synonyms);
+          (model with diseaseInfo = diseaseInfo)
         case UpdateNewSynonym(synonym) ->
           (model with newSynonym = synonym)
         case Cancel ->
@@ -271,7 +269,7 @@ module Editing {
     var a0 = MvuAttrs.empty;
 
     fun renderModel(model) {
-      var data = model.diseaseInfo.disease;
+      var data = model.diseaseInfo.diseaseData;
 
       fun panel(name, contents) {
         div(class("row mt-3"),
@@ -318,7 +316,22 @@ module Editing {
               class("form-control") +@
               onChange(fun(x) {
                 var dbID = stringToInt(x);
-                UpdateSelectedDatabase(dbID) } ), options)
+                fun lookupDB(dbID, dbs) {
+                  switch(dbs) {
+                    case [] ->
+                      # Not found (shouldn't happen) -- default case is to
+                      # use the first DB in the list (which should be nonempty)
+                      hd(model.diseaseInfo.databases)
+                    case x :: xs ->
+                      if (x.database_id == dbID) {
+                        x
+                      } else {
+                        lookupDB(dbID, xs)
+                      }
+                  }
+                }
+                var db = lookupDB(dbID, model.diseaseInfo.databases);
+                UpdateSelectedDatabase(db) } ), options)
         };
 
         var dbForm = {
@@ -357,7 +370,7 @@ module Editing {
               td(a0, textNode(x.placeholder)) +*
               td(a0,
                 i(class("fas fa-trash") +@
-                  onClick(fun() { DeleteDBLink(x.disease_database_link_id) }), h0))
+                  onClick(fun() { DeleteDBLink(x) }), h0))
             )
           }
 
@@ -382,10 +395,10 @@ module Editing {
       var synonymsPanel = {
         fun renderRow(x) {
           tr(a0,
-            td(a0, textNode(x.synonym.synonym)) +*
+            td(a0, textNode(x.synonym)) +*
             td(a0,
               i(class("fas fa-trash") +@
-                onClick(fun() { DeleteSynonym(x.synonym.disease2synonym_id) }), h0))
+                onClick(fun() { DeleteSynonym(x.synonym) }), h0))
           )
         }
 
@@ -441,38 +454,38 @@ module Editing {
     # Row types let us abstract over the table, as long as it has a diseaseID
     # field
 
-    var data =
-      for (d <-- Tables.disease)
-      where (d.disease_id == diseaseID)
-      [ (disease = d,
-         synonyms =
-           for (s <-- Tables.disease2synonym)
-           where (s.disease_id == diseaseID)
-           [
-            (dbLinkIDs =
-              for (synLink <-- Tables.disease_synonym2database_link)
-              where (synLink.disease2synonym_id == s.disease2synonym_id)
-              [synLink.disease_database_link_id],
-             synonym = s)
-           ],
-        dbLinks =
-          for (ddl <-- Tables.disease_database_link)
-          where (ddl.disease_id == diseaseID)
-          [ ddl ],
-        databases =
-          for (db <-- Tables.tbl_database)
-          [ db ]
-        )
-      ];
+    fun diseaseFilter(x) { x.disease_id == diseaseID }
+
+    # Disease lenses
+    var diseasesLens = lens Tables.disease default;
+    var diseaseSelectLens =
+      lenscheck (lensselect from diseasesLens by diseaseFilter);
+    var diseases = lensget diseaseSelectLens;
+
+    # Database link lenses
+    var dbLens = lens tbl_database with { database_id -> name url specialist "prefix" };
+    var dbs = sortBy(fun(x) { x.name }, lensget dbLens);
+
+    var dbLinksLens = lens dbLinkTable default;
+    var dbLinksLens =
+      lenscheck (lensselect from dbLinksLens by diseaseFilter);
+    var dbLinksJoinLens =
+      lenscheck (lensjoin dbLinksLens with dbLens on database_id delete_left);
+    var dbLinks = lensget dbLinksJoinLens;
+
+    # Synonym lenses
+    var synonymsLens = lens synonymTable default;
+    var synonymsLens =
+      lenscheck (lensselect from synonymsLens by diseaseFilter);
+    var synonyms = lensget synonymsLens;
+
 
     var pid = spawn {
       receive {
         case Submit(diseaseInfo, pid) ->
-        # TODO: Fill this in. Need to diff with `data`, which is the
-        # original disease data, which this process closes over.
-        # lensput diseaseSelectLens with [diseaseInfo.disease];
-        # lensput dbLinksJoinLens with diseaseInfo.dbLinks;
-        # lensput synonymsLens with diseaseInfo.synonyms;
+          lensput diseaseSelectLens with [diseaseInfo.diseaseData];
+          lensput dbLinksJoinLens with diseaseInfo.dbLinks;
+          lensput synonymsLens with diseaseInfo.synonyms;
           pid ! Done
       }
     };
@@ -487,13 +500,19 @@ module Editing {
     }
 
     var (initialModel: Model) = {
-      switch(data) {
+      switch(diseases) {
         case [] -> Nothing
         case d :: _ ->
-          Just((diseaseInfo = d,
+          var diseaseInfo =
+            (diseaseData = d,
+             databases = dbs,
+             dbLinks = dbLinks,
+             synonyms = synonyms);
+
+          Just((diseaseInfo = diseaseInfo,
                 accessionID = "",
                 newSynonym = "",
-                selectedDatabaseID = hd(d.databases).database_id, # will fail if DBs are empty (which they aren't)
+                selectedDatabase = hd(dbs), # will fail if DBs are empty (which they aren't)
                 submitDisease = submitDisease))
       }
     };
