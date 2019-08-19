@@ -163,6 +163,7 @@ module Editing {
        selectedDatabaseID: Int,
        accessionID: String,
        newSynonym: String,
+       newSynonymRefs: [Int],
        submitDisease: (DiseaseInfo) {}~> ()));
 
   typename Message =
@@ -170,6 +171,7 @@ module Editing {
      | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:Int
      | AddDBLink | DeleteDBLink:Int
      | AddSynonym | DeleteSynonym:Int | UpdateNewSynonym:String
+     | AddNewSynonymReference:Int | DeleteNewSynonymReference:SynonymReferenceID
      | DeleteSynonymReference:(SynonymID, SynonymReferenceID)
      |];
 
@@ -245,10 +247,10 @@ module Editing {
              disease_id = data.disease_id,
              synonym = model.newSynonym);
           var newSynonym =
-            (synonym = newSynonymInfo, dbLinkIDs = []);
+            (synonym = newSynonymInfo, dbLinkIDs = model.newSynonymRefs);
           var diseaseInfo = (model.diseaseInfo with synonyms =
               (newSynonym :: model.diseaseInfo.synonyms));
-          (model with =diseaseInfo, newSynonym = "")
+          (model with =diseaseInfo, newSynonym = "", newSynonymRefs = [])
         case DeleteSynonym(synonymID) ->
           var synonyms =
             filter(fun(x) { x.synonym.disease2synonym_id <> synonymID }, model.diseaseInfo.synonyms);
@@ -256,6 +258,17 @@ module Editing {
           (model with =diseaseInfo)
         case UpdateNewSynonym(synonym) ->
           (model with newSynonym = synonym)
+        case AddNewSynonymReference(dbLinkID) ->
+          var newSynonymRefs =
+            if (Utility.listContains(dbLinkID, model.newSynonymRefs)) {
+              model.newSynonymRefs
+            } else {
+              model.newSynonymRefs ++ [dbLinkID]
+            };
+          (model with =newSynonymRefs)
+        case DeleteNewSynonymReference(dbLinkID) ->
+          (model with newSynonymRefs =
+            filter(fun(x) { x <> dbLinkID }, model.newSynonymRefs))
         case DeleteSynonymReference(synonymID, dbLinkID) ->
           var synonyms =
             map(fun(x) {
@@ -376,8 +389,9 @@ module Editing {
               td(a0, textNode(x.placeholder)) +*
               td(a0,
                 i(class("fas fa-trash") +@
-                  onClick(fun() { DeleteDBLink(x.disease_database_link_id) }), h0))
-            )
+                  onClick(fun() { DeleteDBLink(x.disease_database_link_id) }), h0) +*
+                i(class("fas fa-plus") +@
+                  onClick(fun() { AddNewSynonymReference(x.disease_database_link_id) }), h0)))
           }
 
           var rows = MvuHTML.concatMap(renderRow, model.diseaseInfo.dbLinks);
@@ -425,6 +439,20 @@ module Editing {
         var rows = MvuHTML.concatMap(renderRow, model.diseaseInfo.synonyms);
 
         var newSynonymForm = {
+          fun renderXRef(linkID) {
+            switch (filter(fun(dbl) { dbl.disease_database_link_id == linkID}, model.diseaseInfo.dbLinks)) {
+              case [] -> MvuHTML.empty
+              case dbl :: _ ->
+                var name = getDBName(dbl.database_id);
+                a(href("#") +@
+                  onClick(fun() {DeleteNewSynonymReference(linkID)}),
+                    textNode(name ^^ " (" ^^ dbl.placeholder ^^ ")"))
+            }
+          }
+
+          var xrefLinks =
+            MvuHTML.concat(join([textNode(", ")], map(fun(x) { [renderXRef(x)] }, model.newSynonymRefs)));
+
           h5(class("card-title"), textNode("Add a synonym")) +*
           form(a0,
             div(class("form-group"),
@@ -434,6 +462,11 @@ module Editing {
                 id("synonym") +@
                 value(model.newSynonym) +@
                 onInput(fun(x) { UpdateNewSynonym(x) }), h0)) +*
+
+            div(class("form-group"),
+              label(for_("xrefs"), textNode("Crossreferences (click to delete)")) +*
+              div(class("form-control") +@ id("xrefs"), xrefLinks)) +*
+
             div(class("form-group"),
               button(type("button") +@ class("btn btn-primary mr-2") +@
                   onClick(fun() { AddSynonym }), textNode("Add Synonym"))))
@@ -661,7 +694,7 @@ module Editing {
 
               # Insert all DB links that need to be inserted
               iter(fun(x) {
-                assert (x > 0, "Attempting to insert virtual ID");
+                assert (x >= 0, "Attempting to insert virtual ID");
                 insert Tables.disease_synonym2database_link
                 values [(disease2synonym_id = syn.synonym.disease2synonym_id,
                          disease_database_link_id = x)]
@@ -671,10 +704,19 @@ module Editing {
             iter(updateSynonym, toUpdate);
 
             # Finally, insert each new synonym (I don't believe we actually need
-            # the returned synonym IDs).
+            # to return the returned synonym IDs).
             iter(fun(x) {
-              insert Tables.disease2synonym values
-                [(disease_id = diseaseID, synonym = x.synonym.synonym)]
+              var dbID =
+                insert Tables.disease2synonym values
+                  [(disease_id = diseaseID, synonym = x.synonym.synonym)]
+                  returning disease2synonym_id;
+              # Insert DB links
+              iter(fun(dbl) {
+                assert (dbID >= 0 && dbl >= 0,
+                    "Attempting to insert virtual ID");
+                insert Tables.disease_synonym2database_link values
+                  [(disease2synonym_id = dbID, disease_database_link_id = dbl)]
+              }, x.dbLinkIDs);
             }, toInsert)
 
          }
@@ -715,6 +757,7 @@ module Editing {
           Just((diseaseInfo = d,
                 accessionID = "",
                 newSynonym = "",
+                newSynonymRefs = [],
                 selectedDatabaseID = hd(d.databases).database_id, # will fail if DBs are empty (which they aren't)
                 submitDisease = submitDisease))
       }
