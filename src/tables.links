@@ -84,7 +84,7 @@ var discoverx = table "discoverx" with (cat_no: String, url: String, name: Strin
 
 
 typename DbDisease = (disease_id: Int, name: String, description: String, type: String);
-var disease = table "disease" with DbDisease tablekeys [["disease_id"]] from db;
+var disease = table "disease" with DbDisease where disease_id readonly tablekeys [["disease_id"]] from db;
 
 var disease2category = table "disease2category" with (disease_id: Int, disease_category_id: Int, comment: String) from db;
 
@@ -95,7 +95,7 @@ var disease_category = table "disease_category" with (disease_category_id: Int, 
 
 typename DbDiseaseDatabaseLink =
   (disease_database_link_id: Int, disease_id: Int, database_id: Int, placeholder: String);
-var disease_database_link = table "disease_database_link" with DbDiseaseDatabaseLink from db;
+var disease_database_link = table "disease_database_link" with DbDiseaseDatabaseLink where disease_database_link_id readonly from db;
 
 var disease_synonym2database_link = table "disease_synonym2database_link" with (disease2synonym_id: Int, disease_database_link_id: Int) from db;
 

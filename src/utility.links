@@ -211,3 +211,12 @@ fun safeHead(xs, def) {
     case x :: xs -> x
   }
 }
+
+fun filterMap(f, xs) {
+  listConcatMap(fun(x) {
+    switch(f(x)) {
+      case Just(x) -> [x]
+      case Nothing -> []
+    }
+  }, xs)
+}

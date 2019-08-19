@@ -3,6 +3,7 @@ import Mvu;
 import MvuHTML;
 import MvuAttrs;
 import Template;
+import Utility;
 
 typename DiseaseID = Int;
 typename DiseaseName = String;
@@ -105,11 +106,12 @@ module Selecting {
   }
 
   fun mainPage() {
-    var diseasesLens = lens Tables.disease with { disease_id -> name };
 
     fun retrieveDiseases() {
-      var diseases = sortBy(fun(x) { x.name }, lensget diseasesLens);
-      map(fun(x) { (x.disease_id, x.name) }, diseases)
+      var diseases =
+        for (d <-- Tables.disease)
+        [(d.disease_id, d.name)];
+      sortBy(fun((name, _)) { name }, diseases)
     }
 
     # TODO: Actor-style threads spawned in a `mainPage` loop should be GCed when
@@ -118,9 +120,7 @@ module Selecting {
       receive {
         case Delete(id) ->
           # TODO: Need to properly handle all of the other cruft here (deleting FKs etc)
-          var selectLens = lensselect from diseasesLens by fun(x) { x.disease_id == id };
-          var selectLens = lenscheck selectLens;
-          lensput selectLens with []
+          delete (x <-- Tables.disease) where (x.disease_id == id)
         case GetDiseases(pid) ->
           pid ! (retrieveDiseases())
       }
@@ -466,13 +466,94 @@ module Editing {
       ];
 
     var pid = spawn {
-      receive {
+        receive {
         case Submit(diseaseInfo, pid) ->
-        # TODO: Fill this in. Need to diff with `data`, which is the
-        # original disease data, which this process closes over.
-        # lensput diseaseSelectLens with [diseaseInfo.disease];
-        # lensput dbLinksJoinLens with diseaseInfo.dbLinks;
-        # lensput synonymsLens with diseaseInfo.synonyms;
+          var oldData = hd(data);
+
+          # Given a "virtual" ID, resolve to a full DB ID given a resolver map
+          fun resolveID(id, ids) {
+            switch(lookup(id, ids)) {
+              case Just(resolved) -> resolved
+              case Nothing -> error("Unresolvable ID " ^^ intToString(id))
+            }
+          }
+
+          fun syncCrossrefs(dbLinks) {
+            # True if a given DB link has changed from the original DB capture
+            fun isChanged(dbLink) {
+              fun go(oldLinks) {
+                switch(oldLinks) {
+                  case [] -> false
+                  case x :: xs ->
+                    if (x.disease_database_link_id == dbLink.disease_database_link_id) {
+                      dbLink <> x
+                    } else {
+                      go(xs)
+                    }
+                }
+              }
+              go(oldData.dbLinks)
+            }
+
+            # True if a given DB link is in the old DB but not in the new
+            # (TODO: This would be better using set difference -- rewrite when implemented in stdlib)
+            var deletedIDs = {
+              Utility.filterMap(fun(oldDBL) {
+                var searchRes =
+                  search(
+                    fun(newDBL) {
+                      oldDBL.disease_database_link_id == newDBL.disease_database_link_id
+                    }, dbLinks);
+
+                switch (searchRes) {
+                  case Just(x) -> Nothing
+                  case Nothing -> Just(oldDBL.disease_database_link_id)
+                }
+              }, oldData.dbLinks)
+            };
+
+            # If the PK is negative, we need to insert, otherwise update.
+            var (toUpdate, toInsert) =
+              partition(fun(x) { x.disease_database_link_id > 0 }, dbLinks);
+            # We only need to generate an update query if part of the DB link
+            # (for example, accession ID) has changed.
+            var toUpdate = filter(isChanged, toUpdate);
+
+            # First, do the required deletions
+            var deletePred = Utility.contains(deletedIDs);
+            delete (ddl <-- Tables.disease_database_link)
+              where (deletePred(ddl.disease_database_link_id));
+
+            # Next, do the required updates
+            iter(fun(x) {
+              update (ddl <-- Tables.disease_database_link)
+                where (ddl.disease_database_link_id == x.disease_database_link_id)
+                set (database_id = x.database_id, placeholder = x.placeholder)
+            }, toUpdate);
+
+            # Finally, insert all rows that need inserting, generating a mapping between
+            # the "virtual" IDs and the freshly-minted "real" IDs
+            map(fun(x) {
+                var dbID =
+                  insert Tables.disease_database_link values
+                    [(disease_id = x.disease_id,
+                     database_id = x.database_id,
+                     placeholder = x.placeholder)]
+                  returning disease_database_link_id;
+
+                (x.disease_database_link_id, dbID)
+            }, toInsert)
+          }
+
+          # First, the easy stuff: Update the disease information (name, desc)
+          update (d <-- Tables.disease)
+            where (d.disease_id == diseaseID)
+            set (name = diseaseInfo.disease.name,
+                 description = diseaseInfo.disease.description);
+          # Next, sync crossreferences.
+          var xrefMap = syncCrossrefs(diseaseInfo.dbLinks);
+
+          # With crossrefs synchronised, we can synchronise synonyms.
           pid ! Done
       }
     };
