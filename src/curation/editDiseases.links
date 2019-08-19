@@ -8,6 +8,9 @@ import Utility;
 typename DiseaseID = Int;
 typename DiseaseName = String;
 
+typename SynonymID = Int;
+typename SynonymReferenceID = Int;
+
 typename HTML(a) = MvuHTML.HTML(a);
 
 # We need to be careful with auto-incrementing primary keys, so we
@@ -167,6 +170,7 @@ module Editing {
      | Cancel | UpdateAccessionID:String | UpdateSelectedDatabase:Int
      | AddDBLink | DeleteDBLink:Int
      | AddSynonym | DeleteSynonym:Int | UpdateNewSynonym:String
+     | DeleteSynonymReference:(SynonymID, SynonymReferenceID)
      |];
 
 
@@ -252,6 +256,18 @@ module Editing {
           (model with =diseaseInfo)
         case UpdateNewSynonym(synonym) ->
           (model with newSynonym = synonym)
+        case DeleteSynonymReference(synonymID, dbLinkID) ->
+          var synonyms =
+            map(fun(x) {
+              if (x.synonym.disease2synonym_id == synonymID) {
+                (x with dbLinkIDs =
+                  filter(fun(dbl) { dbl <> dbLinkID }, x.dbLinkIDs))
+              } else {
+                x
+              }
+            }, model.diseaseInfo.synonyms);
+          var diseaseInfo = (model.diseaseInfo with =synonyms);
+          (model with =diseaseInfo)
         case Cancel ->
           redirect("/editDiseases"); model
       }
@@ -279,6 +295,21 @@ module Editing {
             div(class("card"),
               div(class("card-header"), textNode(name)) +*
               div(class("card-body"), contents))))
+      }
+
+      fun getDBName(dbID) {
+        fun go(xs) {
+          switch(xs) {
+            case [] -> ""
+            case x :: xs ->
+              if (x.database_id == dbID) {
+                x.name
+              } else {
+                go(xs)
+              }
+          }
+        }
+        go(model.diseaseInfo.databases)
       }
 
       var basicInfoPanel = {
@@ -339,21 +370,9 @@ module Editing {
         };
 
         var crossrefsTable = {
-          fun getDBName(dbID, xs) {
-            switch(xs) {
-              case [] -> ""
-              case x :: xs ->
-                if (x.database_id == dbID) {
-                  x.name
-                } else {
-                  getDBName(dbID, xs)
-                }
-            }
-          }
-
           fun renderRow(x) {
             tr(a0,
-              td(a0, textNode(getDBName(x.database_id, model.diseaseInfo.databases))) +*
+              td(a0, textNode(getDBName(x.database_id))) +*
               td(a0, textNode(x.placeholder)) +*
               td(a0,
                 i(class("fas fa-trash") +@
@@ -373,16 +392,30 @@ module Editing {
             tbody(a0, rows))
         };
 
-
-
         panel("Database References",
             dbForm +* crossrefsTable)
       };
 
       var synonymsPanel = {
         fun renderRow(x) {
+
+          fun renderXRef(linkID) {
+            switch (filter(fun(dbl) { dbl.disease_database_link_id == linkID}, model.diseaseInfo.dbLinks)) {
+              case [] -> MvuHTML.empty
+              case dbl :: _ ->
+                var name = getDBName(dbl.database_id);
+                a(href("#") +@
+                  onClick(fun() {DeleteSynonymReference(x.synonym.disease2synonym_id, linkID)}),
+                    textNode(name ^^ " (" ^^ dbl.placeholder ^^ ")"))
+            }
+          }
+
+          var xrefLinks =
+            MvuHTML.concat(join([textNode(", ")], map(fun(x) { [renderXRef(x)] }, x.dbLinkIDs)));
+
           tr(a0,
             td(a0, textNode(x.synonym.synonym)) +*
+            td(a0, xrefLinks) +*
             td(a0,
               i(class("fas fa-trash") +@
                 onClick(fun() { DeleteSynonym(x.synonym.disease2synonym_id) }), h0))
@@ -412,6 +445,7 @@ module Editing {
             thead(a0,
               tr(a0,
                 th(a0, textNode("Synonym")) +*
+                th(a0, textNode("Crossreferences (click to remove)")) +*
                 th(a0, h0))) +*
             tbody(a0, rows));
 
@@ -615,13 +649,6 @@ module Editing {
               var deleted =
                 filter(fun(x) { not(Utility.listContains(x, syn.dbLinkIDs)) }, oldSynonym.dbLinkIDs);
 
-               #Utility.filterMap(fun(x) {
-               #  if (not(Utility.listContains(x, syn.dbLinks))) {
-               #    Just(x.disease_database_link_id)
-               #  } else {
-               #    Nothing
-               #  }
-               #}, oldData.dbLinks);
               # Inserted: in new DB links, but not old one
               var inserted =
                 filter(fun(x) { not(Utility.listContains(x, oldSynonym.dbLinkIDs)) }, syn.dbLinkIDs);
