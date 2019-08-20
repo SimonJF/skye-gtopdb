@@ -19,6 +19,10 @@ typename HTML(a) = MvuHTML.HTML(a);
 
 var db = database "gtopdb";
 
+# Still to do:
+# Adding new diseases
+
+
 typename DiseaseInfo =
   (disease: Tables.DbDisease,
    synonyms: [(synonym: Tables.DbDisease2Synonym, dbLinkIDs: [Int])],
@@ -161,7 +165,9 @@ module Editing {
     Maybe(
       (diseaseInfo: DiseaseInfo,
        selectedDatabaseID: Int,
+       editingCrossrefID: Maybe(Int),
        accessionID: String,
+       editingSynonymID: Maybe(Int),
        newSynonym: String,
        newSynonymRefs: [Int],
        submitDisease: (DiseaseInfo) {}~> ()));
@@ -173,6 +179,7 @@ module Editing {
      | AddSynonym | DeleteSynonym:Int | UpdateNewSynonym:String
      | AddNewSynonymReference:Int | DeleteNewSynonymReference:SynonymReferenceID
      | DeleteSynonymReference:(SynonymID, SynonymReferenceID)
+     | EditSynonym:SynonymID | EditCrossref:Int
      |];
 
 
@@ -198,6 +205,67 @@ module Editing {
     }
   }
 
+  fun addDBLink(model) {
+    # We either update the model, or add a new DB link,
+    # based on whether editingCrossrefID is set.
+    var data = model.diseaseInfo.disease;
+    var dbLinks =
+      switch(model.editingCrossrefID) {
+        case Just(xrefID) ->
+          # Update existing entry
+          map(fun(x) {
+            if(x.disease_database_link_id == xrefID) {
+              (x with
+                database_id = model.selectedDatabaseID,
+                placeholder = model.accessionID)
+            } else {
+              x
+            }
+          }, model.diseaseInfo.dbLinks)
+        case Nothing ->
+          # Add new entry
+          var newLinkID = freshID();
+          var newLink =
+            (disease_database_link_id = newLinkID,
+             disease_id = data.disease_id,
+             database_id = model.selectedDatabaseID,
+             placeholder = model.accessionID);
+          model.diseaseInfo.dbLinks ++ [newLink]
+      };
+
+    var diseaseInfo = (model.diseaseInfo with =dbLinks);
+    (model with =diseaseInfo, accessionID = "", editingCrossrefID = Nothing)
+  }
+
+  fun addSynonym(model) {
+    var data = model.diseaseInfo.disease;
+    var synonyms =
+      switch(model.editingSynonymID) {
+        case Just(synID) ->
+          map(fun(x) {
+            if(x.synonym.disease2synonym_id == synID) {
+              var synonym = (x.synonym with synonym = model.newSynonym);
+              (x with =synonym, dbLinkIDs = model.newSynonymRefs)
+            } else {
+              x
+            }
+          }, model.diseaseInfo.synonyms)
+        case Nothing ->
+          var newSynonymID = freshID();
+          var newSynonymInfo =
+            (disease2synonym_id = newSynonymID,
+             disease_id = data.disease_id,
+             synonym = model.newSynonym);
+          var newSynonym =
+            (synonym = newSynonymInfo, dbLinkIDs = model.newSynonymRefs);
+          model.diseaseInfo.synonyms ++ [newSynonym]
+      };
+
+    var diseaseInfo = (model.diseaseInfo with =synonyms);
+    (model with =diseaseInfo, newSynonym = "", newSynonymRefs = [],
+      editingSynonymID = Nothing)
+  }
+
   sig updt : (Message, Model) {}~> Model
   fun updt(msg, model) {
 
@@ -219,15 +287,7 @@ module Editing {
         case UpdateSelectedDatabase(dbID) ->
           (model with selectedDatabaseID = dbID)
         case AddDBLink ->
-          var newLinkID = freshID();
-          var newLink =
-            (disease_database_link_id = newLinkID,
-             disease_id = data.disease_id,
-             database_id = model.selectedDatabaseID,
-             placeholder = model.accessionID);
-          var dbLinks = newLink :: model.diseaseInfo.dbLinks;
-          var diseaseInfo = (model.diseaseInfo with =dbLinks);
-          (model with =diseaseInfo, accessionID = "")
+          addDBLink(model)
         case DeleteDBLink(dbLinkID) ->
           var dbLinks =
             filter(fun(x) { x.disease_database_link_id <> dbLinkID }, model.diseaseInfo.dbLinks);
@@ -241,16 +301,7 @@ module Editing {
           var diseaseInfo = (model.diseaseInfo with =dbLinks, =synonyms);
           (model with =diseaseInfo)
         case AddSynonym ->
-          var newSynonymID = freshID();
-          var newSynonymInfo =
-            (disease2synonym_id = newSynonymID,
-             disease_id = data.disease_id,
-             synonym = model.newSynonym);
-          var newSynonym =
-            (synonym = newSynonymInfo, dbLinkIDs = model.newSynonymRefs);
-          var diseaseInfo = (model.diseaseInfo with synonyms =
-              (newSynonym :: model.diseaseInfo.synonyms));
-          (model with =diseaseInfo, newSynonym = "", newSynonymRefs = [])
+          addSynonym(model)
         case DeleteSynonym(synonymID) ->
           var synonyms =
             filter(fun(x) { x.synonym.disease2synonym_id <> synonymID }, model.diseaseInfo.synonyms);
@@ -281,6 +332,35 @@ module Editing {
             }, model.diseaseInfo.synonyms);
           var diseaseInfo = (model.diseaseInfo with =synonyms);
           (model with =diseaseInfo)
+        case EditSynonym(synID) ->
+          fun getSynonymData(syns) {
+            switch(syns) {
+              case [] -> ("", [])
+              case x :: xs ->
+                if (x.synonym.disease2synonym_id == synID) {
+                  (x.synonym.synonym, x.dbLinkIDs)
+                } else {
+                  getSynonymData(xs)
+                }
+            }
+          }
+          var (name, refs) = getSynonymData(model.diseaseInfo.synonyms);
+          (model with editingSynonymID = Just(synID),
+            newSynonym = name, newSynonymRefs = refs)
+        case EditCrossref(xrefID) ->
+          fun getAccessionID(xrefs) {
+            switch(xrefs) {
+              case [] -> ""
+              case x :: xs ->
+                if (x.disease_database_link_id == xrefID) {
+                  x.placeholder
+                } else {
+                  getAccessionID(xs)
+                }
+            }
+          }
+          var accessionID = getAccessionID(model.diseaseInfo.dbLinks);
+          (model with editingCrossrefID = Just(xrefID), =accessionID)
         case Cancel ->
           redirect("/editDiseases"); model
       }
@@ -301,6 +381,8 @@ module Editing {
 
     fun renderModel(model) {
       var data = model.diseaseInfo.disease;
+      var isEditingSynonym = isJust(model.editingSynonymID);
+      var isEditingCrossref = isJust(model.editingCrossrefID);
 
       fun panel(name, contents) {
         div(class("row mt-3"),
@@ -364,6 +446,12 @@ module Editing {
                 var dbID = stringToInt(x);
                 UpdateSelectedDatabase(dbID) } ), options)
         };
+        var buttonCaption =
+          if(isEditingCrossref) {
+            "Update Crossreference"
+          } else {
+            "Add Crossreference"
+          };
 
         var dbForm = {
           h5(class("card-title"), textNode("Add a crossreference")) +*
@@ -379,15 +467,25 @@ module Editing {
                 onInput(fun(x) { UpdateAccessionID(x) }), h0)) +*
             div(class("form-group"),
               button(type("button") +@ class("btn btn-secondary mr-2") +@
-                  onClick(fun() { AddDBLink }), textNode("Add Crossreference"))))
+                  onClick(fun() { AddDBLink }), textNode(buttonCaption))))
         };
 
         var crossrefsTable = {
           fun renderRow(x) {
+            var editIcon =
+              if (not(isEditingCrossref)) {
+              i(class("fas fa-edit fa-fw") +@
+                title("Edit crossreference") +@
+                onClick(fun() { EditCrossref(x.disease_database_link_id) }), h0)
+              } else {
+                MvuHTML.empty
+              };
+
             tr(a0,
               td(a0, textNode(getDBName(x.database_id))) +*
               td(a0, textNode(x.placeholder)) +*
               td(a0,
+                editIcon +*
                 i(class("fas fa-trash fa-fw") +@
                   title("Delete crossreference") +@
                   onClick(fun() { DeleteDBLink(x.disease_database_link_id) }), h0) +*
@@ -429,10 +527,20 @@ module Editing {
           var xrefLinks =
             MvuHTML.concat(join([textNode(", ")], map(fun(x) { [renderXRef(x)] }, x.dbLinkIDs)));
 
+          var editIcon =
+            if (not(isEditingSynonym)) {
+            i(class("fas fa-edit fa-fw") +@
+              title("Edit synonym") +@
+              onClick(fun() { EditSynonym(x.synonym.disease2synonym_id) }), h0)
+            } else {
+              MvuHTML.empty
+            };
+
           tr(a0,
             td(a0, textNode(x.synonym.synonym)) +*
             td(a0, xrefLinks) +*
             td(a0,
+              editIcon +*
               i(class("fas fa-trash") +@
                 title("Delete synonym") +@
                 onClick(fun() { DeleteSynonym(x.synonym.disease2synonym_id) }), h0))
@@ -455,6 +563,12 @@ module Editing {
 
           var xrefLinks =
             MvuHTML.concat(join([textNode(", ")], map(fun(x) { [renderXRef(x)] }, model.newSynonymRefs)));
+          var buttonCaption =
+            if(isEditingSynonym) {
+              "Update synonym"
+            } else {
+              "Add synonym"
+            };
 
           h5(class("card-title"), textNode("Add a synonym")) +*
           form(a0,
@@ -472,7 +586,7 @@ module Editing {
 
             div(class("form-group"),
               button(type("button") +@ class("btn btn-secondary mr-2") +@
-                  onClick(fun() { AddSynonym }), textNode("Add Synonym"))))
+                  onClick(fun() { AddSynonym }), textNode(buttonCaption))))
 
         };
         var tbl =
@@ -758,7 +872,9 @@ module Editing {
         case [] -> Nothing
         case d :: _ ->
           Just((diseaseInfo = d,
+                editingCrossrefID = Nothing,
                 accessionID = "",
+                editingSynonymID = Nothing,
                 newSynonym = "",
                 newSynonymRefs = [],
                 selectedDatabaseID = hd(d.databases).database_id, # will fail if DBs are empty (which they aren't)
