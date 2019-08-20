@@ -96,6 +96,7 @@ fun alphabetise(getString, transform, xs) {
 
 fun src(s) { MvuAttrs.attr("src", s) }
 fun alt(s) { MvuAttrs.attr("alt", s) }
+fun role(s) { MvuAttrs.attr("role", s) }
 
 fun boolCol(enabled, html) {
   if (enabled) {

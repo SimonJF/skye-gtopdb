@@ -104,7 +104,7 @@ module Selecting {
           button(type("button") +@ class("btn btn-primary") +@
             onClick(fun() { SubmitEdit }), textNode("Edit"))) +*
         div(class("col-sm-1"),
-          button(type("button") +@ class("btn btn-primary") +@
+          button(type("button") +@ class("btn btn-danger") +@
             onClick(fun() { SubmitDelete }), textNode("Delete")))))
   }
 
@@ -378,7 +378,7 @@ module Editing {
                 value(model.accessionID) +@
                 onInput(fun(x) { UpdateAccessionID(x) }), h0)) +*
             div(class("form-group"),
-              button(type("button") +@ class("btn btn-primary mr-2") +@
+              button(type("button") +@ class("btn btn-secondary mr-2") +@
                   onClick(fun() { AddDBLink }), textNode("Add Crossreference"))))
         };
 
@@ -388,9 +388,11 @@ module Editing {
               td(a0, textNode(getDBName(x.database_id))) +*
               td(a0, textNode(x.placeholder)) +*
               td(a0,
-                i(class("fas fa-trash") +@
+                i(class("fas fa-trash fa-fw") +@
+                  title("Delete crossreference") +@
                   onClick(fun() { DeleteDBLink(x.disease_database_link_id) }), h0) +*
-                i(class("fas fa-plus") +@
+                i(class("fas fa-plus fa-fw") +@
+                  title("Add synonym reference") +@
                   onClick(fun() { AddNewSynonymReference(x.disease_database_link_id) }), h0)))
           }
 
@@ -418,7 +420,7 @@ module Editing {
               case [] -> MvuHTML.empty
               case dbl :: _ ->
                 var name = getDBName(dbl.database_id);
-                a(href("#") +@
+                a(href("javascript:void(0)") +@
                   onClick(fun() {DeleteSynonymReference(x.synonym.disease2synonym_id, linkID)}),
                     textNode(name ^^ " (" ^^ dbl.placeholder ^^ ")"))
             }
@@ -432,6 +434,7 @@ module Editing {
             td(a0, xrefLinks) +*
             td(a0,
               i(class("fas fa-trash") +@
+                title("Delete synonym") +@
                 onClick(fun() { DeleteSynonym(x.synonym.disease2synonym_id) }), h0))
           )
         }
@@ -444,7 +447,7 @@ module Editing {
               case [] -> MvuHTML.empty
               case dbl :: _ ->
                 var name = getDBName(dbl.database_id);
-                a(href("#") +@
+                a(href("javascript:void(0)") +@
                   onClick(fun() {DeleteNewSynonymReference(linkID)}),
                     textNode(name ^^ " (" ^^ dbl.placeholder ^^ ")"))
             }
@@ -468,7 +471,7 @@ module Editing {
               div(class("form-control") +@ id("xrefs"), xrefLinks)) +*
 
             div(class("form-group"),
-              button(type("button") +@ class("btn btn-primary mr-2") +@
+              button(type("button") +@ class("btn btn-secondary mr-2") +@
                   onClick(fun() { AddSynonym }), textNode("Add Synonym"))))
 
         };
