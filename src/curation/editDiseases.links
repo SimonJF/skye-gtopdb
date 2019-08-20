@@ -418,12 +418,18 @@ module Editing {
 
 
       var basicInfoPanel = {
-        panel("Basic Information",
-          form(a0,
-            # Disease ID
+        var diseaseIDRow =
+          if (isNewDisease) {
+            MvuHTML.empty
+          } else {
             div(class("form-group"),
               label(a0, textNode("Disease ID: ")) +*
-              textNode(intToString(data.disease_id))) +*
+              textNode(intToString(data.disease_id)))
+          };
+
+        panel("Basic Information",
+          form(a0,
+            diseaseIDRow +*
             # Disease Name
             div(class("form-group"),
               label(for_("diseaseName"), textNode("Disease Name")) +*
@@ -688,7 +694,13 @@ module Editing {
             }
           }
 
-          fun resolveSynonyms(synonyms, xrefMap) {
+          fun resolveCrossrefs(dbLinks, diseaseID) {
+            map(fun(dbl) {
+              (dbl with disease_id = diseaseID)
+            }, dbLinks)
+          }
+
+          fun resolveSynonyms(synonyms, diseaseID, xrefMap) {
             map(fun(s) {
               var resolvedLinks =
                 map(fun(l) {
@@ -702,7 +714,8 @@ module Editing {
                     l
                   }
                 }, s.dbLinkIDs);
-              (s with dbLinkIDs = resolvedLinks)
+              var synonym = (s.synonym with disease_id = diseaseID);
+              (s with =synonym, dbLinkIDs = resolvedLinks)
             }, synonyms)
           }
 
@@ -737,7 +750,7 @@ module Editing {
               }, oldVals)
           }
 
-          fun syncCrossrefs(dbLinks) {
+          fun syncCrossrefs(dbLinks, diseaseID) {
 
             fun crossrefChanged(dbLink) {
               isChanged(fun(x) { x.disease_database_link_id }, dbLink, oldData.dbLinks)
@@ -785,7 +798,7 @@ module Editing {
             }, toInsert)
           }
 
-         fun syncSynonyms(synonyms) {
+         fun syncSynonyms(synonyms, diseaseID) {
            # Mainly same stuff as above
 
            fun synonymChanged(s) {
@@ -865,22 +878,37 @@ module Editing {
          }
 
 
+          # First up: either insert or update the current disease
+         var diseaseID =
+           if (diseaseID == (-1)) {
+             # Need to insert
+             insert Tables.disease values
+               [(name = diseaseInfo.disease.name,
+                 description = diseaseInfo.disease.description,
+                 type = "")]
+               returning disease_id
+           } else {
+             # Need to update
+             update (d <-- Tables.disease)
+               where (d.disease_id == diseaseID)
+               set (name = diseaseInfo.disease.name,
+                    description = diseaseInfo.disease.description);
+             diseaseID
+           };
 
-          # First, the easy stuff: Update the disease information (name, desc)
-          update (d <-- Tables.disease)
-            where (d.disease_id == diseaseID)
-            set (name = diseaseInfo.disease.name,
-                 description = diseaseInfo.disease.description);
-          # Next, sync crossreferences.
-          var xrefMap = syncCrossrefs(diseaseInfo.dbLinks);
 
-          # With crossrefs synchronised, we can synchronise synonyms.
-          # First, need to resolve all "virtual" IDs for Xrefs.
-          var synonyms = resolveSynonyms(diseaseInfo.synonyms, xrefMap);
-          syncSynonyms(synonyms);
+         # Need to resolve disease_id for each DB link
+         # Next, sync crossreferences.
+         var dbLinks = resolveCrossrefs(diseaseInfo.dbLinks, diseaseID);
+         var xrefMap = syncCrossrefs(dbLinks, diseaseID);
+
+         # With crossrefs synchronised, we can synchronise synonyms.
+         # First, need to resolve all "virtual" IDs for Xrefs.
+         var synonyms = resolveSynonyms(diseaseInfo.synonyms, diseaseID, xrefMap);
+         syncSynonyms(synonyms, diseaseID);
 
 
-          pid ! Done
+         pid ! Done
       }
     };
 
