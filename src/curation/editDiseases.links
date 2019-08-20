@@ -37,8 +37,10 @@ module Selecting {
      getDiseases: () {}~> [(DiseaseID, DiseaseName)]);
 
   typename Message =
-    [| NoOp | ChangeID:Int | Submit |];
+    [| NoOp | ChangeID:Int | SubmitEdit | SubmitDelete | NewDisease |];
 
+
+  sig updt : (Message, Model) {}~> Model
   fun updt(msg, model) {
     switch(msg) {
       case NoOp -> model
@@ -52,6 +54,11 @@ module Selecting {
       case SubmitDelete ->
         model.deleteDisease(model.selectedDisease);
         (model with diseases = model.getDiseases())
+
+      case NewDisease ->
+        redirect("/editDiseases?newDisease");
+        model
+
     }
   }
 
@@ -103,12 +110,16 @@ module Selecting {
               }), options))) +*
       div(class("form-group row"),
         div(class("col-sm-2"), h0) +*
-        div(class("col-sm-1"),
+        div(class("col-sm-2"),
           button(type("button") +@ class("btn btn-primary") +@
             onClick(fun() { SubmitEdit }), textNode("Edit"))) +*
-        div(class("col-sm-1"),
+        div(class("col-sm-2"),
           button(type("button") +@ class("btn btn-danger") +@
-            onClick(fun() { SubmitDelete }), textNode("Delete")))))
+            onClick(fun() { SubmitDelete }), textNode("Delete"))) +*
+        div(class("col-sm-2"),
+          button(type("button") +@ class("btn btn-success") +@
+            onClick(fun() { NewDisease }), textNode("New disease")))
+        ))
   }
 
   fun mainPage() {
