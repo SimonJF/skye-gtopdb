@@ -26,8 +26,7 @@ var db = database "gtopdb";
 typename DiseaseInfo =
   (disease: Tables.DbDisease,
    synonyms: [(synonym: Tables.DbDisease2Synonym, dbLinkIDs: [Int])],
-   dbLinks: [Tables.DbDiseaseDatabaseLink],
-   databases: [Tables.DbDatabase]
+   dbLinks: [Tables.DbDiseaseDatabaseLink]
   );
 
 
@@ -164,6 +163,7 @@ module Editing {
   typename Model =
     Maybe(
       (diseaseInfo: DiseaseInfo,
+       databases: [Tables.DbDatabase],
        selectedDatabaseID: Int,
        editingCrossrefID: Maybe(Int),
        accessionID: String,
@@ -383,6 +383,7 @@ module Editing {
       var data = model.diseaseInfo.disease;
       var isEditingSynonym = isJust(model.editingSynonymID);
       var isEditingCrossref = isJust(model.editingCrossrefID);
+      var isNewDisease = model.diseaseInfo.disease.disease_id == (-1);
 
       fun panel(name, contents) {
         div(class("row mt-3"),
@@ -394,7 +395,7 @@ module Editing {
 
       fun getDBName(dbID) {
         fun go(xs) {
-          switch(xs) {
+           switch(xs) {
             case [] -> ""
             case x :: xs ->
               if (x.database_id == dbID) {
@@ -404,8 +405,17 @@ module Editing {
               }
           }
         }
-        go(model.diseaseInfo.databases)
+        go(model.databases)
       }
+
+      var headerText =
+        if (isNewDisease) {
+          "New Disease"
+        } else {
+          "Editing Disease with ID " ^^ (intToString(model.diseaseInfo.disease.disease_id))
+        };
+      var header = h1(a0, textNode(headerText));
+
 
       var basicInfoPanel = {
         panel("Basic Information",
@@ -438,7 +448,7 @@ module Editing {
             option(value(intToString(x.database_id)), textNode(x.name))
           }
           var options =
-            MvuHTML.concatMap(renderDropdownItem, model.diseaseInfo.databases);
+            MvuHTML.concatMap(renderDropdownItem, model.databases);
           select_(
               id("dbDropdown") +@
               class("form-control") +@
@@ -612,7 +622,11 @@ module Editing {
       };
 
       div(class("container"),
-        basicInfoPanel +* dbLinksPanel +* synonymsPanel +* buttons)
+        header +*
+        basicInfoPanel +*
+        dbLinksPanel +*
+        synonymsPanel +*
+        buttons)
     }
 
     switch(model) {
@@ -621,33 +635,45 @@ module Editing {
     }
   }
 
-  fun mainPage(diseaseID) {
+  fun mainPage(diseaseIDOpt) {
     # Row types let us abstract over the table, as long as it has a diseaseID
     # field
+    var diseaseID =
+      switch(diseaseIDOpt) {
+        case Just(id) -> id
+        case Nothing -> (-1)
+      };
+
+    var databases =
+      for (db <-- Tables.tbl_database)
+      [ db ];
 
     var data =
-      for (d <-- Tables.disease)
-      where (d.disease_id == diseaseID)
-      [ (disease = d,
-         synonyms =
-           for (s <-- Tables.disease2synonym)
-           where (s.disease_id == diseaseID)
-           [
-            (dbLinkIDs =
-              for (synLink <-- Tables.disease_synonym2database_link)
-              where (synLink.disease2synonym_id == s.disease2synonym_id)
-              [synLink.disease_database_link_id],
-             synonym = s)
-           ],
-        dbLinks =
-          for (ddl <-- Tables.disease_database_link)
-          where (ddl.disease_id == diseaseID)
-          [ ddl ],
-        databases =
-          for (db <-- Tables.tbl_database)
-          [ db ]
-        )
-      ];
+      if(isJust(diseaseIDOpt)) {
+        for (d <-- Tables.disease)
+          where (d.disease_id == diseaseID)
+          [ (disease = d,
+             synonyms =
+               for (s <-- Tables.disease2synonym)
+               where (s.disease_id == diseaseID)
+               [
+                (dbLinkIDs =
+                  for (synLink <-- Tables.disease_synonym2database_link)
+                  where (synLink.disease2synonym_id == s.disease2synonym_id)
+                  [synLink.disease_database_link_id],
+                 synonym = s)
+               ],
+            dbLinks =
+              for (ddl <-- Tables.disease_database_link)
+              where (ddl.disease_id == diseaseID)
+              [ ddl ]
+            )
+          ]
+      } else {
+        var emptyDisease =
+          (disease_id = (-1), name = "", description = "", type = "");
+        [ (disease = emptyDisease, synonyms = [], dbLinks = []) ]
+      };
 
     var pid = spawn {
         receive {
@@ -872,12 +898,13 @@ module Editing {
         case [] -> Nothing
         case d :: _ ->
           Just((diseaseInfo = d,
+                =databases,
                 editingCrossrefID = Nothing,
                 accessionID = "",
                 editingSynonymID = Nothing,
                 newSynonym = "",
                 newSynonymRefs = [],
-                selectedDatabaseID = hd(d.databases).database_id, # will fail if DBs are empty (which they aren't)
+                selectedDatabaseID = hd(databases).database_id, # will fail if DBs are empty (which they aren't)
                 submitDisease = submitDisease))
       }
     };
@@ -889,15 +916,19 @@ module Editing {
 
 fun mainPage() {
 
-  switch(lookup("diseaseID", environment())) {
-    case Just(id) ->
-      if (isInt(id)) {
-        Editing.mainPage(stringToInt(id))
-      } else {
+  if (isJust(lookup("newDisease", environment()))) {
+    Editing.mainPage(Nothing)
+  } else {
+    switch(lookup("diseaseID", environment())) {
+      case Just(id) ->
+        if (isInt(id)) {
+          Editing.mainPage(Just(stringToInt(id)))
+        } else {
+          Selecting.mainPage()
+        }
+      case Nothing ->
         Selecting.mainPage()
-      }
-    case Nothing ->
-      Selecting.mainPage()
+    }
   };
 
   Template.template()
