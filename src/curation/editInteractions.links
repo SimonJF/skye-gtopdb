@@ -152,8 +152,38 @@ fun getInitialModel(objectID) {
 
 
 # TODO: fill me in
+sig updt : (Message, Model) ~> Model
 fun updt(msg, model) {
-  model
+  fun updtModel(model) {
+    fun updateComment(ty, newVal, rb) {
+      switch(ty) {
+        case Activators -> (rb with activators_comments = newVal)
+        case GatingInhibitors -> (rb with gating_inhibitors_comments = newVal)
+        case Agonists -> (rb with agonists_comments = newVal)
+        case ChannelBlockers -> (rb with channel_blockers_comments = newVal)
+        case Antagonists -> (rb with antagonists_comments = newVal)
+        case AllostericModulators -> (rb with allosteric_modulators_comments = newVal)
+        case SubunitSpecific -> rb # TODO
+        case Inhibitors -> (rb with inhibitors_comments = newVal)
+        case Antibodies -> (rb with antibody_comments = newVal)
+      }
+    }
+
+    switch(msg) {
+      case UpdateComment(ty, newVal) ->
+        switch(model.receptorBasic) {
+          case Just(rb) ->
+            var newRb = updateComment(ty, newVal, rb);
+            (model with receptorBasic = Just(newRb))
+          case Nothing -> model
+        }
+    }
+  }
+
+  switch(model)  {
+    case Just(model) -> Just(updtModel(model))
+    case Nothing -> Nothing
+  }
 }
 
 fun view(model) {
@@ -196,7 +226,8 @@ fun view(model) {
             var boxID = "commentBox" ^^ intToString(i);
             div(class("form-group"),
               label(for_(boxID), textNode(showCommentType(type))) +*
-              textarea(id(boxID) +@ class("form-control") +@ value(comments), h0))
+              textarea(id(boxID) +@ class("form-control") +@ value(comments)
+                +@ onInput(fun(str) { UpdateComment(type, str) }), h0))
           }
 
           var content =
