@@ -1,0 +1,145 @@
+import Tables;
+import Template;
+import Mvu;
+import MvuHTML;
+import MvuAttrs;
+
+typename InteractionID = Int;
+typename ReferenceID = Int;
+
+typename InteractionInfo =
+  (interaction: Tables.DbInteraction,
+   references: [ReferenceID]);
+
+
+typename Model =
+  Maybe((
+      object: Tables.RawObject,
+      ligands: [Tables.RawLigand],
+      interactions: [InteractionInfo],
+      currentInteraction: InteractionInfo,
+      references: [Tables.DbReference]));
+
+fun emptyInteraction(objectID) {
+  (interaction_id = (-1),
+   ligand_id = (-1),
+   object_id = objectID,
+   type = "None",
+   action = "None",
+   action_comment = "",
+   species_id = (-1), # TODO: This should default to something...
+   endogenous = false,
+   selective = false,
+   use_dependent = false,
+   voltage_dependent = false,
+   affinity_units = "-",
+   affinity_high = 0.0,
+   affinity_median = 0.0,
+   affinity_low = 0.0,
+   concentration_range = "",
+   affinity_voltage_high = 0.0,
+   affinity_voltage_median = 0.0,
+   affinity_voltage_low = 0.0,
+   affinity_physiological_voltage = false,
+   rank= (-1),
+   selectivity = "",
+   original_affinity_low_nm = 0.0,
+   original_affinity_median_nm = 0.0,
+   original_affinity_high_nm = 0.0,
+   original_affinity_units = "",
+   original_affinity_relation = "",
+   assay_description = "",
+   assay_conditions = "",
+   from_grac = false,
+   only_grac = false,
+   receptor_site = "",
+   ligand_context = "",
+   percent_activity = 0.0,
+   assay_url = "",
+   primary_target = false,
+   target_ligand_id= (-1),
+   whole_organism_assay = false,
+   hide = false)
+}
+
+fun emptyInteractionInfo(objectID) {
+  (interaction = emptyInteraction(objectID),
+   references = [])
+}
+
+fun getInitialModel(objectID) {
+  var object =
+    query {
+      for (o <-- Tables.object)
+        where (o.object_id == objectID)
+        [(object = o,
+          interactions =
+            for (i <-- Tables.interaction)
+              where (i.object_id == objectID)
+              [(interaction = i,
+                references =
+                  for (iar <-- Tables.interaction_affinity_refs)
+                    where (iar.interaction_id == i.interaction_id)
+                    [iar.reference_id])
+              ])
+        ]
+    };
+
+  switch (object) {
+    case [] -> Nothing
+    case x :: _ ->
+      var allLigands =
+        query {
+          for (l <-- Tables.ligand)
+            [l]
+        };
+      var allReferences =
+        query {
+          for (r <-- Tables.reference)
+            [r]
+        };
+
+      Just((object = x.object,
+            ligands = allLigands,
+            interactions = x.interactions,
+            currentInteraction = emptyInteractionInfo(objectID),
+            references = allReferences))
+  }
+
+
+ #typename Model =
+ #  Maybe((objectID: RawObject,
+ #      ligands: [Tables.RawLigand],
+ #      interactions: [InteractionInfo],
+ #      currentInteraction: InteractionInfo,
+ #      references: [Tables.DbReference])
+
+}
+
+
+# TODO: fill me in
+fun updt(msg, model) {
+  model
+}
+
+fun view(model) {
+  MvuHTML.empty
+}
+
+
+fun mainPage() {
+  var initialModel =
+    switch(lookup("objectID", environment())) {
+      case Just(id) ->
+        if (isInt(id)) {
+          getInitialModel(stringToInt(id))
+        } else {
+          Nothing
+        }
+      case Nothing -> Nothing
+    };
+  Mvu.runSimple("placeholder", initialModel, view, updt);
+  Template.template()
+}
+
+
