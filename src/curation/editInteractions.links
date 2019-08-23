@@ -15,10 +15,41 @@ typename InteractionInfo =
 typename Model =
   Maybe((
       object: Tables.RawObject,
+      receptorBasic: Maybe(Tables.DbReceptorBasic),
       ligands: [Tables.RawLigand],
       interactions: [InteractionInfo],
       currentInteraction: InteractionInfo,
       references: [Tables.DbReference]));
+
+
+typename CommentType =
+  [| Activators | GatingInhibitors | Agonists | ChannelBlockers
+   | Antagonists | AllostericModulators | SubunitSpecific | Inhibitors
+   | Antibodies
+  |];
+
+
+var commentTypes =
+  [ Activators, GatingInhibitors, Agonists, ChannelBlockers,
+    Antagonists, AllostericModulators, SubunitSpecific, Inhibitors,
+    Antibodies ];
+
+# My kingdom for "deriving Show"
+fun showCommentType(ct) {
+  switch(ct) {
+    case Activators -> "Activators"
+    case GatingInhibitors -> "Gating Inhibitors"
+    case Agonists -> "Agonists"
+    case ChannelBlockers -> "Channel Blockers"
+    case Antagonists -> "Antagonists"
+    case AllostericModulators -> "Allosteric Modulators"
+    case SubunitSpecific -> "Subunit Specific"
+    case Inhibitors -> "Inhibitors"
+    case Antibodies -> "Antibodies"
+  }
+}
+
+typename Message = [| UpdateComment:(CommentType, String) |];
 
 fun emptyInteraction(objectID) {
   (interaction_id = (-1),
@@ -72,7 +103,11 @@ fun getInitialModel(objectID) {
     query {
       for (o <-- Tables.object)
         where (o.object_id == objectID)
-        [(object = o,
+        [(obj = o,
+          rbs =
+            for (rb <-- Tables.receptor_basic)
+              where (rb.object_id == objectID)
+              [rb],
           interactions =
             for (i <-- Tables.interaction)
               where (i.object_id == objectID)
@@ -88,32 +123,31 @@ fun getInitialModel(objectID) {
   switch (object) {
     case [] -> Nothing
     case x :: _ ->
-      var allLigands =
-        query {
-          for (l <-- Tables.ligand)
-            [l]
-        };
-      var allReferences =
-        query {
-          for (r <-- Tables.reference)
-            [r]
+      # TODO: Need to sort these out -- reference DB is wrong, and selecting all ligands is sloow
+      var allLigands = [];
+       #query {
+       #  for (l <-- Tables.ligand)
+       #    [l]
+       #};
+      var allReferences = [];
+       #query {
+       #  for (r <-- Tables.reference)
+       #    [r]
+       #};
+
+      var rb =
+        switch(x.rbs) {
+          case [] -> Nothing
+          case rb :: _ -> Just(rb)
         };
 
-      Just((object = x.object,
+      Just((object = x.obj,
             ligands = allLigands,
+            receptorBasic = rb,
             interactions = x.interactions,
             currentInteraction = emptyInteractionInfo(objectID),
             references = allReferences))
   }
-
-
- #typename Model =
- #  Maybe((objectID: RawObject,
- #      ligands: [Tables.RawLigand],
- #      interactions: [InteractionInfo],
- #      currentInteraction: InteractionInfo,
- #      references: [Tables.DbReference])
-
 }
 
 
@@ -123,7 +157,72 @@ fun updt(msg, model) {
 }
 
 fun view(model) {
-  MvuHTML.empty
+  open MvuHTML;
+  open MvuAttrs;
+
+  fun viewModel(model) {
+    var h0 = MvuHTML.empty;
+    var a0 = MvuAttrs.empty;
+    fun panel(name, contents) {
+      div(class("row mt-3"),
+        div(class("col-sm"),
+          div(class("card"),
+            div(class("card-header"), textNode(name)) +*
+            div(class("card-body"), contents))))
+    }
+
+
+    var header =
+      h1(a0,
+        textNode("Editing interactions for ") +*
+        unescapedTextNode(model.object.name) +*
+        textNode(" (id: " ^^ intToString(model.object.object_id) ^^ ")"));
+
+    var interactionComments = {
+      switch(model.receptorBasic) {
+        case Just(rb) ->
+          var boxes =
+            [(Activators, rb.activators_comments),
+              (GatingInhibitors, rb.gating_inhibitors_comments),
+              (Agonists, rb.agonists_comments),
+              (ChannelBlockers, rb.channel_blockers_comments),
+              (Antagonists, rb.antagonists_comments),
+              (AllostericModulators, rb.allosteric_modulators_comments),
+              # SubunitSpecific, rb.subunit_specific_comments TODO: ADD THIS IN
+              (Inhibitors, rb.inhibitors_comments),
+              (Antibodies, rb.antibody_comments)];
+
+          fun renderBox((type, comments), i) {
+            var boxID = "commentBox" ^^ intToString(i);
+            div(class("form-group"),
+              label(for_(boxID), textNode(showCommentType(type))) +*
+              textarea(id(boxID) +@ class("form-control") +@ value(comments), h0))
+          }
+
+          var content =
+            MvuHTML.concat(mapi(renderBox, boxes));
+
+          panel("Interaction comments", content)
+        case Nothing -> MvuHTML.empty
+      }
+    };
+
+    var existingInteractions =
+      panel("Existing interactions", MvuHTML.empty);
+
+    var interactionEditor =
+      panel("Edit interaction", MvuHTML.empty);
+
+    header +*
+    interactionComments +*
+    existingInteractions +*
+    interactionEditor
+  }
+
+  switch(model) {
+    case Just(model) -> viewModel(model)
+    case Nothing -> textNode("Nonexistent object")
+  }
 }
 
 
@@ -131,6 +230,7 @@ fun mainPage() {
   var initialModel =
     switch(lookup("objectID", environment())) {
       case Just(id) ->
+        debug("ID: " ^^ id);
         if (isInt(id)) {
           getInitialModel(stringToInt(id))
         } else {
