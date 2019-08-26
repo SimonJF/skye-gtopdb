@@ -19,7 +19,9 @@ typename Model =
       ligands: [Tables.RawLigand],
       interactions: [InteractionInfo],
       currentInteraction: InteractionInfo,
-      references: [Tables.DbReference]));
+      references: [Tables.DbReference],
+      submit: (Maybe(Tables.DbReceptorBasic), [InteractionInfo]) {}~> ()
+  ));
 
 
 typename CommentType =
@@ -49,7 +51,7 @@ fun showCommentType(ct) {
   }
 }
 
-typename Message = [| UpdateComment:(CommentType, String) |];
+typename Message = [| UpdateComment:(CommentType, String) | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
   (interaction_id = (-1),
@@ -98,6 +100,46 @@ fun emptyInteractionInfo(objectID) {
    references = [])
 }
 
+
+sig commit: (Int, (Maybe(Tables.DbReceptorBasic), [InteractionInfo]), (Maybe(Tables.DbReceptorBasic), [InteractionInfo])) {}~> ()
+fun commit(objectID, oldInfo, newInfo) server {
+  var (oldComments, oldInteractions) = oldInfo;
+  var (newComments, newInteractions) = newInfo;
+
+  switch((oldComments, newComments)) {
+    case (Just(oldRB), Just(newRB)) ->
+      if (oldRB == newRB) {
+        () # Nothing doing
+      } else {
+        update (rb <-- Tables.receptor_basic)
+          where (rb.object_id == objectID)
+          set (
+            list_comments = newRB.list_comments,
+            associated_proteins_comments = newRB.associated_proteins_comments,
+            functional_assay_comments = newRB.functional_assay_comments,
+            tissue_distribution_comments = newRB.tissue_distribution_comments,
+            functions_comments = newRB.functions_comments,
+            altered_expression_comments = newRB.altered_expression_comments,
+            expression_pathophysiology_comments = newRB.expression_pathophysiology_comments,
+            mutations_pathophysiology_comments = newRB.mutations_pathophysiology_comments,
+            variants_comments = newRB.variants_comments,
+            xenobiotic_expression_comments = newRB.xenobiotic_expression_comments,
+            antibody_comments = newRB.antibody_comments,
+            agonists_comments = newRB.agonists_comments,
+            antagonists_comments = newRB.antagonists_comments,
+            allosteric_modulators_comments = newRB.allosteric_modulators_comments,
+            activators_comments = newRB.activators_comments,
+            inhibitors_comments = newRB.inhibitors_comments,
+            channel_blockers_comments = newRB.channel_blockers_comments,
+            gating_inhibitors_comments = newRB.gating_inhibitors_comments)
+      }
+    case _ ->
+      # Just(old), Nothing; Nothing, Just(new) are impossible
+      # due to the way the UI is set up, so ignore them.
+      ()
+  }
+}
+
 fun getInitialModel(objectID) {
   var object =
     query {
@@ -141,9 +183,16 @@ fun getInitialModel(objectID) {
           case rb :: _ -> Just(rb)
         };
 
+      sig submit : (Maybe(Tables.DbReceptorBasic), [InteractionInfo]) {}~> ()
+      fun submit(newRb, newInteractions) {
+        commit(objectID, (rb, x.interactions), (newRb, newInteractions));
+        redirect("/")
+      }
+
       Just((object = x.obj,
             ligands = allLigands,
             receptorBasic = rb,
+            =submit,
             interactions = x.interactions,
             currentInteraction = emptyInteractionInfo(objectID),
             references = allReferences))
@@ -152,7 +201,7 @@ fun getInitialModel(objectID) {
 
 
 # TODO: fill me in
-sig updt : (Message, Model) ~> Model
+sig updt : (Message, Model) {}~> Model
 fun updt(msg, model) {
   fun updtModel(model) {
     fun updateComment(ty, newVal, rb) {
@@ -177,6 +226,10 @@ fun updt(msg, model) {
             (model with receptorBasic = Just(newRb))
           case Nothing -> model
         }
+      case Submit ->
+        model.submit(model.receptorBasic, model.interactions); model
+      case Cancel ->
+        redirect("/"); model
     }
   }
 
@@ -244,10 +297,20 @@ fun view(model) {
     var interactionEditor =
       panel("Edit interaction", MvuHTML.empty);
 
+    var buttons = {
+      div(class("row mt-5"),
+        div(class("col-sm"),
+          button(type("button") +@ class("btn btn-primary mr-2") +@
+              onClick(fun() { Submit }), textNode("Submit")) +*
+          button(type("button") +@ class("btn btn-primary") +@
+              onClick(fun() { Cancel }), textNode("Cancel"))))
+    };
+
     header +*
     interactionComments +*
     existingInteractions +*
-    interactionEditor
+    interactionEditor +*
+    buttons
   }
 
   switch(model) {
