@@ -55,7 +55,11 @@ fun showCommentType(ct) {
   }
 }
 
-typename Message = [| UpdateComment:(CommentType, String) | Submit | Cancel |];
+typename Message =
+  [| UpdateComment:(CommentType, String)
+   | EditInteraction:InteractionInfo
+   | SubmitEditInteraction | CancelEditInteraction | DeleteInteraction
+   | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
   (interaction_id = (-1),
@@ -211,7 +215,6 @@ fun getInitialModel(objectID) {
 }
 
 
-# TODO: fill me in
 sig updt : (Message, Model) {}~> Model
 fun updt(msg, model) {
   fun updtModel(model) {
@@ -237,6 +240,37 @@ fun updt(msg, model) {
             (model with receptorBasic = Just(newRb))
           case Nothing -> model
         }
+      case EditInteraction(interaction) ->
+        (model with currentInteraction = Just(interaction))
+      case SubmitEditInteraction ->
+        switch(model.currentInteraction) {
+          case Nothing -> model
+          case Just(int) ->
+            fun go(xs) {
+              switch(xs) {
+                case [] -> []
+                case x :: xs ->
+                  if (x.interaction.interaction_id == int.interaction.interaction_id) {
+                    int :: xs
+                  } else {
+                    x :: go(xs)
+                  }
+              }
+            }
+            (model with interactions = go(model.interactions), currentInteraction = Nothing)
+        }
+      case DeleteInteraction ->
+        switch(model.currentInteraction) {
+          case Just(int) ->
+            var interactions =
+              filter(fun(x) {
+                  x.interaction.interaction_id <> int.interaction.interaction_id
+              }, model.interactions);
+            (model with =interactions, currentInteraction = Nothing)
+          case Nothing -> (model with currentInteraction = Nothing)
+        }
+      case CancelEditInteraction ->
+        (model with currentInteraction = Nothing)
       case Submit ->
         model.submit(model.receptorBasic, model.interactions); model
       case Cancel ->
@@ -313,29 +347,33 @@ fun view(model) {
 
     var existingInteractions = {
       open InteractionUtilities;
-      fun renderInteraction(i) {
-        var affinity = mkAffinity(i.interaction.affinity_units,
-            i.interaction.affinity_high, i.interaction.affinity_median,
-            i.interaction.affinity_low);
-        var rawAffinity = mkAffinity(i.interaction.original_affinity_units,
-            i.interaction.original_affinity_high_nm, i.interaction.original_affinity_median_nm,
-            i.interaction.original_affinity_low_nm);
+      fun renderInteraction(int) {
+        var affinity = mkAffinity(int.interaction.affinity_units,
+            int.interaction.affinity_high, int.interaction.affinity_median,
+            int.interaction.affinity_low);
+        var rawAffinity = mkAffinity(int.interaction.original_affinity_units,
+            int.interaction.original_affinity_high_nm, int.interaction.original_affinity_median_nm,
+            int.interaction.original_affinity_low_nm);
 
         tr(a0,
           td(a0,
-            unescapedTextNode(i.ligand.name) +*
+            unescapedTextNode(int.ligand.name) +*
             br(a0, h0) +*
-            textNode(" { ID: " ^^ intToString(i.ligand.ligand_id) ^^ "i }")) +*
-          td(a0, textNode(i.interaction.type)) +*
-          td(a0, textNode(i.interaction.action)) +*
-          td(a0, textNode(speciesShortName(i.interaction.species_id))) +*
+            textNode(" { ID: " ^^ intToString(int.ligand.ligand_id) ^^ "i }")) +*
+          td(a0, textNode(int.interaction.type)) +*
+          td(a0, textNode(int.interaction.action)) +*
+          td(a0, textNode(speciesShortName(int.interaction.species_id))) +*
           td(a0, displayAffinity(affinity, false)) +*
-          td(a0, textNode(i.interaction.affinity_units)) +*
-          td(a0, textNode(i.interaction.concentration_range)) +*
+          td(a0, textNode(int.interaction.affinity_units)) +*
+          td(a0, textNode(int.interaction.concentration_range)) +*
           td(a0, displayAffinity(rawAffinity, false)) +*
-          td(a0, textNode(i.interaction.assay_description)) +*
-          td(a0, textNode(if (i.interaction.from_grac) { "true" } else { "false" }) ) +*
-          td(a0, textNode(intToString(i.interaction.interaction_id)))
+          td(a0, textNode(int.interaction.assay_description)) +*
+          td(a0, textNode(if (int.interaction.from_grac) { "true" } else { "false" }) ) +*
+          td(a0, textNode(intToString(int.interaction.interaction_id))) +*
+          td(a0,
+            i(class("fas fa-edit fa-fw") +@
+                title("Edit interaction") +@
+                onClick(fun() { EditInteraction(int) }), h0))
         )
       }
 
@@ -353,16 +391,37 @@ fun view(model) {
               th(a0, textNode("Raw affinity")) +*
               th(a0, textNode("Assay desc.")) +*
               th(a0, textNode("Concise view only?")) +*
-              th(a0, textNode("ID")))) +*
+              th(a0, textNode("ID")) +*
+              th(a0, textNode("Options")))) +*
           tbody(a0, MvuHTML.concatMap(renderInteraction, model.interactions)))
       };
 
       panel("Existing interactions", interactionsTable)
     };
 
+    fun mkInteractionEditor(interaction) {
+
+      var buttons = {
+        div(class("row mt-5"),
+          div(class("col-sm"),
+            button(type("button") +@ class("btn btn-primary mr-2") +@
+                onClick(fun() { SubmitEditInteraction }), textNode("Update Interaction")) +*
+            button(type("button") +@ class("btn btn-danger mr-2") +@
+                onClick(fun() { DeleteInteraction }), textNode("Delete Interaction")) +*
+            button(type("button") +@ class("btn btn-primary") +@
+                onClick(fun() { CancelEditInteraction }), textNode("Cancel"))))
+      };
+
+      var contents =
+        buttons;
+
+      panel("Editing interaction (ID: " ^^
+          intToString(interaction.interaction.interaction_id) ^^ ")", contents)
+    }
+
     var interactionEditor =
       switch(model.currentInteraction) {
-        case Just(interactionInfo) -> panel("Edit interaction", MvuHTML.empty)
+        case Just(i) -> mkInteractionEditor(i)
         case Nothing -> MvuHTML.empty
       };
 
