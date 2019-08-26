@@ -4,6 +4,7 @@ import Mvu;
 import MvuHTML;
 import MvuAttrs;
 import Species;
+import InteractionUtilities;
 
 typename InteractionID = Int;
 typename ReferenceID = Int;
@@ -311,20 +312,31 @@ fun view(model) {
     };
 
     var existingInteractions = {
-
+      open InteractionUtilities;
       fun renderInteraction(i) {
+        var affinity = mkAffinity(i.interaction.affinity_units,
+            i.interaction.affinity_high, i.interaction.affinity_median,
+            i.interaction.affinity_low);
+        var rawAffinity = mkAffinity(i.interaction.original_affinity_units,
+            i.interaction.original_affinity_high_nm, i.interaction.original_affinity_median_nm,
+            i.interaction.original_affinity_low_nm);
+
         tr(a0,
-          td(a0, textNode(i.ligand.name ^^
-            " { ID: " ^^ intToString(i.ligand.ligand_id) ^^ "i }")) +*
+          td(a0,
+            unescapedTextNode(i.ligand.name) +*
+            br(a0, h0) +*
+            textNode(" { ID: " ^^ intToString(i.ligand.ligand_id) ^^ "i }")) +*
           td(a0, textNode(i.interaction.type)) +*
           td(a0, textNode(i.interaction.action)) +*
           td(a0, textNode(speciesShortName(i.interaction.species_id))) +*
-          td(a0, textNode("AFFINITY, TODO")) +*
+          td(a0, displayAffinity(affinity, false)) +*
           td(a0, textNode(i.interaction.affinity_units)) +*
           td(a0, textNode(i.interaction.concentration_range)) +*
-          td(a0, textNode("RAW AFFINITY, TODO")) +*
+          td(a0, displayAffinity(rawAffinity, false)) +*
           td(a0, textNode(i.interaction.assay_description)) +*
-          td(a0, textNode(if (i.interaction.from_grac) { "true" } else { "false" }) ))
+          td(a0, textNode(if (i.interaction.from_grac) { "true" } else { "false" }) ) +*
+          td(a0, textNode(intToString(i.interaction.interaction_id)))
+        )
       }
 
       var interactionsTable = {
@@ -352,7 +364,7 @@ fun view(model) {
       switch(model.currentInteraction) {
         case Just(interactionInfo) -> panel("Edit interaction", MvuHTML.empty)
         case Nothing -> MvuHTML.empty
-      }
+      };
 
     var buttons = {
       div(class("row mt-5"),
