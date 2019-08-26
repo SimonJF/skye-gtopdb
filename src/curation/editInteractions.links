@@ -3,12 +3,14 @@ import Template;
 import Mvu;
 import MvuHTML;
 import MvuAttrs;
+import Species;
 
 typename InteractionID = Int;
 typename ReferenceID = Int;
 
 typename InteractionInfo =
   (interaction: Tables.DbInteraction,
+   ligand: Tables.RawLigand,
    references: [ReferenceID]);
 
 
@@ -16,10 +18,11 @@ typename Model =
   Maybe((
       object: Tables.RawObject,
       receptorBasic: Maybe(Tables.DbReceptorBasic),
-      ligands: [Tables.RawLigand],
+      ligands: [(ligand_id: Int, name: String)],
       interactions: [InteractionInfo],
-      currentInteraction: InteractionInfo,
+      currentInteraction: Maybe(InteractionInfo),
       references: [Tables.DbReference],
+      speciesMap: Species.SpeciesMap,
       submit: (Maybe(Tables.DbReceptorBasic), [InteractionInfo]) {}~> ()
   ));
 
@@ -95,8 +98,9 @@ fun emptyInteraction(objectID) {
    hide = false)
 }
 
-fun emptyInteractionInfo(objectID) {
+fun emptyInteractionInfo(objectID, ligand) {
   (interaction = emptyInteraction(objectID),
+   =ligand,
    references = [])
 }
 
@@ -153,7 +157,10 @@ fun getInitialModel(objectID) {
           interactions =
             for (i <-- Tables.interaction)
               where (i.object_id == objectID)
+              for (l <-- Tables.ligand)
+              where (l.ligand_id == i.ligand_id)
               [(interaction = i,
+                ligand = l,
                 references =
                   for (iar <-- Tables.interaction_affinity_refs)
                     where (iar.interaction_id == i.interaction_id)
@@ -165,12 +172,14 @@ fun getInitialModel(objectID) {
   switch (object) {
     case [] -> Nothing
     case x :: _ ->
-      # TODO: Need to sort these out -- reference DB is wrong, and selecting all ligands is sloow
+      # TODO: Unfortunately this blows the stack. And is slow. Alas.
+      # We might have to have a user-unfriendly "enter a ligand ID" for now...
       var allLigands = [];
-       #query {
-       #  for (l <-- Tables.ligand)
-       #    [l]
-       #};
+      #query {
+      #  for (l <-- Tables.ligand)
+      #    [(ligand_id = l.ligand_id, name = l.name)]
+      #};
+
       var allReferences = [];
        #query {
        #  for (r <-- Tables.reference)
@@ -194,7 +203,8 @@ fun getInitialModel(objectID) {
             receptorBasic = rb,
             =submit,
             interactions = x.interactions,
-            currentInteraction = emptyInteractionInfo(objectID),
+            currentInteraction = Nothing,
+            speciesMap = Species.getSpeciesMap(),
             references = allReferences))
   }
 }
@@ -244,6 +254,15 @@ fun view(model) {
   open MvuAttrs;
 
   fun viewModel(model) {
+
+    fun speciesShortName(speciesID) {
+      Species.resolveSpeciesShortName(speciesID, model.speciesMap)
+    }
+
+    fun speciesLongName(speciesID) {
+      Species.resolveSpeciesLongName(speciesID, model.speciesMap)
+    }
+
     var h0 = MvuHTML.empty;
     var a0 = MvuAttrs.empty;
     fun panel(name, contents) {
@@ -291,11 +310,49 @@ fun view(model) {
       }
     };
 
-    var existingInteractions =
-      panel("Existing interactions", MvuHTML.empty);
+    var existingInteractions = {
+
+      fun renderInteraction(i) {
+        tr(a0,
+          td(a0, textNode(i.ligand.name ^^
+            " { ID: " ^^ intToString(i.ligand.ligand_id) ^^ "i }")) +*
+          td(a0, textNode(i.interaction.type)) +*
+          td(a0, textNode(i.interaction.action)) +*
+          td(a0, textNode(speciesShortName(i.interaction.species_id))) +*
+          td(a0, textNode("AFFINITY, TODO")) +*
+          td(a0, textNode(i.interaction.affinity_units)) +*
+          td(a0, textNode(i.interaction.concentration_range)) +*
+          td(a0, textNode("RAW AFFINITY, TODO")) +*
+          td(a0, textNode(i.interaction.assay_description)) +*
+          td(a0, textNode(if (i.interaction.from_grac) { "true" } else { "false" }) ))
+      }
+
+      var interactionsTable = {
+        table_(class("table table-bordered"),
+          thead(a0,
+            tr(a0,
+              th(a0, textNode("Ligand")) +*
+              th(a0, textNode("Type")) +*
+              th(a0, textNode("Action")) +*
+              th(a0, textNode("Sp.")) +*
+              th(a0, textNode("Affinity")) +*
+              th(a0, textNode("Units")) +*
+              th(a0, textNode("Concentration range")) +*
+              th(a0, textNode("Raw affinity")) +*
+              th(a0, textNode("Assay desc.")) +*
+              th(a0, textNode("Concise view only?")) +*
+              th(a0, textNode("ID")))) +*
+          tbody(a0, MvuHTML.concatMap(renderInteraction, model.interactions)))
+      };
+
+      panel("Existing interactions", interactionsTable)
+    };
 
     var interactionEditor =
-      panel("Edit interaction", MvuHTML.empty);
+      switch(model.currentInteraction) {
+        case Just(interactionInfo) -> panel("Edit interaction", MvuHTML.empty)
+        case Nothing -> MvuHTML.empty
+      }
 
     var buttons = {
       div(class("row mt-5"),
