@@ -55,10 +55,16 @@ fun showCommentType(ct) {
   }
 }
 
+typename DisplayOption = [| ShowInConcise | OnlyInConcise | Hide |];
+
+typename Field = [| LigandContext | ReceptorSite |];
+
 typename Message =
   [| UpdateComment:(CommentType, String)
+   | UpdateField:(Field, String)
    | EditInteraction:InteractionInfo | DeleteInteraction:InteractionID
    | SubmitCurrentInteraction | CancelCurrentInteraction | DeleteCurrentInteraction
+   | ChangeDisplayOption:(DisplayOption, Bool)
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -282,6 +288,42 @@ fun updt(msg, model) {
       case CancelCurrentInteraction ->
         (model with currentInteraction = Nothing)
 
+      # Editing
+      case ChangeDisplayOption(displayOption, val) ->
+
+        switch(model.currentInteraction) {
+          case Just(int) ->
+            var interaction = int.interaction;
+            var interaction =
+              switch (displayOption) {
+                case ShowInConcise -> (interaction with from_grac = val)
+                case OnlyInConcise -> (interaction with only_grac = val)
+                case Hide -> (interaction with hide = val)
+              };
+            var currentInteraction = Just((int with =interaction));
+            (model with =currentInteraction)
+
+          case Nothing -> model
+        }
+
+      case UpdateField(field, val) ->
+        switch(model.currentInteraction) {
+          case Just(int) ->
+            var interaction = int.interaction;
+            var interaction =
+              switch(field) {
+                case LigandContext ->
+                  (interaction with ligand_context = val)
+                case ReceptorSite ->
+                  (interaction with receptor_site = val)
+              };
+            var currentInteraction = Just((int with =interaction));
+            (model with =currentInteraction)
+          case Nothing -> model
+        }
+
+      # Submission
+
       case Submit ->
         model.submit(model.receptorBasic, model.interactions); model
 
@@ -422,6 +464,7 @@ fun view(model) {
     };
 
     fun mkInteractionEditor(interaction) {
+      var int = interaction.interaction;
 
       var buttons = {
         div(class("row mt-5"),
@@ -434,7 +477,89 @@ fun view(model) {
                 onClick(fun() { CancelCurrentInteraction }), textNode("Cancel"))))
       };
 
+      var ligandInfo = {
+        # TODO: This does not (yet) allow changes in ligands, since dumping the
+        # entire ligand list overflows the stack.
+        panel("Ligand information",
+          form(a0,
+            div(class("form-group"),
+              label(for_("lInfoID"), textNode("Ligand: ")) +*
+              div(id("lInfoID") +@ class("form-control"),
+                unescapedTextNode(interaction.ligand.name ^^
+                  " { ID: " ^^ intToString(interaction.ligand.ligand_id) ^^ " }"))) +*
+            div(class("form-group"),
+              label(for_("lInfoContext"), textNode("Ligand context: ")) +*
+              input(id("lInfoContext") +@
+                class("form-control") +@
+                type("input") +@
+                value(int.ligand_context) +@
+                onInput(fun(str) { UpdateField(LigandContext, str) }), h0)) +*
+            div(class("form-group"),
+              label(for_("lInfoSite"), textNode("Receptor site of action: ")) +*
+              input(id("lInfoSite") +@
+                class("form-control") +@
+                type("input") +@
+                value(int.receptor_site) +@
+                onInput(fun(str) { UpdateField(ReceptorSite, str) }), h0))
+
+        ))
+      };
+
+      var displayOptions = {
+        fun renderCheckbox((displayOption, text, value), i) {
+          var checkedAttr =
+            if (value) {
+              MvuAttrs.attr("checked", "checked")
+            } else {
+              MvuAttrs.empty
+            };
+
+          var checkID = "check" ^^ intToString(i);
+
+          div(class("form-check form-check-inline"),
+            input(class("form-check-input") +@
+              type("checkbox") +@
+              id(checkID) +@
+              checkedAttr +@
+              onClick(fun() { ChangeDisplayOption(displayOption, not(value)) }), h0) +*
+            label(class("form-check-label") +@ for_(checkID), textNode(text)))
+        }
+
+        var options = [
+          (ShowInConcise, "Show in concise view", int.from_grac),
+          (OnlyInConcise, "Only in concise view", int.only_grac),
+          (Hide, "Hide", int.hide)
+        ];
+
+        var options = MvuHTML.concat(mapi(renderCheckbox, options));
+
+        panel("Display options", options)
+      };
+
+      var basicProperties = MvuHTML.empty;
+
+      var affinity = MvuHTML.empty;
+
+      var subunitSpecificity = MvuHTML.empty;
+
+      var actionComment = MvuHTML.empty;
+
+      var assayInfo = MvuHTML.empty;
+
+      var malariaInfo = MvuHTML.empty;
+
+      var references = MvuHTML.empty;
+
       var contents =
+        ligandInfo +*
+        displayOptions +*
+        basicProperties +*
+        affinity +*
+        subunitSpecificity +*
+        actionComment +*
+        assayInfo +*
+        malariaInfo +*
+        references +*
         buttons;
 
       panel("Editing interaction (ID: " ^^
