@@ -57,8 +57,8 @@ fun showCommentType(ct) {
 
 typename Message =
   [| UpdateComment:(CommentType, String)
-   | EditInteraction:InteractionInfo
-   | SubmitEditInteraction | CancelEditInteraction | DeleteInteraction
+   | EditInteraction:InteractionInfo | DeleteInteraction:InteractionID
+   | SubmitCurrentInteraction | CancelCurrentInteraction | DeleteCurrentInteraction
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -232,6 +232,12 @@ fun updt(msg, model) {
       }
     }
 
+    fun deleteInteraction(id) {
+      filter(fun(x) {
+          x.interaction.interaction_id <> id
+      }, model.interactions)
+    }
+
     switch(msg) {
       case UpdateComment(ty, newVal) ->
         switch(model.receptorBasic) {
@@ -240,9 +246,11 @@ fun updt(msg, model) {
             (model with receptorBasic = Just(newRb))
           case Nothing -> model
         }
+
       case EditInteraction(interaction) ->
         (model with currentInteraction = Just(interaction))
-      case SubmitEditInteraction ->
+
+      case SubmitCurrentInteraction ->
         switch(model.currentInteraction) {
           case Nothing -> model
           case Just(int) ->
@@ -259,20 +267,24 @@ fun updt(msg, model) {
             }
             (model with interactions = go(model.interactions), currentInteraction = Nothing)
         }
-      case DeleteInteraction ->
+
+      case DeleteInteraction(id) ->
+        (model with interactions = deleteInteraction(id))
+
+      case DeleteCurrentInteraction ->
         switch(model.currentInteraction) {
           case Just(int) ->
-            var interactions =
-              filter(fun(x) {
-                  x.interaction.interaction_id <> int.interaction.interaction_id
-              }, model.interactions);
+            var interactions = deleteInteraction(int.interaction.interaction_id);
             (model with =interactions, currentInteraction = Nothing)
           case Nothing -> (model with currentInteraction = Nothing)
         }
-      case CancelEditInteraction ->
+
+      case CancelCurrentInteraction ->
         (model with currentInteraction = Nothing)
+
       case Submit ->
         model.submit(model.receptorBasic, model.interactions); model
+
       case Cancel ->
         redirect("/"); model
     }
@@ -355,6 +367,20 @@ fun view(model) {
             int.interaction.original_affinity_high_nm, int.interaction.original_affinity_median_nm,
             int.interaction.original_affinity_low_nm);
 
+        # Only display edit / trash buttons if we're not currently editing an interaction
+        var editButtons = {
+          if (isJust(model.currentInteraction)) {
+            MvuHTML.empty
+          } else {
+            i(class("fas fa-edit fa-fw") +@
+                title("Edit interaction") +@
+                onClick(fun() { EditInteraction(int) }), h0) +*
+            i(class("fas fa-trash fa-fw") +@
+                title("Edit interaction") +@
+                onClick(fun() { DeleteInteraction(int.interaction.interaction_id) }), h0)
+          }
+        };
+
         tr(a0,
           td(a0,
             unescapedTextNode(int.ligand.name) +*
@@ -370,11 +396,7 @@ fun view(model) {
           td(a0, textNode(int.interaction.assay_description)) +*
           td(a0, textNode(if (int.interaction.from_grac) { "true" } else { "false" }) ) +*
           td(a0, textNode(intToString(int.interaction.interaction_id))) +*
-          td(a0,
-            i(class("fas fa-edit fa-fw") +@
-                title("Edit interaction") +@
-                onClick(fun() { EditInteraction(int) }), h0))
-        )
+          td(a0, editButtons))
       }
 
       var interactionsTable = {
@@ -405,11 +427,11 @@ fun view(model) {
         div(class("row mt-5"),
           div(class("col-sm"),
             button(type("button") +@ class("btn btn-primary mr-2") +@
-                onClick(fun() { SubmitEditInteraction }), textNode("Update Interaction")) +*
+                onClick(fun() { SubmitCurrentInteraction }), textNode("Update Interaction")) +*
             button(type("button") +@ class("btn btn-danger mr-2") +@
-                onClick(fun() { DeleteInteraction }), textNode("Delete Interaction")) +*
+                onClick(fun() { DeleteCurrentInteraction }), textNode("Delete Interaction")) +*
             button(type("button") +@ class("btn btn-primary") +@
-                onClick(fun() { CancelEditInteraction }), textNode("Cancel"))))
+                onClick(fun() { CancelCurrentInteraction }), textNode("Cancel"))))
       };
 
       var contents =
