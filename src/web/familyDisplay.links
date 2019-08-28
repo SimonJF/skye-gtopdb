@@ -24,10 +24,6 @@ typename ExternalRef = (
   refUrl: String
 );
 
-typename InteractionInfo = (
-    interaction: Interaction,
-    parsedName: Markup
-);
 
 typename Synonym = (synonymName: Markup, synonymOrder: Int, synonymReferences: [ReferenceId]);
 
@@ -43,7 +39,7 @@ typename ObjectSummary = (
    objectEnsemblRefs: [ExternalRef],
    objectUniprotRefs: [ExternalRef],
    objectPrincipalTransductions: [Markup],
-   objectInteractions: [InteractionInfo],
+   objectInteractions: [Interaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
   );
@@ -192,12 +188,11 @@ fun view(model) {
             switch(is) {
               case [] -> (labelled, endogenous, selective, neither)
               case x :: is ->
-              var i = x.interaction;
-              if (i.interactionLigand.labelled) {
+              if (x.interactionLigand.labelled) {
                 go(is, x :: labelled, endogenous, selective, neither)
-              } else if (i.endogenous) {
+              } else if (x.endogenous) {
                 go(is, labelled, x :: endogenous, selective, neither)
-              } else if (i.selectivity == "Selective") {
+              } else if (x.selectivity == "Selective") {
                 go(is, labelled, endogenous, x :: selective, neither)
               } else {
                 go(is, labelled, endogenous, selective, x :: neither)
@@ -210,11 +205,11 @@ fun view(model) {
         }
 
         var allAgonists =
-          filter(fun(i) { i.interaction.interactionType == "Agonist" }, summary.objectInteractions);
+          filter(fun(i) { i.interactionType == "Agonist" }, summary.objectInteractions);
         var allAntagonists =
-          filter(fun(i) { i.interaction.interactionType == "Antagonist" }, summary.objectInteractions);
+          filter(fun(i) { i.interactionType == "Antagonist" }, summary.objectInteractions);
         var allostericModulators =
-          filter(fun(i) { i.interaction.interactionType == "Allosteric modulator" }, summary.objectInteractions);
+          filter(fun(i) { i.interactionType == "Allosteric modulator" }, summary.objectInteractions);
 
         var (labelledAgonists, endogenousAgonists,
             selectiveAgonists, otherAgonists) = splitInteractions(allAgonists);
@@ -224,13 +219,12 @@ fun view(model) {
         var labelledLigands = labelledAgonists ++ labelledAntagonists;
 
         fun showInteraction(x) {
-          var i = x.interaction;
           var interactionActionNode =
-            if (not(i.interactionAction == "Agonist"
-                  || i.interactionAction == "Antagonist")) {
-              textNode(" (" ^^ i.interactionAction ^^ ")")
+            if (not(x.interactionAction == "Agonist"
+                  || x.interactionAction == "Antagonist")) {
+              textNode(" (" ^^ x.interactionAction ^^ ")")
             } else { MvuHTML.empty };
-          var speciesName = resolveSpeciesLongName(i.speciesID, model.speciesMap);
+          var speciesName = resolveSpeciesLongName(x.speciesID, model.speciesMap);
           var speciesNode =
             if (speciesName <> "Human") {
               textNode(" - " ^^ speciesName)
@@ -239,16 +233,16 @@ fun view(model) {
             };
 
           var affinityNode = {
-            InteractionUtilities.displayAffinity(i.affinity, true)
+            InteractionUtilities.displayAffinity(x.affinity, true)
           };
 
           var citationsNode =
             textNode(" ") +*
-            renderCitationList(i.references, model.references);
+            renderCitationList(x.references, model.references);
 
           a(href("ligandDisplay?ligandId=" ^^
-              intToString(i.ligandID)),
-              renderM(x.parsedName)) +*
+              intToString(x.ligandID)),
+              unescapedTextNode(x.interactionLigand.name)) +*
           interactionActionNode +*
           affinityNode +*
           citationsNode +*
@@ -498,13 +492,8 @@ fun getInitialModel() {
         # queries needn't be tame, and we can do them in memory?
         var objects = map(fun(r) {
             var interactions =
-              map(InteractionUtilities.makeInteraction, r.interactions);
-            fun transformInteractions(interactions) {
-              map(fun(i) {
-                (interaction = i,
-                 parsedName = parseOrError(getTargetName(i.interactionTarget)))
-              }, interactions)
-            }
+              filter(fun(x) { x.fromGrac },
+                  map(InteractionUtilities.makeInteraction, r.interactions));
 
             (
                 objectId=r.id,
@@ -518,13 +507,13 @@ fun getInitialModel() {
                 objectUniprotRefs=r.uniprotRefs,
                 objectPrincipalTransductions=
                   map(parseOrError, r.principalTransductions),
-                objectInteractions = transformInteractions(interactions),
+                objectInteractions = interactions,
                 objectDisplayOrder=r.displayOrder
             )
           }, objects);
 
         var objectReferences = listConcatMap(fun (object) {
-            listConcatMap(fun (x) { x.interaction.references },
+            listConcatMap(fun (x) { x.references },
                 object.objectInteractions) ++
             listConcatMap(fun (synonym) { synonym.synonymReferences },
                 object.objectSynonyms)
