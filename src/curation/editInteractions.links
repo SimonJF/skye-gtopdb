@@ -59,6 +59,10 @@ typename DisplayOption = [| ShowInConcise | OnlyInConcise | Hide |];
 
 typename Field = [| LigandContext | ReceptorSite |];
 
+typename InteractionProperty =
+  [| Endogenous | UseDependent | VoltageDependent
+   | PrimaryTarget | WholeOrganismAssay |];
+
 typename Message =
   [| UpdateComment:(CommentType, String)
    | UpdateField:(Field, String)
@@ -67,6 +71,7 @@ typename Message =
    | ChangeDisplayOption:(DisplayOption, Bool)
    | ChangeSpeciesID:Int | ChangeInteractionType:String
    | ChangeAction:String | ChangeSelectivity:String
+   | ChangeInteractionProperty:(InteractionProperty, Bool)
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -336,6 +341,20 @@ fun updt(msg, model) {
         updateCurrentInteraction(fun(int) {
           var interaction = int.interaction;
           var interaction = (interaction with =selectivity);
+          (int with =interaction)
+        })
+
+      case ChangeInteractionProperty(prop, val) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction =
+            switch(prop) {
+              case Endogenous -> (interaction with endogenous = val)
+              case UseDependent -> (interaction with use_dependent = val)
+              case VoltageDependent -> (interaction with voltage_dependent = val)
+              case PrimaryTarget -> (interaction with primary_target = val)
+              case WholeOrganismAssay -> (interaction with whole_organism_assay = val)
+            };
           (int with =interaction)
         })
 
@@ -653,11 +672,45 @@ fun view(model) {
              fun(x) { ChangeSelectivity(x) }, selectivity)
        };
 
+       var checkboxes = {
+         fun renderCheckbox((displayOption, text, value), i) {
+           var checkedAttr =
+             if (value) {
+               MvuAttrs.attr("checked", "checked")
+             } else {
+               MvuAttrs.empty
+             };
+
+           var checkID = "interactionPropCheck" ^^ intToString(i);
+
+           div(class("form-check form-check-inline"),
+             input(class("form-check-input") +@
+               type("checkbox") +@
+               id(checkID) +@
+               checkedAttr +@
+               onClick(fun() { ChangeInteractionProperty(displayOption, not(value)) }), h0) +*
+             label(class("form-check-label") +@ for_(checkID), textNode(text)))
+         }
+
+         var options = [
+           (Endogenous, "Endogenous", int.endogenous),
+           (UseDependent, "Use-dependent", int.use_dependent),
+           (VoltageDependent, "Voltage-dependent", int.voltage_dependent),
+           (PrimaryTarget, "Primary target for this drug", int.primary_target),
+           (WholeOrganismAssay, "Whole organism assay", int.whole_organism_assay)
+         ];
+
+         var options = MvuHTML.concat(mapi(renderCheckbox, options));
+
+         panel("Properties", options)
+       };
+
        var contents =
          speciesDropdown +*
          typeDropdown +*
          actionDropdown +*
-         selectivityDropdown;
+         selectivityDropdown +*
+         checkboxes;
 
        panel("Basic properties", contents)
       };
