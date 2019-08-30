@@ -65,6 +65,8 @@ typename Message =
    | EditInteraction:InteractionInfo | DeleteInteraction:InteractionID
    | SubmitCurrentInteraction | CancelCurrentInteraction | DeleteCurrentInteraction
    | ChangeDisplayOption:(DisplayOption, Bool)
+   | ChangeSpeciesID:Int | ChangeInteractionType:String
+   | ChangeAction:String | ChangeSelectivity:String
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -244,6 +246,15 @@ fun updt(msg, model) {
       }, model.interactions)
     }
 
+    fun updateCurrentInteraction(f) {
+      var currentInteraction =
+        switch (model.currentInteraction) {
+          case Just(int) -> Just(f(int))
+          case Nothing -> Nothing
+        };
+      (model with =currentInteraction)
+    }
+
     switch(msg) {
       case UpdateComment(ty, newVal) ->
         switch(model.receptorBasic) {
@@ -290,40 +301,58 @@ fun updt(msg, model) {
 
       # Editing
       case ChangeDisplayOption(displayOption, val) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction =
+            switch (displayOption) {
+              case ShowInConcise -> (interaction with from_grac = val)
+              case OnlyInConcise -> (interaction with only_grac = val)
+              case Hide -> (interaction with hide = val)
+            };
+          (int with =interaction) })
 
-        switch(model.currentInteraction) {
-          case Just(int) ->
+      case ChangeSpeciesID(speciesID) ->
+        updateCurrentInteraction(fun(int) {
             var interaction = int.interaction;
-            var interaction =
-              switch (displayOption) {
-                case ShowInConcise -> (interaction with from_grac = val)
-                case OnlyInConcise -> (interaction with only_grac = val)
-                case Hide -> (interaction with hide = val)
-              };
-            var currentInteraction = Just((int with =interaction));
-            (model with =currentInteraction)
+            var interaction = (interaction with species_id = speciesID);
+            (int with =interaction)
+        })
 
-          case Nothing -> model
-        }
+      case ChangeInteractionType(type) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction = (interaction with =type);
+          (int with =interaction)
+        })
+
+      case ChangeAction(action) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction = (interaction with =action);
+          (int with =interaction)
+        })
+
+      case ChangeSelectivity(selectivity) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction = (interaction with =selectivity);
+          (int with =interaction)
+        })
 
       case UpdateField(field, val) ->
-        switch(model.currentInteraction) {
-          case Just(int) ->
-            var interaction = int.interaction;
-            var interaction =
-              switch(field) {
-                case LigandContext ->
-                  (interaction with ligand_context = val)
-                case ReceptorSite ->
-                  (interaction with receptor_site = val)
-              };
-            var currentInteraction = Just((int with =interaction));
-            (model with =currentInteraction)
-          case Nothing -> model
-        }
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction =
+            switch(field) {
+              case LigandContext ->
+                (interaction with ligand_context = val)
+              case ReceptorSite ->
+                (interaction with receptor_site = val)
+            };
+            (int with =interaction)
+        })
 
       # Submission
-
       case Submit ->
         model.submit(model.receptorBasic, model.interactions); model
 
@@ -536,7 +565,102 @@ fun view(model) {
         panel("Display options", options)
       };
 
-      var basicProperties = MvuHTML.empty;
+      var basicProperties = {
+
+        fun dropdown(selectID, caption, renderEntry, changeFn, entries) {
+          var options = MvuHTML.concatMap(renderEntry, entries);
+          div(class("form-group"),
+            label(for_(selectID), textNode(caption)) +*
+            select_(id(selectID) +@ class("form-control") +@
+              onChange(changeFn), options))
+        }
+
+        var speciesDropdown = {
+          fun renderSpeciesEntry((speciesID, (speciesShort, speciesLong))) {
+            var selAttr =
+              if (speciesID == int.species_id) {
+                attr("selected", "selected")
+              } else {
+                MvuAttrs.empty
+              };
+
+            option(value(intToString(speciesID)) +@ selAttr,
+                textNode(speciesLong ^^ " (" ^^ speciesShort ^^ ")"))
+          }
+          dropdown("speciesSelect", "Species", renderSpeciesEntry,
+            fun(x) { ChangeSpeciesID(stringToInt(x)) }, model.speciesMap)
+       };
+
+       var typeDropdown = {
+         var types =
+           [ "None", "Antibody", "Agonist", "Antagonist", "Allosteric modulator",
+             "Activator", "Inhibitor", "Channel blocker", "Gating inhibitor" ];
+
+         fun renderType(ty) {
+           var selAttr =
+             if (ty == int.type) {
+               attr("selected", "selected")
+             } else {
+               MvuAttrs.empty
+             };
+           option(value(ty) +@ selAttr, textNode(ty))
+         }
+
+         dropdown("interactionTypeSelect", "Interaction Type", renderType,
+             fun(x) { ChangeInteractionType(x) }, types)
+       };
+
+       var actionDropdown = {
+         var actions =
+           [ "None", "Activation", "Agonist", "Biased agonist",
+             "Partial agonist", "Full agonist", "Antagonist",
+             "Biased antagonist", "Inverse agonist", "Positive",
+             "Negative", "Neutral", "Biphasic", "Potentiation",
+             "Inhibition", "Mixed", "Competitive", "Uncompetitive",
+             "Non-competitive", "Feedback inhibition",
+             "Irreversible inhibition", "Binding", "Pore blocker",
+             "Slows inactivation", "Voltage-dependent inhibition", "Unknown" ];
+
+        fun renderAction(ty) {
+           var selAttr =
+             if (ty == int.action) {
+               attr("selected", "selected")
+             } else {
+               MvuAttrs.empty
+             };
+           option(value(ty) +@ selAttr, textNode(ty))
+         }
+
+         dropdown("actionSelect", "Action", renderAction,
+             fun(x) { ChangeAction(x) }, actions)
+       };
+
+       var selectivityDropdown = {
+         var selectivity =
+           [ "Not Determined", "Selective", "Non-selective", "Family selective" ];
+
+         fun renderSelectivity(sel) {
+           var selAttr =
+             if (sel == int.selectivity) {
+               attr("selected", "selected")
+             } else {
+               MvuAttrs.empty
+             };
+           option(value(sel) +@ selAttr, textNode(sel))
+         }
+
+         dropdown("selectivitySelect", "Selectivity", renderSelectivity,
+             fun(x) { ChangeSelectivity(x) }, selectivity)
+       };
+
+       var contents =
+         speciesDropdown +*
+         typeDropdown +*
+         actionDropdown +*
+         selectivityDropdown;
+
+       panel("Basic properties", contents)
+      };
 
       var affinity = MvuHTML.empty;
 
