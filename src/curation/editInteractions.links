@@ -57,7 +57,9 @@ fun showCommentType(ct) {
 
 typename DisplayOption = [| ShowInConcise | OnlyInConcise | Hide |];
 
-typename Field = [| LigandContext | ReceptorSite |];
+typename Field =
+  [| LigandContext | ReceptorSite | ActionComment | AssayDescription
+   | AssayConditions | AssayURL |];
 
 typename InteractionProperty =
   [| Endogenous | UseDependent | VoltageDependent
@@ -367,6 +369,14 @@ fun updt(msg, model) {
                 (interaction with ligand_context = val)
               case ReceptorSite ->
                 (interaction with receptor_site = val)
+              case ActionComment ->
+                (interaction with action_comment = val)
+              case AssayDescription ->
+                (interaction with assay_description = val)
+              case AssayConditions ->
+                (interaction with assay_conditions = val)
+              case AssayURL ->
+                (interaction with assay_url = val)
             };
             (int with =interaction)
         })
@@ -719,9 +729,56 @@ fun view(model) {
 
       var subunitSpecificity = MvuHTML.empty;
 
-      var actionComment = MvuHTML.empty;
+      var actionComment = {
+        var caption =
+          if (int.type == "Subunit-specific") {
+            "Subunit specificity order"
+          } else {
+            "Action comment"
+          };
 
-      var assayInfo = MvuHTML.empty;
+
+        var contents =
+          div(class("form-group"),
+            label(for_("actionComment"), textNode(caption)) +*
+            textarea(id("actionComment") +@ class("form-control") +@ value(int.action_comment)
+              +@ onInput(fun(str) { UpdateField(ActionComment, str) }), h0));
+
+        panel(caption, contents)
+      };
+
+      var assayInfo = {
+
+        fun labelledTextarea(taID, caption, val, f) {
+          div(class("form-group"),
+            label(for_(taID), textNode(caption)) +*
+            textarea(id(taID) +@ class("form-control") +@ value(val)
+              +@ onInput(f), h0))
+        }
+
+        var assayDescription =  {
+          labelledTextarea("assayDesc", "Assay description", int.assay_description,
+            fun(str) { UpdateField(AssayDescription, str) })
+        };
+
+        var assayConditions = {
+          labelledTextarea("assayCond", "Assay conditions", int.assay_conditions,
+            fun(str) { UpdateField(AssayConditions, str) })
+        };
+
+        var assayURL = {
+          div(class("form-group"),
+            label(for_("assayURL"), textNode("Assay URL")) +*
+            input(id("assayURL") +@
+              class("form-control") +@
+              type("input") +@
+              value(int.assay_url) +@
+              onInput(fun(str) { UpdateField(AssayURL, str) }), h0))
+        };
+
+        var contents = assayDescription +* assayConditions +* assayURL;
+        panel("Assay information", contents)
+      };
 
       var malariaInfo = MvuHTML.empty;
 
