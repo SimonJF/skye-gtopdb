@@ -9,7 +9,6 @@ open import Utility;
 
 # TODAY:
 #  - Affinity box
-#  - Input validation
 #  - Initial DB update logic
 
 # STILL TO DO:
@@ -119,6 +118,8 @@ typename Message =
    | ChangePercentActivity:String
    | ChangeRank:String
    | SetPhysiologicalVoltage:Bool
+   | ChangeOriginalAffinityUnits:String
+   | ChangeOriginalAffinityRelation:String
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -532,6 +533,30 @@ fun updt(msg, model) {
           (int with =interaction)
         })
 
+      case ChangeOriginalAffinityUnits(val) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction =
+            (interaction with original_affinity_units = val);
+          (int with =interaction)
+        })
+
+      case ChangeOriginalAffinityRelation(val) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction =
+            (interaction with original_affinity_relation= val);
+          (int with =interaction)
+        })
+
+     #case ChangeAffinityUnits(val) ->
+     #  updateCurrentInteraction(fun(int) {
+     #    var interaction = int.interaction;
+     #    var interaction =
+     #      (interaction with affinity_units = val);
+     #    (int with =interaction)
+     #  })
+
       case ChangeRank(str) ->
         updateAffinityValues(fun(avs) {
           (avs with rank = str)
@@ -577,6 +602,14 @@ fun view(model) {
           type("input") +@
           value(val) +@
           onInput(inputCallback), h0))
+    }
+
+    fun renderDropdown(selectID, caption, renderEntry, changeFn, entries) {
+      var options = MvuHTML.concatMap(renderEntry, entries);
+      div(class("form-group"),
+        label(for_(selectID), textNode(caption)) +*
+        select_(id(selectID) +@ class("form-control") +@
+          onChange(changeFn), options))
     }
 
     fun panel(name, contents) {
@@ -778,14 +811,6 @@ fun view(model) {
 
       var basicProperties = {
 
-        fun dropdown(selectID, caption, renderEntry, changeFn, entries) {
-          var options = MvuHTML.concatMap(renderEntry, entries);
-          div(class("form-group"),
-            label(for_(selectID), textNode(caption)) +*
-            select_(id(selectID) +@ class("form-control") +@
-              onChange(changeFn), options))
-        }
-
         var speciesDropdown = {
           fun renderSpeciesEntry((speciesID, (speciesShort, speciesLong))) {
             var selAttr =
@@ -798,7 +823,7 @@ fun view(model) {
             option(value(intToString(speciesID)) +@ selAttr,
                 textNode(speciesLong ^^ " (" ^^ speciesShort ^^ ")"))
           }
-          dropdown("speciesSelect", "Species", renderSpeciesEntry,
+          renderDropdown("speciesSelect", "Species", renderSpeciesEntry,
             fun(x) { ChangeSpeciesID(stringToInt(x)) }, model.speciesMap)
        };
 
@@ -817,7 +842,7 @@ fun view(model) {
            option(value(ty) +@ selAttr, textNode(ty))
          }
 
-         dropdown("interactionTypeSelect", "Interaction Type", renderType,
+         renderDropdown("interactionTypeSelect", "Interaction Type", renderType,
              fun(x) { ChangeInteractionType(x) }, types)
        };
 
@@ -842,7 +867,7 @@ fun view(model) {
            option(value(ty) +@ selAttr, textNode(ty))
          }
 
-         dropdown("actionSelect", "Action", renderAction,
+         renderDropdown("actionSelect", "Action", renderAction,
              fun(x) { ChangeAction(x) }, actions)
        };
 
@@ -860,7 +885,7 @@ fun view(model) {
            option(value(sel) +@ selAttr, textNode(sel))
          }
 
-         dropdown("selectivitySelect", "Selectivity", renderSelectivity,
+         renderDropdown("selectivitySelect", "Selectivity", renderSelectivity,
              fun(x) { ChangeSelectivity(x) }, selectivity)
        };
 
@@ -922,9 +947,44 @@ fun view(model) {
                   ChangeAffinity(affinityType, Low, str) }))
         }
 
-        var originalAffinity =
-          renderHighMedLowBoxes("Original Affinity Value (nM)", "orig", AffinityOriginal,
-              avs.origHigh, avs.origMedian, avs.origLow);
+        var originalAffinity = {
+          var boxes =
+            renderHighMedLowBoxes("Original Affinity Value (nM)", "orig", AffinityOriginal,
+                avs.origHigh, avs.origMedian, avs.origLow);
+          # Affinity units
+          var unitOptions = [ "-", "Kd", "Ki", "IC50", "EC50", "KB" ];
+          fun renderUnit(unit) {
+            var selAttr =
+              if (unit == int.original_affinity_units) {
+                attr("selected", "selected")
+              } else {
+                MvuAttrs.empty
+              };
+            option(value(unit) +@ selAttr, textNode(unit))
+          }
+
+          var units =
+            renderDropdown("origAffinityUnits", "Units", renderUnit,
+                fun(str) { ChangeOriginalAffinityUnits(str) }, unitOptions);
+          # Affinity relation
+          # TODO: Can we factor this pattern out?
+          fun renderRelation(rel) {
+            var selAttr =
+              if (rel == int.original_affinity_relation) {
+                attr("selected", "selected")
+              } else {
+                MvuAttrs.empty
+              };
+            option(value(rel) +@ selAttr, textNode(rel))
+          }
+
+
+          var relationOptions = [ "=", ">", "<", "~" ];
+          var relation =
+            renderDropdown("origAffinityRelation", "Relation", renderRelation,
+                fun(str) { ChangeOriginalAffinityRelation(str) }, relationOptions);
+          boxes +* units +* relation
+        };
 
         var logAffinity =
           renderHighMedLowBoxes("Affinity (-log)", "log", AffinityLog,
