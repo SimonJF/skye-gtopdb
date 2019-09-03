@@ -6,8 +6,45 @@ import MvuAttrs;
 import Species;
 import InteractionUtilities;
 
+# TODAY:
+#  - Affinity box
+#  - Input validation
+#  - Initial DB update logic
+
+# STILL TO DO:
+#  - Inserting from scratch
+#  - Adding new interactions
+#  - References
+
 typename InteractionID = Int;
 typename ReferenceID = Int;
+
+
+# Affinity values are stored in the database as floats.  We can't modify the
+# model directly as we do with other fields since it's perfectly reasonable to
+# have the model in an inconsistent state during editing. We should only
+# validate when submitting.
+typename AffinityType = [| AffinityLog | AffinityVoltage | AffinityOriginal |];
+typename AffinityBox = [| Low | Median | High |];
+
+typename AffinityValues =
+  (logHigh: String, logMedian: String, logLow: String,
+   avHigh: String, avMedian: String, avLow: String,
+   origHigh: String, origMedian: String, origLow: String,
+   rank:String, percentActivity:String
+  );
+
+fun mkAffinityValues(int) {
+  var f2s = floatToString;
+  (logHigh = f2s(int.affinity_high), logMedian = f2s(int.affinity_median),
+   logLow = f2s(int.affinity_low), avHigh = f2s(int.affinity_voltage_high),
+   avMedian = f2s(int.affinity_voltage_median), avLow = f2s(int.affinity_voltage_low),
+   origHigh = f2s(int.original_affinity_high_nm),
+   origMedian = f2s(int.original_affinity_median_nm),
+   origLow = f2s(int.original_affinity_low_nm),
+   rank = intToString(int.rank),
+   percentActivity = f2s(int.percent_activity))
+}
 
 typename InteractionInfo =
   (interaction: Tables.DbInteraction,
@@ -21,7 +58,7 @@ typename Model =
       receptorBasic: Maybe(Tables.DbReceptorBasic),
       ligands: [(ligand_id: Int, name: String)],
       interactions: [InteractionInfo],
-      currentInteraction: Maybe(InteractionInfo),
+      currentInteraction: Maybe((InteractionInfo, AffinityValues)),
       references: [Tables.DbReference],
       speciesMap: Species.SpeciesMap,
       submit: (Maybe(Tables.DbReceptorBasic), [InteractionInfo]) {}~> ()
@@ -74,6 +111,10 @@ typename Message =
    | ChangeSpeciesID:Int | ChangeInteractionType:String
    | ChangeAction:String | ChangeSelectivity:String
    | ChangeInteractionProperty:(InteractionProperty, Bool)
+   | ChangeAffinity:(AffinityType, AffinityBox, String)
+   | ChangePercentActivity:String
+   | ChangeRank:String
+   | SetPhysiologicalVoltage:Bool
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -256,7 +297,16 @@ fun updt(msg, model) {
     fun updateCurrentInteraction(f) {
       var currentInteraction =
         switch (model.currentInteraction) {
-          case Just(int) -> Just(f(int))
+          case Just((int, avs)) -> Just(f(int), avs)
+          case Nothing -> Nothing
+        };
+      (model with =currentInteraction)
+    }
+
+    fun updateAffinityValues(f) {
+      var currentInteraction =
+        switch (model.currentInteraction) {
+          case Just((int, avs)) -> Just(int, f(avs))
           case Nothing -> Nothing
         };
       (model with =currentInteraction)
@@ -272,12 +322,15 @@ fun updt(msg, model) {
         }
 
       case EditInteraction(interaction) ->
-        (model with currentInteraction = Just(interaction))
+        var avs = mkAffinityValues(interaction.interaction);
+        (model with currentInteraction = Just((interaction, avs)))
 
       case SubmitCurrentInteraction ->
+        # TODO: Validate affinity data and propagate casted values
+        # to the model.
         switch(model.currentInteraction) {
           case Nothing -> model
-          case Just(int) ->
+          case Just((int, _)) ->
             fun go(xs) {
               switch(xs) {
                 case [] -> []
@@ -297,7 +350,7 @@ fun updt(msg, model) {
 
       case DeleteCurrentInteraction ->
         switch(model.currentInteraction) {
-          case Just(int) ->
+          case Just((int, _)) ->
             var interactions = deleteInteraction(int.interaction.interaction_id);
             (model with =interactions, currentInteraction = Nothing)
           case Nothing -> (model with currentInteraction = Nothing)
@@ -381,6 +434,48 @@ fun updt(msg, model) {
             (int with =interaction)
         })
 
+      case ChangeAffinity(ty, box, val) ->
+        updateAffinityValues(fun(affinityValues) {
+          switch ((ty, box)) {
+            case (AffinityLog, Low) ->
+              (affinityValues with logLow = val)
+            case (AffinityLog, Median) ->
+              (affinityValues with logMedian = val)
+            case (AffinityLog, High) ->
+              (affinityValues with logHigh = val)
+            case (AffinityVoltage, Low) ->
+              (affinityValues with avLow = val)
+            case (AffinityVoltage, Median) ->
+              (affinityValues with avMedian = val)
+            case (AffinityVoltage, High) ->
+              (affinityValues with avHigh = val)
+            case (AffinityOriginal, Low) ->
+              (affinityValues with origLow = val)
+            case (AffinityOriginal, Median) ->
+              (affinityValues with origMedian = val)
+            case (AffinityOriginal, High) ->
+              (affinityValues with origLow = val)
+          }
+        })
+
+      case ChangePercentActivity(str) ->
+        updateAffinityValues(fun(avs) {
+          (avs with percentActivity = str)
+        })
+
+      case SetPhysiologicalVoltage(val) ->
+        updateCurrentInteraction(fun(int) {
+          var interaction = int.interaction;
+          var interaction =
+            (interaction with affinity_physiological_voltage = val);
+          (int with =interaction)
+        })
+
+      case ChangeRank(str) ->
+        updateAffinityValues(fun(avs) {
+          (avs with rank = str)
+        })
+
       # Submission
       case Submit ->
         model.submit(model.receptorBasic, model.interactions); model
@@ -412,6 +507,17 @@ fun view(model) {
 
     var h0 = MvuHTML.empty;
     var a0 = MvuAttrs.empty;
+
+    fun renderTextBox(boxID, caption, val, inputCallback) {
+      div(class("form-group"),
+        label(for_(boxID), textNode(caption)) +*
+        input(id(boxID) +@
+          class("form-control") +@
+          type("input") +@
+          value(val) +@
+          onInput(inputCallback), h0))
+    }
+
     fun panel(name, contents) {
       div(class("row mt-3"),
         div(class("col-sm"),
@@ -521,7 +627,7 @@ fun view(model) {
       panel("Existing interactions", interactionsTable)
     };
 
-    fun mkInteractionEditor(interaction) {
+    fun mkInteractionEditor(interaction, avs) {
       var int = interaction.interaction;
 
       var buttons = {
@@ -725,9 +831,48 @@ fun view(model) {
        panel("Basic properties", contents)
       };
 
-      var affinity = MvuHTML.empty;
+      var affinity = {
+        var originalAffinity = MvuHTML.empty;
+        var logAffinity = MvuHTML.empty;
+        var affinityVoltage = MvuHTML.empty;
+        var calculateButton = MvuHTML.empty;
+ # fun renderTextBox(boxID, caption, val, inputCallback) {
 
-      var subunitSpecificity = MvuHTML.empty;
+ #      <div class="row">
+ #  <div class="col-sm">
+ #    One of three columns
+ #  </div>
+ #  <div class="col-sm">
+ #    One of three columns
+ #  </div>
+ #  <div class="col-sm">
+ #    One of three columns
+ #  </div>
+ #</div>
+        var affinityContents =
+          div(class("row"),
+            div(class("col-sm"), originalAffinity) +*
+            div(class("col-sm"), logAffinity) +*
+            div(class("col-sm"), originalAffinity)) +*
+          div(class("row"), calculateButton);
+
+
+        var affinityBoxes =
+          panel("Affinity values", affinityContents);
+
+        var concentrationRange = MvuHTML.empty;
+        var rank = MvuHTML.empty;
+        var percentActivity = MvuHTML.empty;
+
+
+        var contents =
+          affinityBoxes +*
+          concentrationRange +*
+          rank +*
+          percentActivity;
+
+        panel("Interaction affinity", contents)
+      };
 
       var actionComment = {
         var caption =
@@ -789,7 +934,6 @@ fun view(model) {
         displayOptions +*
         basicProperties +*
         affinity +*
-        subunitSpecificity +*
         actionComment +*
         assayInfo +*
         malariaInfo +*
@@ -802,7 +946,7 @@ fun view(model) {
 
     var interactionEditor =
       switch(model.currentInteraction) {
-        case Just(i) -> mkInteractionEditor(i)
+        case Just((i, avs)) -> mkInteractionEditor(i, avs)
         case Nothing -> MvuHTML.empty
       };
 

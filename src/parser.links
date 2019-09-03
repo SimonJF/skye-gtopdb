@@ -4,7 +4,6 @@ open import Utility;
 # A simple parser for the GtoPdb markup.
 # Limitations right now:
 #  1. Cannot handle '<' and '>' characters which do not refer to tags
-#  2. Doesn't handle HTML attributes yet
 
 typename Attribute = (String, String);
 
