@@ -612,6 +612,23 @@ fun view(model) {
           onChange(changeFn), options))
     }
 
+    fun renderCheckbox(checkID, text, value, fn) {
+      var checkedAttr =
+        if (value) {
+          MvuAttrs.attr("checked", "checked")
+        } else {
+          MvuAttrs.empty
+        };
+
+      div(class("form-check"),
+        input(class("form-check-input") +@
+          type("checkbox") +@
+          id(checkID) +@
+          checkedAttr +@
+          onClick(fn), h0) +*
+      label(class("form-check-label") +@ for_(checkID), textNode(text)))
+    }
+
     fun panel(name, contents) {
       div(class("row mt-3"),
         div(class("col-sm"),
@@ -779,23 +796,10 @@ fun view(model) {
       };
 
       var displayOptions = {
-        fun renderCheckbox((displayOption, text, value), i) {
-          var checkedAttr =
-            if (value) {
-              MvuAttrs.attr("checked", "checked")
-            } else {
-              MvuAttrs.empty
-            };
-
+        fun renderCB((displayOption, text, value), i) {
           var checkID = "check" ^^ intToString(i);
-
-          div(class("form-check form-check-inline"),
-            input(class("form-check-input") +@
-              type("checkbox") +@
-              id(checkID) +@
-              checkedAttr +@
-              onClick(fun() { ChangeDisplayOption(displayOption, not(value)) }), h0) +*
-            label(class("form-check-label") +@ for_(checkID), textNode(text)))
+          renderCheckbox(checkID, text, value,
+            fun() { ChangeDisplayOption(displayOption, not(value)) })
         }
 
         var options = [
@@ -804,7 +808,7 @@ fun view(model) {
           (Hide, "Hide", int.hide)
         ];
 
-        var options = MvuHTML.concat(mapi(renderCheckbox, options));
+        var options = MvuHTML.concat(mapi(renderCB, options));
 
         panel("Display options", options)
       };
@@ -934,7 +938,8 @@ fun view(model) {
 
       var affinity = {
 
-        fun renderHighMedLowBoxes(caption, pref, affinityType, highVal, medVal, lowVal) {
+        fun renderHighMedLowBoxes(caption, pref, affinityType, highVal, medVal,
+            lowVal, extras) {
           panel(caption,
             renderTextBox(pref ^^ "High", "High",
                 highVal, fun(str) {
@@ -944,13 +949,11 @@ fun view(model) {
                   ChangeAffinity(affinityType, Median, str) }) +*
             renderTextBox(pref ^^ "Low", "Low",
                 lowVal, fun(str) {
-                  ChangeAffinity(affinityType, Low, str) }))
+                  ChangeAffinity(affinityType, Low, str) }) +*
+            extras)
         }
 
         var originalAffinity = {
-          var boxes =
-            renderHighMedLowBoxes("Original Affinity Value (nM)", "orig", AffinityOriginal,
-                avs.origHigh, avs.origMedian, avs.origLow);
           # Affinity units
           var unitOptions = [ "-", "Kd", "Ki", "IC50", "EC50", "KB" ];
           fun renderUnit(unit) {
@@ -978,21 +981,30 @@ fun view(model) {
             option(value(rel) +@ selAttr, textNode(rel))
           }
 
-
           var relationOptions = [ "=", ">", "<", "~" ];
           var relation =
             renderDropdown("origAffinityRelation", "Relation", renderRelation,
                 fun(str) { ChangeOriginalAffinityRelation(str) }, relationOptions);
-          boxes +* units +* relation
+          renderHighMedLowBoxes("Original Affinity Value (nM)", "orig", AffinityOriginal,
+              avs.origHigh, avs.origMedian, avs.origLow, units +* relation)
         };
 
         var logAffinity =
           renderHighMedLowBoxes("Affinity (-log)", "log", AffinityLog,
-              avs.logHigh, avs.logMedian, avs.logLow);
+              avs.logHigh, avs.logMedian, avs.logLow, h0);
 
-        var affinityVoltage =
+        var affinityVoltage = {
+          var cb = renderCheckbox("physVoltageCB", "Physiological Voltage",
+            int.affinity_physiological_voltage,
+            fun() {
+              SetPhysiologicalVoltage(not(int.affinity_physiological_voltage))
+            });
+
+          var cb = div(class("row"), cb);
+
           renderHighMedLowBoxes("Affinity Voltage (mV)", "av", AffinityVoltage,
-              avs.avHigh, avs.avMedian, avs.avLow);
+            avs.avHigh, avs.avMedian, avs.avLow, cb)
+        };
 
         var calculateButton = MvuHTML.empty;
 
