@@ -96,7 +96,7 @@ typename DisplayOption = [| ShowInConcise | OnlyInConcise | Hide |];
 
 typename Field =
   [| LigandContext | ReceptorSite | ActionComment | AssayDescription
-   | AssayConditions | AssayURL |];
+   | AssayConditions | AssayURL | ConcentrationRange |];
 
 typename InteractionProperty =
   [| Endogenous | UseDependent | VoltageDependent
@@ -430,6 +430,8 @@ fun updt(msg, model) {
                 (interaction with assay_conditions = val)
               case AssayURL ->
                 (interaction with assay_url = val)
+              case ConcentrationRange ->
+                (interaction with concentration_range = val)
             };
             (int with =interaction)
         })
@@ -832,23 +834,34 @@ fun view(model) {
       };
 
       var affinity = {
-        var originalAffinity = MvuHTML.empty;
-        var logAffinity = MvuHTML.empty;
-        var affinityVoltage = MvuHTML.empty;
-        var calculateButton = MvuHTML.empty;
- # fun renderTextBox(boxID, caption, val, inputCallback) {
 
- #      <div class="row">
- #  <div class="col-sm">
- #    One of three columns
- #  </div>
- #  <div class="col-sm">
- #    One of three columns
- #  </div>
- #  <div class="col-sm">
- #    One of three columns
- #  </div>
- #</div>
+        fun renderHighMedLowBoxes(caption, pref, affinityType, highVal, medVal, lowVal) {
+          panel(caption,
+            renderTextBox(pref ^^ "High", "High",
+                highVal, fun(str) {
+                  ChangeAffinity(affinityType, High, str) }) +*
+            renderTextBox(pref ^^ "Median", "Median",
+                medVal, fun(str) {
+                  ChangeAffinity(affinityType, Median, str) }) +*
+            renderTextBox(pref ^^ "Low", "Low",
+                lowVal, fun(str) {
+                  ChangeAffinity(affinityType, Low, str) }))
+        }
+
+        var originalAffinity =
+          renderHighMedLowBoxes("Original Affinity Value (nM)", "orig", AffinityOriginal,
+              avs.origHigh, avs.origMedian, avs.origLow);
+
+        var logAffinity =
+          renderHighMedLowBoxes("Affinity (-log)", "av", AffinityLog,
+              avs.logHigh, avs.logMedian, avs.logLow);
+
+        var affinityVoltage =
+          renderHighMedLowBoxes("Affinity Voltage (mV)", "av", AffinityVoltage,
+              avs.avHigh, avs.avMedian, avs.avLow);
+
+        var calculateButton = MvuHTML.empty;
+
         var affinityContents =
           div(class("row"),
             div(class("col-sm"), originalAffinity) +*
@@ -860,10 +873,18 @@ fun view(model) {
         var affinityBoxes =
           panel("Affinity values", affinityContents);
 
-        var concentrationRange = MvuHTML.empty;
-        var rank = MvuHTML.empty;
-        var percentActivity = MvuHTML.empty;
+        var concentrationRange =
+          renderTextBox("concentrationRange", "Concentration Range",
+              int.concentration_range, fun(str) {
+                UpdateField(ConcentrationRange, str) });
 
+        var rank =
+          renderTextBox("rank", "Rank",
+              avs.rank, fun(str) { ChangeRank(str) });
+
+        var percentActivity =
+          renderTextBox("percentActivity", "Percent Activity",
+              avs.rank, fun(str) { ChangePercentActivity(str) });
 
         var contents =
           affinityBoxes +*
