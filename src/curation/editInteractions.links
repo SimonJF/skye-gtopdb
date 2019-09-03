@@ -5,6 +5,7 @@ import MvuHTML;
 import MvuAttrs;
 import Species;
 import InteractionUtilities;
+open import Utility;
 
 # TODAY:
 #  - Affinity box
@@ -52,6 +53,8 @@ typename InteractionInfo =
    references: [ReferenceID]);
 
 
+typename Error = String;
+
 typename Model =
   Maybe((
       object: Tables.RawObject,
@@ -61,6 +64,7 @@ typename Model =
       currentInteraction: Maybe((InteractionInfo, AffinityValues)),
       references: [Tables.DbReference],
       speciesMap: Species.SpeciesMap,
+      errors: [Error],
       submit: (Maybe(Tables.DbReceptorBasic), [InteractionInfo]) {}~> ()
   ));
 
@@ -266,6 +270,7 @@ fun getInitialModel(objectID) {
             interactions = x.interactions,
             currentInteraction = Nothing,
             speciesMap = Species.getSpeciesMap(),
+            errors = [],
             references = allReferences))
   }
 }
@@ -312,25 +317,56 @@ fun updt(msg, model) {
       (model with =currentInteraction)
     }
 
-    switch(msg) {
-      case UpdateComment(ty, newVal) ->
-        switch(model.receptorBasic) {
-          case Just(rb) ->
-            var newRb = updateComment(ty, newVal, rb);
-            (model with receptorBasic = Just(newRb))
-          case Nothing -> model
-        }
+    fun submitCurrentInteraction() {
+      fun validate(avs) {
+        var conditions =
+          [
+           (isFloat(avs.origHigh),
+              "Original Affinity Value (High) must be a floating-point number"),
+           (isFloat(avs.origMedian),
+              "Original Affinity Value (Median) must be a floating-point number"),
+           (isFloat(avs.origLow),
+              "Original Affinity Value (Low) must be a floating-point number"),
+           (isFloat(avs.logHigh),
+              "-log Affinity Value (High) must be a floating-point number"),
+           (isFloat(avs.logMedian),
+              "-log Affinity Value (Median) must be a floating-point number"),
+           (isFloat(avs.logLow),
+              "-log Affinity Value (Low) must be a floating-point number"),
+           (isFloat(avs.avHigh),
+              "Affinity Voltage (High) must be a floating-point number"),
+           (isFloat(avs.avMedian),
+              "Affinity Voltage (Median) must be a floating-point number"),
+           (isFloat(avs.avLow),
+              "Affinity Voltage (Low) must be a floating-point number")];
+        # Leave all errors where condition is not satisfied
+        filterMap(fun((cond, err)) { if (cond) { Nothing } else { Just(err) } }, conditions)
+      }
 
-      case EditInteraction(interaction) ->
-        var avs = mkAffinityValues(interaction.interaction);
-        (model with currentInteraction = Just((interaction, avs)))
+      switch(model.currentInteraction) {
+        case Nothing -> model
+        case Just((int, avs)) ->
+          var errors = validate(avs);
+          var isOK = listEmpty(errors);
+          # Only update interaction if no errors
+          if (isOK) {
+            # Now propagate the changes from AVs fields
+            var interaction = int.interaction;
+            var s2f = stringToFloat;
+            var interaction =
+              (interaction with
+               affinity_high = s2f(avs.logHigh), affinity_median =
+               s2f(avs.logMedian), affinity_low = s2f(avs.logLow),
+               #
+               affinity_voltage_high = s2f(avs.avHigh),
+               affinity_voltage_median = s2f(avs.avMedian),
+               affinity_voltage_low = s2f(avs.avLow),
+               #
+               original_affinity_high_nm = s2f(avs.origHigh),
+               original_affinity_median_nm = s2f(avs.origMedian),
+               original_affinity_low_nm = s2f(avs.origLow));
+            var int = (int with =interaction);
 
-      case SubmitCurrentInteraction ->
-        # TODO: Validate affinity data and propagate casted values
-        # to the model.
-        switch(model.currentInteraction) {
-          case Nothing -> model
-          case Just((int, _)) ->
             fun go(xs) {
               switch(xs) {
                 case [] -> []
@@ -342,8 +378,31 @@ fun updt(msg, model) {
                   }
               }
             }
-            (model with interactions = go(model.interactions), currentInteraction = Nothing)
+            (model with interactions = go(model.interactions),
+             currentInteraction = Nothing, errors = [])
+          } else {
+            redirect("#interactionEditor");
+            (model with =errors)
+          }
+      }
+    }
+
+    switch(msg) {
+      case UpdateComment(ty, newVal) ->
+        switch(model.receptorBasic) {
+          case Just(rb) ->
+            var newRb = updateComment(ty, newVal, rb);
+            (model with receptorBasic = Just(newRb))
+          case Nothing -> model
         }
+
+      case EditInteraction(interaction) ->
+        var avs = mkAffinityValues(interaction.interaction);
+        redirect("#interactionEditor");
+        (model with errors = [], currentInteraction = Just((interaction, avs)))
+
+      case SubmitCurrentInteraction ->
+        submitCurrentInteraction()
 
       case DeleteInteraction(id) ->
         (model with interactions = deleteInteraction(id))
@@ -456,7 +515,7 @@ fun updt(msg, model) {
             case (AffinityOriginal, Median) ->
               (affinityValues with origMedian = val)
             case (AffinityOriginal, High) ->
-              (affinityValues with origLow = val)
+              (affinityValues with origHigh = val)
           }
         })
 
@@ -631,6 +690,21 @@ fun view(model) {
 
     fun mkInteractionEditor(interaction, avs) {
       var int = interaction.interaction;
+
+      var errorBox = {
+        fun renderError(err) {
+          li(a0, textNode(err))
+        }
+
+        if (listEmpty(model.errors)) {
+            MvuHTML.empty
+        } else {
+          var renderedErrors = MvuHTML.concatMap(renderError, model.errors);
+          div(class("alert alert-danger") +@ role("alert"),
+            textNode("Please correct the following problems:") +*
+            ul(a0, renderedErrors))
+        }
+      };
 
       var buttons = {
         div(class("row mt-5"),
@@ -853,7 +927,7 @@ fun view(model) {
               avs.origHigh, avs.origMedian, avs.origLow);
 
         var logAffinity =
-          renderHighMedLowBoxes("Affinity (-log)", "av", AffinityLog,
+          renderHighMedLowBoxes("Affinity (-log)", "log", AffinityLog,
               avs.logHigh, avs.logMedian, avs.logLow);
 
         var affinityVoltage =
@@ -866,7 +940,7 @@ fun view(model) {
           div(class("row"),
             div(class("col-sm"), originalAffinity) +*
             div(class("col-sm"), logAffinity) +*
-            div(class("col-sm"), originalAffinity)) +*
+            div(class("col-sm"), affinityVoltage)) +*
           div(class("row"), calculateButton);
 
 
@@ -950,7 +1024,9 @@ fun view(model) {
 
       var references = MvuHTML.empty;
 
+
       var contents =
+        errorBox +*
         ligandInfo +*
         displayOptions +*
         basicProperties +*
@@ -965,11 +1041,15 @@ fun view(model) {
           intToString(interaction.interaction.interaction_id) ^^ ")", contents)
     }
 
-    var interactionEditor =
-      switch(model.currentInteraction) {
-        case Just((i, avs)) -> mkInteractionEditor(i, avs)
-        case Nothing -> MvuHTML.empty
-      };
+    var interactionEditor = {
+      var anchor = a(name("interactionEditor"), h0);
+      var editor =
+        switch(model.currentInteraction) {
+          case Just((i, avs)) -> mkInteractionEditor(i, avs)
+          case Nothing -> MvuHTML.empty
+        };
+      anchor +* editor
+    };
 
     var buttons = {
       div(class("row mt-5"),
