@@ -3,7 +3,7 @@ import Mvu;
 import MvuHTML;
 import MvuAttrs;
 import Template;
-import Utility;
+open import Utility;
 
 typename DiseaseID = Int;
 typename DiseaseName = String;
@@ -728,22 +728,6 @@ module Editing {
               var synonym = (s.synonym with disease_id = diseaseID);
               (s with =synonym, dbLinkIDs = resolvedLinks)
             }, synonyms)
-          }
-
-          # True if a given DB link has changed from the original DB capture
-          fun isChanged(proj, newVal, oldVals) {
-            fun go(oldLinks) {
-              switch(oldLinks) {
-                case [] -> false
-                case x :: xs ->
-                  if (proj(x) == proj(newVal)) {
-                    newVal <> x
-                  } else {
-                    go(xs)
-                  }
-              }
-            }
-            go(oldVals)
           }
 
           fun deletedIDs(proj, oldVals, newVals) {

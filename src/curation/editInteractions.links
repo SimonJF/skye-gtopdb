@@ -8,10 +8,10 @@ import InteractionUtilities;
 open import Utility;
 
 # TODAY:
-#  - Affinity box
-#  - Initial DB update logic
+#  - DB update logic
 
 # STILL TO DO:
+#  - Malaria pharmacology
 #  - Inserting from scratch
 #  - Adding new interactions
 #  - References
@@ -181,38 +181,215 @@ fun commit(objectID, oldInfo, newInfo) server {
   var (oldComments, oldInteractions) = oldInfo;
   var (newComments, newInteractions) = newInfo;
 
-  switch((oldComments, newComments)) {
-    case (Just(oldRB), Just(newRB)) ->
-      if (oldRB == newRB) {
-        () # Nothing doing
-      } else {
-        update (rb <-- Tables.receptor_basic)
-          where (rb.object_id == objectID)
-          set (
-            list_comments = newRB.list_comments,
-            associated_proteins_comments = newRB.associated_proteins_comments,
-            functional_assay_comments = newRB.functional_assay_comments,
-            tissue_distribution_comments = newRB.tissue_distribution_comments,
-            functions_comments = newRB.functions_comments,
-            altered_expression_comments = newRB.altered_expression_comments,
-            expression_pathophysiology_comments = newRB.expression_pathophysiology_comments,
-            mutations_pathophysiology_comments = newRB.mutations_pathophysiology_comments,
-            variants_comments = newRB.variants_comments,
-            xenobiotic_expression_comments = newRB.xenobiotic_expression_comments,
-            antibody_comments = newRB.antibody_comments,
-            agonists_comments = newRB.agonists_comments,
-            antagonists_comments = newRB.antagonists_comments,
-            allosteric_modulators_comments = newRB.allosteric_modulators_comments,
-            activators_comments = newRB.activators_comments,
-            inhibitors_comments = newRB.inhibitors_comments,
-            channel_blockers_comments = newRB.channel_blockers_comments,
-            gating_inhibitors_comments = newRB.gating_inhibitors_comments)
-      }
-    case _ ->
-      # Just(old), Nothing; Nothing, Just(new) are impossible
-      # due to the way the UI is set up, so ignore them.
-      ()
+  fun updateComments() {
+    switch((oldComments, newComments)) {
+      case (Just(oldRB), Just(newRB)) ->
+        if (oldRB == newRB) {
+          () # Nothing doing
+        } else {
+          update (rb <-- Tables.receptor_basic)
+            where (rb.object_id == objectID)
+            set (
+              list_comments = newRB.list_comments,
+              associated_proteins_comments = newRB.associated_proteins_comments,
+              functional_assay_comments = newRB.functional_assay_comments,
+              tissue_distribution_comments = newRB.tissue_distribution_comments,
+              functions_comments = newRB.functions_comments,
+              altered_expression_comments = newRB.altered_expression_comments,
+              expression_pathophysiology_comments = newRB.expression_pathophysiology_comments,
+              mutations_pathophysiology_comments = newRB.mutations_pathophysiology_comments,
+              variants_comments = newRB.variants_comments,
+              xenobiotic_expression_comments = newRB.xenobiotic_expression_comments,
+              antibody_comments = newRB.antibody_comments,
+              agonists_comments = newRB.agonists_comments,
+              antagonists_comments = newRB.antagonists_comments,
+              allosteric_modulators_comments = newRB.allosteric_modulators_comments,
+              activators_comments = newRB.activators_comments,
+              inhibitors_comments = newRB.inhibitors_comments,
+              channel_blockers_comments = newRB.channel_blockers_comments,
+              gating_inhibitors_comments = newRB.gating_inhibitors_comments)
+        }
+      case _ ->
+        # Just(old), Nothing; Nothing, Just(new) are impossible
+        # due to the way the UI is set up, so ignore them.
+        ()
+    }
   }
+
+  fun updateInteractions() {
+    var (toInsert, toUpdate) =
+      partition(fun(i) { i.interaction.interaction_id < 0 }, newInteractions);
+
+    # Diff: toUpdate will have all negative IDs removed. This is unproblematic.
+    # Assumptions:
+    #   - interaction_ids increase monotonically (Postgres guarantees this).
+    #   - interaction_ids not changed by the application
+    # So, if we sort both lists by ID, we will have the following situations:
+    #   new, old have same ID: zip and add to appropriate list
+    #   new, old have different IDs: "old" has been deleted, add to deleted list
+    fun diff(oldI, newI) {
+      fun go(oldI, newI, modified, unmodified, deleted) {
+        switch ((oldI, newI)) {
+          case ([], []) -> (modified, unmodified, deleted)
+          case ([], _) ->
+            # Should not happen; any newIs should have negative IDs and thus be
+            # in the "inserted" list
+            error("Non-empty newI list")
+          case (olds, []) ->
+            # Olds not in list, so should be deleted
+            (modified, unmodified, deleted ++ olds)
+          case (x::xs, y::ys) ->
+            if (x.interaction.interaction_id == y.interaction.interaction_id) {
+              if (x == y) {
+                go(xs, ys, modified, (x, y) :: unmodified, deleted)
+              } else {
+                go(xs, ys, (x, y) :: modified, unmodified, deleted)
+              }
+            } else {
+              go(xs, y::ys, modified, unmodified, x :: deleted)
+            }
+        }
+      }
+      go(oldI, newI, [], [], [])
+    }
+
+
+    var sortedOld = sortBy(fun(x) { x.interaction.interaction_id }, oldInteractions);
+    var sortedNew = sortBy(fun(x) { x.interaction.interaction_id }, newInteractions);
+    var (modified, unmodified, deleted) = diff(oldInteractions, newInteractions);
+
+    print("Diffed. Doing updates...\n");
+    # Now perform the updates
+    iter(fun((oldI, newI)) {
+      if (oldI.interaction <> newI.interaction) {
+        print("Before update...\n");
+
+        update (i <-- Tables.interaction)
+          where (i.interaction_id == newI.interaction.interaction_id)
+          set (
+            ligand_id = newI.interaction.ligand_id, object_id = newI.interaction.object_id,
+            type = newI.interaction.type, action = newI.interaction.action,
+            action_comment = newI.interaction.action_comment, species_id = newI.interaction.species_id,
+            endogenous = newI.interaction.endogenous, selective = newI.interaction.selective,
+            use_dependent = newI.interaction.use_dependent,
+            voltage_dependent = newI.interaction.voltage_dependent,
+            affinity_units = newI.interaction.affinity_units,
+            affinity_high = newI.interaction.affinity_high,
+            affinity_median = newI.interaction.affinity_median,
+            affinity_low = newI.interaction.affinity_low,
+            concentration_range = newI.interaction.concentration_range,
+            affinity_voltage_high = newI.interaction.affinity_voltage_high,
+            affinity_voltage_median = newI.interaction.affinity_voltage_median,
+            affinity_voltage_low = newI.interaction.affinity_voltage_low,
+            affinity_physiological_voltage = newI.interaction.affinity_physiological_voltage,
+            rank = newI.interaction.rank, selectivity = newI.interaction.selectivity,
+            original_affinity_low_nm = newI.interaction.original_affinity_low_nm,
+            original_affinity_median_nm = newI.interaction.original_affinity_median_nm,
+            original_affinity_high_nm = newI.interaction.original_affinity_high_nm,
+            original_affinity_units = newI.interaction.original_affinity_units,
+            original_affinity_relation = newI.interaction.original_affinity_relation,
+            assay_description = newI.interaction.assay_description,
+            assay_conditions = newI.interaction.assay_conditions,
+            from_grac = newI.interaction.from_grac, only_grac = newI.interaction.only_grac,
+            receptor_site = newI.interaction.receptor_site,
+            ligand_context = newI.interaction.ligand_context,
+            percent_activity = newI.interaction.percent_activity,
+            assay_url = newI.interaction.assay_url, primary_target = newI.interaction.primary_target,
+            # target_ligand_id = newI.interaction.target_ligand_id,
+            whole_organism_assay = newI.interaction.whole_organism_assay,
+            hide = newI.interaction.hide);
+        print("After update...\n")
+      } else { print("Not updating\n") };
+
+      print("Before updating refs\n");
+      if (oldI.references <> newI.references) {
+        var interactionID = newI.interaction.interaction_id;
+        var toDelete = filter(fun(x) { not(elem(x, newI.references)) }, oldI.references);
+        var toInsert = filter(fun(x) { not(elem(x, oldI.references)) }, newI.references);
+
+        var pred = contains(toDelete);
+
+        delete (iar <-- Tables.interaction_affinity_refs)
+          where (iar.interaction_id == interactionID && pred(iar.reference_id));
+
+        iter(fun(refID) {
+          insert Tables.interaction_affinity_refs
+          values [(interaction_id = interactionID, reference_id = refID)]
+        }, toInsert);
+
+      } else { () };
+      print("After updating refs\n");
+
+    }, modified);
+    print("Updated. Doing deletions...\n");
+
+    ## Do the deletions
+    var pred = contains(map(fun(x) { x.interaction.interaction_id }, deleted));
+    delete (iar <-- Tables.interaction_affinity_refs)
+      where (pred(iar.interaction_id));
+    delete (ms2i <-- Tables.malaria_stage2interaction)
+      where (pred(ms2i.interaction_id));
+    delete (i <-- Tables.interaction)
+      where (pred(i.interaction_id));
+
+    print("Deleted. Doing insertions...\n");
+
+    ## And finally do the insertions
+    iter(fun(i) {
+      # First, insert new record
+      var interactionID =
+        insert Tables.interaction
+        values [
+          (ligand_id = i.interaction.ligand_id, object_id = i.interaction.object_id,
+            type = i.interaction.type, action = i.interaction.action,
+            action_comment = i.interaction.action_comment, species_id = i.interaction.species_id,
+            endogenous = i.interaction.endogenous, selective = i.interaction.selective,
+            use_dependent = i.interaction.use_dependent,
+            voltage_dependent = i.interaction.voltage_dependent,
+            affinity_units = i.interaction.affinity_units,
+            affinity_high = i.interaction.affinity_high,
+            affinity_median = i.interaction.affinity_median,
+            affinity_low = i.interaction.affinity_low,
+            concentration_range = i.interaction.concentration_range,
+            affinity_voltage_high = i.interaction.affinity_voltage_high,
+            affinity_voltage_median = i.interaction.affinity_voltage_median,
+            affinity_voltage_low = i.interaction.affinity_voltage_low,
+            affinity_physiological_voltage = i.interaction.affinity_physiological_voltage,
+            rank = i.interaction.rank, selectivity = i.interaction.selectivity,
+            original_affinity_low_nm = i.interaction.original_affinity_low_nm,
+            original_affinity_median_nm = i.interaction.original_affinity_median_nm,
+            original_affinity_high_nm = i.interaction.original_affinity_high_nm,
+            original_affinity_units = i.interaction.original_affinity_units,
+            original_affinity_relation = i.interaction.original_affinity_relation,
+            assay_description = i.interaction.assay_description,
+            assay_conditions = i.interaction.assay_conditions,
+            from_grac = i.interaction.from_grac, only_grac = i.interaction.only_grac,
+            receptor_site = i.interaction.receptor_site,
+            ligand_context = i.interaction.ligand_context,
+            percent_activity = i.interaction.percent_activity,
+            assay_url = i.interaction.assay_url, primary_target = i.interaction.primary_target,
+            # target_ligand_id = i.interaction.target_ligand_id,
+            whole_organism_assay = i.interaction.whole_organism_assay,
+            hide = i.interaction.hide)]
+        returning interaction_id;
+      # Next, insert all references using new interaction ID
+      #var newRefs =
+      #  map(fun(r) { (r with interaction_id = interactionID) }, newI.references);
+      iter(fun(r) {
+        insert Tables.interaction_affinity_refs
+        values [(interaction_id = interactionID, reference_id = r)]
+      }, i.references);
+    }, toInsert);
+    print("Done!\n")
+
+   #print("Zipped: " ^^ show(zipped));
+   #print("\n\n\n ---- \n\n\n");
+   #print("Deleted: " ^^ show(deleted));
+   #()
+  }
+
+  updateComments();
+  updateInteractions()
 }
 
 fun getInitialModel(objectID) {
@@ -771,7 +948,7 @@ fun view(model) {
       }
 
       var interactionsTable = {
-        table_(class("table table-bordered"),
+        table_(class("table table-bordered table-sm"),
           thead(a0,
             tr(a0,
               th(a0, textNode("Ligand")) +*

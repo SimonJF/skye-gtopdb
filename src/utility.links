@@ -233,3 +233,20 @@ fun listContains(x, xs) {
       }
   }
 }
+
+# True if a given DB link has changed from the original DB capture
+fun isChanged(proj, newVal, oldVals) {
+  fun go(old) {
+    switch(old) {
+      case [] -> false
+      case x :: xs ->
+        if (proj(x) == proj(newVal)) {
+          newVal <> x
+        } else {
+          go(xs)
+        }
+    }
+  }
+  go(oldVals)
+}
+
