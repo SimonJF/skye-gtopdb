@@ -35,7 +35,11 @@ typename AffinityValues =
   );
 
 fun mkAffinityValues(int) {
-  var f2s = floatToString;
+  # Hack, since we can't currently distinguish between nulls and 0.0.
+  # This means "0.0" won't display if it's set as such in the DB --
+  # but it's a slightly better alternative than having "Infinity" pop up
+  # all over the place when calculating logarithms.
+  fun f2s(f) { if (f == 0.0) { "" } else { floatToString(f) } }
   (logHigh = f2s(int.affinity_high), logMedian = f2s(int.affinity_median),
    logLow = f2s(int.affinity_low), avHigh = f2s(int.affinity_voltage_high),
    avMedian = f2s(int.affinity_voltage_median), avLow = f2s(int.affinity_voltage_low),
@@ -120,6 +124,7 @@ typename Message =
    | SetPhysiologicalVoltage:Bool
    | ChangeOriginalAffinityUnits:String
    | ChangeOriginalAffinityRelation:String
+   | CalculateLogAffinity
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -319,27 +324,39 @@ fun updt(msg, model) {
     }
 
     fun submitCurrentInteraction() {
+      fun isValid(str) { isFloat(str) || str == "Infinity" || str == "" }
+      fun isValidPA(str) {
+        if (isFloat(str)) {
+          var paFloat = stringToFloat(str);
+          (paFloat >= 0.0) && (paFloat <= 100.0)
+        } else if (str == "") { true } else { false }
+      }
+
       fun validate(avs) {
         var conditions =
           [
-           (isFloat(avs.origHigh),
+           (isValid(avs.origHigh),
               "Original Affinity Value (High) must be a floating-point number"),
-           (isFloat(avs.origMedian),
+           (isValid(avs.origMedian),
               "Original Affinity Value (Median) must be a floating-point number"),
-           (isFloat(avs.origLow),
+           (isValid(avs.origLow),
               "Original Affinity Value (Low) must be a floating-point number"),
-           (isFloat(avs.logHigh),
+           (isValid(avs.logHigh),
               "-log Affinity Value (High) must be a floating-point number"),
-           (isFloat(avs.logMedian),
+           (isValid(avs.logMedian),
               "-log Affinity Value (Median) must be a floating-point number"),
-           (isFloat(avs.logLow),
+           (isValid(avs.logLow),
               "-log Affinity Value (Low) must be a floating-point number"),
-           (isFloat(avs.avHigh),
+           (isValid(avs.avHigh),
               "Affinity Voltage (High) must be a floating-point number"),
-           (isFloat(avs.avMedian),
+           (isValid(avs.avMedian),
               "Affinity Voltage (Median) must be a floating-point number"),
-           (isFloat(avs.avLow),
-              "Affinity Voltage (Low) must be a floating-point number")];
+           (isValid(avs.avLow),
+              "Affinity Voltage (Low) must be a floating-point number"),
+           (isValidPA(avs.percentActivity),
+              "Percentage activity must be a floating-point number between 0.0 and 100.0"),
+           (isInt(avs.rank) || avs.rank == "", "Rank must be an integer")
+          ];
         # Leave all errors where condition is not satisfied
         filterMap(fun((cond, err)) { if (cond) { Nothing } else { Just(err) } }, conditions)
       }
@@ -353,7 +370,8 @@ fun updt(msg, model) {
           if (isOK) {
             # Now propagate the changes from AVs fields
             var interaction = int.interaction;
-            var s2f = stringToFloat;
+            fun s2f(str) { if (str == "") { 0.0 } else { stringToFloat(str) }}
+            fun s2i(str) { if (str == "") { (-1) } else { stringToInt(str) }}
             var interaction =
               (interaction with
                affinity_high = s2f(avs.logHigh), affinity_median =
@@ -365,7 +383,11 @@ fun updt(msg, model) {
                #
                original_affinity_high_nm = s2f(avs.origHigh),
                original_affinity_median_nm = s2f(avs.origMedian),
-               original_affinity_low_nm = s2f(avs.origLow));
+               original_affinity_low_nm = s2f(avs.origLow),
+               #
+               percent_activity = s2f(avs.percentActivity),
+               rank = s2i(avs.rank)
+               );
             var int = (int with =interaction);
 
             fun go(xs) {
@@ -386,6 +408,28 @@ fun updt(msg, model) {
             (model with =errors)
           }
       }
+    }
+
+    fun calculateLogAffinity(avs) {
+      var multiplier = 10.0 ^. (-.(9.0));
+      var avs =
+        if (isFloat(avs.origHigh)) {
+          var affinity = stringToFloat(avs.origHigh);
+          var adjusted = -. (log10(affinity *. multiplier));
+          (avs with logHigh = floatToString(adjusted))
+        } else { avs };
+      var avs =
+        if (isFloat(avs.origMedian)) {
+          var affinity = stringToFloat(avs.origMedian);
+          var adjusted = -. (log10(affinity *. multiplier));
+          (avs with logMedian = floatToString(adjusted))
+        } else { avs };
+
+      if (isFloat(avs.origLow)) {
+        var affinity = stringToFloat(avs.origLow);
+        var adjusted = -. (log10(affinity *. multiplier));
+        (avs with logLow = floatToString(adjusted))
+      } else { avs }
     }
 
     switch(msg) {
@@ -562,6 +606,11 @@ fun updt(msg, model) {
           (avs with rank = str)
         })
 
+      case CalculateLogAffinity ->
+        updateAffinityValues(fun(avs) {
+          calculateLogAffinity(avs)
+        })
+
       # Submission
       case Submit ->
         model.submit(model.receptorBasic, model.interactions); model
@@ -627,6 +676,11 @@ fun view(model) {
           checkedAttr +@
           onClick(fn), h0) +*
       label(class("form-check-label") +@ for_(checkID), textNode(text)))
+    }
+
+    fun renderButton(f, caption, cls) {
+      button(type("button") +@ class(cls) +@
+        onClick(f), textNode(caption))
     }
 
     fun panel(name, contents) {
@@ -985,8 +1039,14 @@ fun view(model) {
           var relation =
             renderDropdown("origAffinityRelation", "Relation", renderRelation,
                 fun(str) { ChangeOriginalAffinityRelation(str) }, relationOptions);
+          var calculateButton =
+            div(class("form-group"),
+              renderButton(fun() { CalculateLogAffinity }, "Caculate -Log Affinity", "btn btn-primary"));
+
+          var extras = units +* relation +* calculateButton;
+
           renderHighMedLowBoxes("Original Affinity Value (nM)", "orig", AffinityOriginal,
-              avs.origHigh, avs.origMedian, avs.origLow, units +* relation)
+              avs.origHigh, avs.origMedian, avs.origLow, extras)
         };
 
         var logAffinity =
@@ -1000,21 +1060,17 @@ fun view(model) {
               SetPhysiologicalVoltage(not(int.affinity_physiological_voltage))
             });
 
-          var cb = div(class("row"), cb);
+          var cb = div(class("form-group"), cb);
 
           renderHighMedLowBoxes("Affinity Voltage (mV)", "av", AffinityVoltage,
             avs.avHigh, avs.avMedian, avs.avLow, cb)
         };
 
-        var calculateButton = MvuHTML.empty;
-
         var affinityContents =
           div(class("row"),
             div(class("col-sm"), originalAffinity) +*
             div(class("col-sm"), logAffinity) +*
-            div(class("col-sm"), affinityVoltage)) +*
-          div(class("row"), calculateButton);
-
+            div(class("col-sm"), affinityVoltage));
 
         var affinityBoxes =
           panel("Affinity values", affinityContents);
@@ -1030,7 +1086,7 @@ fun view(model) {
 
         var percentActivity =
           renderTextBox("percentActivity", "Percent Activity",
-              avs.rank, fun(str) { ChangePercentActivity(str) });
+              avs.percentActivity, fun(str) { ChangePercentActivity(str) });
 
         var contents =
           affinityBoxes +*
