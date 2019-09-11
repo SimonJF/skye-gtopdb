@@ -223,7 +223,8 @@ var ligand_structure = table "ligand_structure" with (ligand_id: Int, isomeric_s
 
 var list_ligand = table "list_ligand" with (object_id: Int, ligand_id: Int, display_order: Int) from db;
 
-var malaria_stage = table "malaria_stage" with (malaria_stage_id: Int, name: String, description: String, short_name: String) from db;
+typename DbMalariaStage = (malaria_stage_id: Int, name: String, description: String, short_name: String);
+var malaria_stage = table "malaria_stage" with DbMalariaStage from db;
 
 var malaria_stage2interaction = table "malaria_stage2interaction" with (interaction_id: Int, malaria_stage_id: Int) from db;
 

@@ -7,9 +7,6 @@ import Species;
 import InteractionUtilities;
 open import Utility;
 
-# TODAY:
-#  - DB update logic
-
 # STILL TO DO:
 #  - Malaria pharmacology
 #  - Inserting from scratch
@@ -18,6 +15,7 @@ open import Utility;
 
 typename InteractionID = Int;
 typename ReferenceID = Int;
+typename MalariaStageID = Int;
 
 
 # Affinity values are stored in the database as floats.  We can't modify the
@@ -53,8 +51,13 @@ fun mkAffinityValues(int) {
 typename InteractionInfo =
   (interaction: Tables.DbInteraction,
    ligand: Tables.RawLigand,
+   malariaStages: [MalariaStageID],
    references: [ReferenceID]);
 
+typename EditingInfo =
+  (interactionInfo: InteractionInfo,
+   affinityValues: AffinityValues,
+   selectedMalariaStage: MalariaStageID);
 
 typename Error = String;
 
@@ -63,8 +66,9 @@ typename Model =
       object: Tables.RawObject,
       receptorBasic: Maybe(Tables.DbReceptorBasic),
       ligands: [(ligand_id: Int, name: String)],
+      malariaStages: [Tables.DbMalariaStage],
       interactions: [InteractionInfo],
-      currentInteraction: Maybe((InteractionInfo, AffinityValues)),
+      currentInteraction: Maybe(EditingInfo),
       references: [Tables.DbReference],
       speciesMap: Species.SpeciesMap,
       errors: [Error],
@@ -125,6 +129,9 @@ typename Message =
    | ChangeOriginalAffinityUnits:String
    | ChangeOriginalAffinityRelation:String
    | CalculateLogAffinity
+   | UpdateMalariaStage:MalariaStageID
+   | AddMalariaStage
+   | DeleteMalariaStage:MalariaStageID
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -172,6 +179,7 @@ fun emptyInteraction(objectID) {
 fun emptyInteractionInfo(objectID, ligand) {
   (interaction = emptyInteraction(objectID),
    =ligand,
+   malariaStages = [],
    references = [])
 }
 
@@ -409,6 +417,10 @@ fun getInitialModel(objectID) {
               where (l.ligand_id == i.ligand_id)
               [(interaction = i,
                 ligand = l,
+                malariaStages =
+                  for (ms2i <-- Tables.malaria_stage2interaction)
+                    where (ms2i.interaction_id == i.interaction_id)
+                    [ms2i.malaria_stage_id],
                 references =
                   for (iar <-- Tables.interaction_affinity_refs)
                     where (iar.interaction_id == i.interaction_id)
@@ -434,6 +446,12 @@ fun getInitialModel(objectID) {
        #    [r]
        #};
 
+      var allMalariaStages =
+        query {
+          for (ms <-- Tables.malaria_stage)
+            [ms]
+        };
+
       var rb =
         switch(x.rbs) {
           case [] -> Nothing
@@ -448,6 +466,7 @@ fun getInitialModel(objectID) {
 
       Just((object = x.obj,
             ligands = allLigands,
+            malariaStages = allMalariaStages,
             receptorBasic = rb,
             =submit,
             interactions = x.interactions,
@@ -482,22 +501,25 @@ fun updt(msg, model) {
       }, model.interactions)
     }
 
-    fun updateCurrentInteraction(f) {
+    fun updateEditInfo(f) {
       var currentInteraction =
         switch (model.currentInteraction) {
-          case Just((int, avs)) -> Just(f(int), avs)
+          case Just(ei) -> Just(f(ei))
           case Nothing -> Nothing
         };
       (model with =currentInteraction)
     }
 
+    fun updateCurrentInteraction(f) {
+      updateEditInfo(fun(ei) {
+        (ei with interactionInfo = f(ei.interactionInfo))
+      })
+    }
+
     fun updateAffinityValues(f) {
-      var currentInteraction =
-        switch (model.currentInteraction) {
-          case Just((int, avs)) -> Just(int, f(avs))
-          case Nothing -> Nothing
-        };
-      (model with =currentInteraction)
+      updateEditInfo(fun(ei) {
+        (ei with affinityValues = f(ei.affinityValues))
+      })
     }
 
     fun submitCurrentInteraction() {
@@ -540,7 +562,9 @@ fun updt(msg, model) {
 
       switch(model.currentInteraction) {
         case Nothing -> model
-        case Just((int, avs)) ->
+        case Just(ei) ->
+          var int = ei.interactionInfo;
+          var avs = ei.affinityValues;
           var errors = validate(avs);
           var isOK = listEmpty(errors);
           # Only update interaction if no errors
@@ -618,10 +642,14 @@ fun updt(msg, model) {
           case Nothing -> model
         }
 
-      case EditInteraction(interaction) ->
-        var avs = mkAffinityValues(interaction.interaction);
+      case EditInteraction(interactionInfo) ->
+        var affinityValues =
+          mkAffinityValues(interactionInfo.interaction);
+        var ei =
+          (=interactionInfo, =affinityValues,
+           selectedMalariaStage = hd(model.malariaStages).malaria_stage_id);
         redirect("#interactionEditor");
-        (model with errors = [], currentInteraction = Just((interaction, avs)))
+        (model with errors = [], currentInteraction = Just(ei))
 
       case SubmitCurrentInteraction ->
         submitCurrentInteraction()
@@ -631,7 +659,8 @@ fun updt(msg, model) {
 
       case DeleteCurrentInteraction ->
         switch(model.currentInteraction) {
-          case Just((int, _)) ->
+          case Just(ei) ->
+            var int = ei.interactionInfo;
             var interactions = deleteInteraction(int.interaction.interaction_id);
             (model with =interactions, currentInteraction = Nothing)
           case Nothing -> (model with currentInteraction = Nothing)
@@ -788,6 +817,29 @@ fun updt(msg, model) {
           calculateLogAffinity(avs)
         })
 
+      case UpdateMalariaStage(id) ->
+        updateEditInfo(fun(ei) {
+          (ei with selectedMalariaStage = id)
+        })
+
+      case AddMalariaStage ->
+        updateEditInfo(fun(ei) {
+          var int = ei.interactionInfo;
+          var id = ei.selectedMalariaStage;
+          if (not(elem(id, int.malariaStages))) {
+            var malariaStages = int.malariaStages ++ [id];
+            (ei with interactionInfo = (int with =malariaStages))
+          } else {
+            ei
+          }
+        })
+
+      case DeleteMalariaStage(id) ->
+        updateCurrentInteraction(fun(int) {
+          var malariaStages = filter(fun(x) { x <> id }, int.malariaStages);
+          (int with =malariaStages)
+        })
+
       # Submission
       case Submit ->
         model.submit(model.receptorBasic, model.interactions); model
@@ -803,6 +855,7 @@ fun updt(msg, model) {
   }
 }
 
+sig view : (Model) ~> MvuHTML.HTML(Message)
 fun view(model) {
   open MvuHTML;
   open MvuAttrs;
@@ -969,7 +1022,9 @@ fun view(model) {
       panel("Existing interactions", interactionsTable)
     };
 
-    fun mkInteractionEditor(interaction, avs) {
+    fun mkInteractionEditor(ei) {
+      var interaction = ei.interactionInfo;
+      var avs = ei.affinityValues;
       var int = interaction.interaction;
 
       var errorBox = {
@@ -1325,7 +1380,46 @@ fun view(model) {
         panel("Assay information", contents)
       };
 
-      var malariaInfo = MvuHTML.empty;
+      var malariaInfo = {
+        fun lookupStage(id, xs) {
+          switch(xs) {
+            case [] -> error("Invalid malaria ID")
+            case x :: xs ->
+              if (x.malaria_stage_id == id) {
+                x
+              } else {
+                lookupStage(id, xs)
+              }
+          }
+        }
+
+        fun renderStage(stage) {
+          textNode(stage.name ^^ " [" ^^ intToString(stage.malaria_stage_id) ^^ "]")
+        }
+
+        var dropdown = MvuHTML.empty;
+        var stages = {
+          fun renderRow(id) {
+            # Stages associated with this interaction
+            var icon =
+              i(class("fas fa-trash fa-fw") +@
+                  title("Delete Malaria Stage") +@
+                  onClick(fun() { DeleteMalariaStage(id) }), h0);
+
+            tr(a0,
+              td(a0, renderStage(lookupStage(id, model.malariaStages))) +*
+              td(a0, icon))
+          }
+
+          var renderedStages =
+            MvuHTML.concatMap(renderRow, interaction.malariaStages);
+
+          table_(class("table table-bordered table-sm"), renderedStages)
+        };
+
+        var contents = dropdown +* stages;
+        panel("Malaria stages", contents)
+      };
 
       var references = MvuHTML.empty;
 
@@ -1350,7 +1444,7 @@ fun view(model) {
       var anchor = a(name("interactionEditor"), h0);
       var editor =
         switch(model.currentInteraction) {
-          case Just((i, avs)) -> mkInteractionEditor(i, avs)
+          case Just((ei)) -> mkInteractionEditor(ei)
           case Nothing -> MvuHTML.empty
         };
       anchor +* editor
