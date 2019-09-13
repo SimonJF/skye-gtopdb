@@ -129,7 +129,7 @@ typename Message =
    | ChangeOriginalAffinityUnits:String
    | ChangeOriginalAffinityRelation:String
    | CalculateLogAffinity
-   | UpdateMalariaStage:MalariaStageID
+   | ChangeMalariaStage:MalariaStageID
    | AddMalariaStage
    | DeleteMalariaStage:MalariaStageID
    | Submit | Cancel |];
@@ -269,6 +269,28 @@ fun commit(objectID, oldInfo, newInfo) server {
     print("Diffed. Doing updates...\n");
     # Now perform the updates
     iter(fun((oldI, newI)) {
+
+       fun updateIntLists(interaction, oldL, newL, tbl, project, mkRow) {
+        if (oldL <> newL) {
+          var interactionID = interaction.interaction_id;
+          var toDelete = filter(fun(x) { not(elem(x, newL)) }, oldL);
+          var toInsert = filter(fun(x) { not(elem(x, oldL)) }, newL);
+
+          var pred = contains(toDelete);
+
+          delete (x <-- tbl)
+            where (x.interaction_id == interactionID && pred(project(x)));
+
+        # FIXME: This doesn't work because the parser is too restrictive on the `values` clause.
+        # (Everything else seems to support it.)
+        # iter(fun(x) {
+        #   insert Tables.interaction_affinity_refs
+        #   values [mkRow(interactionID, x)]
+        # }, toInsert);
+
+        } else { () };
+      }
+
       if (oldI.interaction <> newI.interaction) {
         print("Before update...\n");
 
@@ -310,25 +332,36 @@ fun commit(objectID, oldInfo, newInfo) server {
       } else { print("Not updating\n") };
 
       print("Before updating refs\n");
-      if (oldI.references <> newI.references) {
-        var interactionID = newI.interaction.interaction_id;
-        var toDelete = filter(fun(x) { not(elem(x, newI.references)) }, oldI.references);
-        var toInsert = filter(fun(x) { not(elem(x, oldI.references)) }, newI.references);
+      # Update affinity references
+      updateIntLists(newI.interaction, oldI.references, newI.references, Tables.interaction_affinity_refs,
+          fun(x) { x.reference_id },
+          fun(x) { (interaction_id = newI.interaction.interaction_id, reference_id = x) });
+      # Update malaria stages
+      updateIntLists(newI.interaction, oldI.malariaStages, newI.malariaStages, Tables.malaria_stage2interaction,
+          fun(x) { x.malaria_stage_id },
+          fun(x) { (interaction_id = newI.interaction.interaction_id, malaria_stage_id = x) });
 
-        var pred = contains(toDelete);
+     #if (oldI.references <> newI.references) {
+     #  var interactionID = newI.interaction.interaction_id;
+     #  var toDelete = filter(fun(x) { not(elem(x, newI.references)) }, oldI.references);
+     #  var toInsert = filter(fun(x) { not(elem(x, oldI.references)) }, newI.references);
 
-        delete (iar <-- Tables.interaction_affinity_refs)
-          where (iar.interaction_id == interactionID && pred(iar.reference_id));
+     #  var pred = contains(toDelete);
 
-        iter(fun(refID) {
-          insert Tables.interaction_affinity_refs
-          values [(interaction_id = interactionID, reference_id = refID)]
-        }, toInsert);
+     #  delete (iar <-- Tables.interaction_affinity_refs)
+     #    where (iar.interaction_id == interactionID && pred(iar.reference_id));
 
-      } else { () };
+     #  iter(fun(refID) {
+     #    insert Tables.interaction_affinity_refs
+     #    values [(interaction_id = interactionID, reference_id = refID)]
+     #  }, toInsert);
+
+     #} else { () };
       print("After updating refs\n");
 
     }, modified);
+
+
     print("Updated. Doing deletions...\n");
 
     ## Do the deletions
@@ -817,7 +850,7 @@ fun updt(msg, model) {
           calculateLogAffinity(avs)
         })
 
-      case UpdateMalariaStage(id) ->
+      case ChangeMalariaStage(id) ->
         updateEditInfo(fun(ei) {
           (ei with selectedMalariaStage = id)
         })
@@ -1394,10 +1427,28 @@ fun view(model) {
         }
 
         fun renderStage(stage) {
-          textNode(stage.name ^^ " [" ^^ intToString(stage.malaria_stage_id) ^^ "]")
+          textNode(stage.name ^^ " [ID: " ^^ intToString(stage.malaria_stage_id) ^^ "]")
         }
 
-        var dropdown = MvuHTML.empty;
+        var dropdown = {
+          fun renderStageOption(x) {
+            var selAttr =
+              if (x.malaria_stage_id == ei.selectedMalariaStage) {
+                attr("selected", "selected")
+              } else {
+                MvuAttrs.empty
+              };
+            option(value(intToString(x.malaria_stage_id)) +@ selAttr, renderStage(x))
+          }
+
+          div(class("form-inline"),
+            div(class("form-group mb-2"),
+              renderDropdown("malariaStage", "Malaria Stage", renderStageOption,
+                  fun(id) { ChangeMalariaStage(stringToInt(id)) }, model.malariaStages)) +*
+            button(class("mx-sm-3 btn btn-primary mb-2")
+              +@ onClick(fun() { AddMalariaStage }), textNode("Add")))
+        };
+
         var stages = {
           fun renderRow(id) {
             # Stages associated with this interaction
@@ -1411,10 +1462,13 @@ fun view(model) {
               td(a0, icon))
           }
 
-          var renderedStages =
-            MvuHTML.concatMap(renderRow, interaction.malariaStages);
-
-          table_(class("table table-bordered table-sm"), renderedStages)
+          if (listEmpty(interaction.malariaStages)) {
+            textNode("No malaria stages associated with this interaction.")
+          } else {
+            var renderedStages =
+              MvuHTML.concatMap(renderRow, interaction.malariaStages);
+            table_(class("table table-bordered table-sm"), renderedStages)
+          }
         };
 
         var contents = dropdown +* stages;
