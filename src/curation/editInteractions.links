@@ -270,26 +270,27 @@ fun commit(objectID, oldInfo, newInfo) server {
     # Now perform the updates
     iter(fun((oldI, newI)) {
 
-       fun updateIntLists(interaction, oldL, newL, tbl, project, mkRow) {
-        if (oldL <> newL) {
-          var interactionID = interaction.interaction_id;
-          var toDelete = filter(fun(x) { not(elem(x, newL)) }, oldL);
-          var toInsert = filter(fun(x) { not(elem(x, oldL)) }, newL);
+       # Alas -- We can't do this yet, since the we cannot abstract over the
+       # `values` field since field sets are not first-class
 
-          var pred = contains(toDelete);
+       # fun updateIntLists(interaction, oldL, newL, tbl, project, mkRow) {
+       #  if (oldL <> newL) {
+       #    var interactionID = interaction.interaction_id;
+       #    var toDelete = filter(fun(x) { not(elem(x, newL)) }, oldL);
+       #    var toInsert = filter(fun(x) { not(elem(x, oldL)) }, newL);
 
-          delete (x <-- tbl)
-            where (x.interaction_id == interactionID && pred(project(x)));
+       #    var pred = contains(toDelete);
 
-        # FIXME: This doesn't work because the parser is too restrictive on the `values` clause.
-        # (Everything else seems to support it.)
-        # iter(fun(x) {
-        #   insert Tables.interaction_affinity_refs
-        #   values [mkRow(interactionID, x)]
-        # }, toInsert);
+       #    delete (x <-- tbl)
+       #      where (x.interaction_id == interactionID && pred(project(x)));
 
-        } else { () };
-      }
+       #    iter(fun(x) {
+       #      insert Tables.interaction_affinity_refs
+       #      values (mkRow(interactionID, x))
+       #    }, toInsert);
+
+       #  } else { () };
+       #}
 
       if (oldI.interaction <> newI.interaction) {
         print("Before update...\n");
@@ -332,31 +333,52 @@ fun commit(objectID, oldInfo, newInfo) server {
       } else { print("Not updating\n") };
 
       print("Before updating refs\n");
-      # Update affinity references
-      updateIntLists(newI.interaction, oldI.references, newI.references, Tables.interaction_affinity_refs,
-          fun(x) { x.reference_id },
-          fun(x) { (interaction_id = newI.interaction.interaction_id, reference_id = x) });
-      # Update malaria stages
-      updateIntLists(newI.interaction, oldI.malariaStages, newI.malariaStages, Tables.malaria_stage2interaction,
-          fun(x) { x.malaria_stage_id },
-          fun(x) { (interaction_id = newI.interaction.interaction_id, malaria_stage_id = x) });
+   #  # Update affinity references
+   #  updateIntLists(newI.interaction, oldI.references, newI.references, Tables.interaction_affinity_refs,
+   #      fun(x) { x.reference_id },
+   #      fun(x) { (interaction_id = newI.interaction.interaction_id, reference_id = x) });
+   #  # Update malaria stages
+   #  updateIntLists(newI.interaction, oldI.malariaStages, newI.malariaStages, Tables.malaria_stage2interaction,
+   #      fun(x) { x.malaria_stage_id },
+   #      fun(x) { (interaction_id = newI.interaction.interaction_id, malaria_stage_id = x) });
 
-     #if (oldI.references <> newI.references) {
-     #  var interactionID = newI.interaction.interaction_id;
-     #  var toDelete = filter(fun(x) { not(elem(x, newI.references)) }, oldI.references);
-     #  var toInsert = filter(fun(x) { not(elem(x, oldI.references)) }, newI.references);
+      # A bit more repetitive than I'd like, since we can't abstract over insert statements right now.
+      # (See above for what I'd like to have written)
+      var interactionID = newI.interaction.interaction_id;
+      if (oldI.references <> newI.references) {
+        var toDelete = filter(fun(x) { not(elem(x, newI.references)) }, oldI.references);
+        var toInsert = filter(fun(x) { not(elem(x, oldI.references)) }, newI.references);
 
-     #  var pred = contains(toDelete);
+        var pred = contains(toDelete);
 
-     #  delete (iar <-- Tables.interaction_affinity_refs)
-     #    where (iar.interaction_id == interactionID && pred(iar.reference_id));
+        delete (iar <-- Tables.interaction_affinity_refs)
+          where (iar.interaction_id == interactionID && pred(iar.reference_id));
 
-     #  iter(fun(refID) {
-     #    insert Tables.interaction_affinity_refs
-     #    values [(interaction_id = interactionID, reference_id = refID)]
-     #  }, toInsert);
+        var insertRecords =
+          map(fun(x) { (interaction_id = interactionID, reference_id = x) }, toInsert);
 
-     #} else { () };
+        insert Tables.interaction_affinity_refs
+          values (interaction_id, reference_id)
+          insertRecords
+      } else { () };
+
+      if (oldI.malariaStages <> newI.malariaStages) {
+        var toDelete = filter(fun(x) { not(elem(x, newI.malariaStages)) }, oldI.malariaStages);
+        var toInsert = filter(fun(x) { not(elem(x, oldI.malariaStages)) }, newI.malariaStages);
+
+        var pred = contains(toDelete);
+
+        delete (ms2i<-- Tables.malaria_stage2interaction)
+          where (ms2i.interaction_id == interactionID && pred(ms2i.malaria_stage_id));
+
+        var insertRecords =
+          map(fun(x) { (interaction_id = interactionID, malaria_stage_id = x) }, toInsert);
+
+        insert Tables.malaria_stage2interaction
+          values (interaction_id, malaria_stage_id)
+          insertRecords
+
+      } else { () };
       print("After updating refs\n");
 
     }, modified);
