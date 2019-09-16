@@ -45,7 +45,7 @@ fun renderMarkup(m, refs, ligands) {
     switch(m) {
       case MarkupEmpty -> MvuHTML.empty
       case MarkupAppend(m1, m2) -> go(m1) +* go(m2)
-      case MarkupText(txt) -> textNode(txt)
+      case MarkupText(txt) -> unescapedTextNode(txt)
       case MarkupReferenceTag(id) -> Reference.renderCitation(id, refs)
       case MarkupLigandTag(id) ->
         var ligandMarkup = switch(lookup(id, ligands)) {

@@ -52,7 +52,10 @@ typename InteractionInfo =
   (interaction: Tables.DbInteraction,
    ligand: Tables.RawLigand,
    malariaStages: [MalariaStageID],
-   references: [ReferenceID]);
+   # Since we don't have an efficient map type, I'm resorting to storing all
+   # reference data here instead of just the reference ID. This is worth
+   # revisiting when I get round to implementing one.
+   references: [Tables.DbReference]);
 
 typename EditingInfo =
   (interactionInfo: InteractionInfo,
@@ -346,8 +349,10 @@ fun commit(objectID, oldInfo, newInfo) server {
       # (See above for what I'd like to have written)
       var interactionID = newI.interaction.interaction_id;
       if (oldI.references <> newI.references) {
-        var toDelete = filter(fun(x) { not(elem(x, newI.references)) }, oldI.references);
-        var toInsert = filter(fun(x) { not(elem(x, oldI.references)) }, newI.references);
+        var toDelete = filterMap(fun(x) { if (not(elem(x, newI.references))) {
+              Just(x.reference_id) } else { Nothing } }, oldI.references);
+        var toInsert = filterMap(fun(x) { if (not(elem(x, oldI.references))) {
+            Just(x.reference_id) } else { Nothing } }, newI.references);
 
         var pred = contains(toDelete);
 
@@ -355,7 +360,8 @@ fun commit(objectID, oldInfo, newInfo) server {
           where (iar.interaction_id == interactionID && pred(iar.reference_id));
 
         var insertRecords =
-          map(fun(x) { (interaction_id = interactionID, reference_id = x) }, toInsert);
+          map(fun(x) { (interaction_id = interactionID, reference_id =
+                x) }, toInsert);
 
         insert Tables.interaction_affinity_refs
           values (interaction_id, reference_id)
@@ -440,7 +446,7 @@ fun commit(objectID, oldInfo, newInfo) server {
       #  map(fun(r) { (r with interaction_id = interactionID) }, newI.references);
       iter(fun(r) {
         insert Tables.interaction_affinity_refs
-        values [(interaction_id = interactionID, reference_id = r)]
+        values [(interaction_id = interactionID, reference_id = r.reference_id)]
       }, i.references);
     }, toInsert);
     print("Done!\n")
@@ -479,7 +485,9 @@ fun getInitialModel(objectID) {
                 references =
                   for (iar <-- Tables.interaction_affinity_refs)
                     where (iar.interaction_id == i.interaction_id)
-                    [iar.reference_id])
+                    for (r <-- Tables.reference)
+                      where (r.reference_id == iar.reference_id)
+                      [r])
               ])
         ]
     };
@@ -1496,7 +1504,19 @@ fun view(model) {
         panel("Malaria stages", contents)
       };
 
-      var references = MvuHTML.empty;
+      var references = {
+        var dropdown = {
+          MvuHTML.empty
+        };
+
+        var refTable = {
+          MvuHTML.empty
+        };
+
+        var contents = dropdown +* refTable;
+
+        panel("Affinity references", contents)
+      };
 
 
       var contents =
