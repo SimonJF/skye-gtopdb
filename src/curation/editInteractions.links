@@ -1671,7 +1671,42 @@ fun view(model) {
         }
 
         var queryPane = {
-          textNode("TODO: Query pane")
+
+          var results = ei.referenceQueryResults;
+
+          # TODO: Go from here
+          var queryBoxes = MvuHTML.empty;
+
+          var resultsTable = {
+            fun renderRow(ref) {
+              var icon =
+                i(class("fas fa-plus fa-fw") +@
+                    title("Add Reference") +@
+                    onClick(fun() { AddReference(ref) }), h0);
+
+              tr(a0,
+                td(a0, textNode(renderRef(ref))) +*
+                td(a0, icon))
+            }
+
+            switch(results) {
+              case Nothing ->
+                div(class("text-center"),
+                  div(class("spinner-border") +@ role("status"),
+                    span(class("sr-only"), textNode("Loading..."))))
+
+              case Just(results) ->
+                if (listEmpty(results)) {
+                  textNode("No results.")
+                } else {
+                  var renderedResults =
+                    MvuHTML.concatMap(renderRow, results);
+                  table_(class("table table-bordered table-sm"), renderedResults)
+                }
+            }
+          };
+
+          queryBoxes +* resultsTable
         };
 
         var refTable = {
