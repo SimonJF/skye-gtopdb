@@ -3,6 +3,7 @@ import Template;
 import Mvu;
 import MvuHTML;
 import MvuAttrs;
+import MvuCommands;
 import Species;
 import InteractionUtilities;
 open import Utility;
@@ -57,11 +58,22 @@ typename InteractionInfo =
    # revisiting when I get round to implementing one.
    references: [Tables.DbReference]);
 
+typename ReferenceQuery = (
+  authors: String,
+  title: String,
+  journal: String,
+  year: Int
+);
+
+typename ReferenceQueryField =
+  [| Authors:String | Title:String | Journal:String | Year:Int |];
+
 typename EditingInfo =
   (interactionInfo: InteractionInfo,
    affinityValues: AffinityValues,
    selectedMalariaStage: MalariaStageID,
-   selectedReference: Tables.DbReference
+   referenceQuery: ReferenceQuery,
+   referenceQueryResults: Maybe([Tables.DbReference])
   );
 
 typename Error = String;
@@ -74,7 +86,6 @@ typename Model =
       malariaStages: [Tables.DbMalariaStage],
       interactions: [InteractionInfo],
       currentInteraction: Maybe(EditingInfo),
-      references: [Tables.DbReference],
       speciesMap: Species.SpeciesMap,
       errors: [Error],
       submit: (Maybe(Tables.DbReceptorBasic), [InteractionInfo]) {}~> ()
@@ -137,9 +148,11 @@ typename Message =
    | ChangeMalariaStage:MalariaStageID
    | AddMalariaStage
    | DeleteMalariaStage:MalariaStageID
-   | AddReference
-   | ChangeReference:Tables.DbReference
+   | AddReference:Tables.DbReference
    | DeleteReference:Tables.DbReference
+   | UpdateReferenceQuery:ReferenceQueryField
+   | SubmitReferenceQuery
+   | ReferenceQueryResults:[Tables.DbReference]
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -191,7 +204,7 @@ fun emptyInteractionInfo(objectID, ligand) {
    references = [])
 }
 
-
+#### SERVER FUNCTIONS ####
 sig commit: (Int, (Maybe(Tables.DbReceptorBasic), [InteractionInfo]), (Maybe(Tables.DbReceptorBasic), [InteractionInfo])) {}~> ()
 fun commit(objectID, oldInfo, newInfo) server {
   var (oldComments, oldInteractions) = oldInfo;
@@ -500,17 +513,12 @@ fun getInitialModel(objectID) {
   switch (object) {
     case [] -> Nothing
     case x :: _ ->
+      # We may not need this.
       var allLigands =
         query {
           for (l <-- Tables.ligand)
             [(ligand_id = l.ligand_id, name = l.name)]
         };
-
-      var allReferences =
-        query {
-          for (r <-- Tables.reference)
-            [r]
-         };
 
       var allMalariaStages =
         sortBy(fun(ms) { ms.malaria_stage_id },
@@ -539,14 +547,56 @@ fun getInitialModel(objectID) {
             interactions = x.interactions,
             currentInteraction = Nothing,
             speciesMap = Species.getSpeciesMap(),
-            errors = [],
-            references = allReferences))
+            errors = []))
   }
 }
 
 
-sig updt : (Message, Model) {}~> Model
+
+fun submitReferenceQuery(rq) server {
+
+  fun pred(ref) {
+    var authorsPred =
+      if (rq.authors <> "") {
+        ref.authors =~ /^{rq.authors}.*/
+      } else { true };
+
+    var titlePred =
+      if (rq.title <> "") {
+        ref.article_title =~ /^{rq.title}.*/
+      } else { true };
+
+    var journalPred =
+      if (rq.journal <> "") {
+        ref.title =~ /^{rq.journal}.*/
+      } else { true };
+
+    var yearPred =
+      if (rq.year > 0) {
+        ref.year == rq.year
+      } else { true };
+
+    authorsPred && titlePred && journalPred && yearPred
+  }
+
+  var res = query {
+    for (r <-- Tables.reference)
+      where (pred(r))
+      [r]
+  };
+
+  ReferenceQueryResults(res)
+}
+
+#### CLIENT FUNCTIONS ####
+
+var emptyReferenceQuery =
+  (authors = "", title = "", journal = "", year = (-1));
+
+
+sig updt : (Message, Model) {}~> (Model, MvuCommands.Command(Message))
 fun updt(msg, model) {
+  fun noCmd(x) { (x, MvuCommands.empty) }
   fun updtModel(model) {
     fun updateComment(ty, newVal, rb) {
       switch(ty) {
@@ -705,42 +755,43 @@ fun updt(msg, model) {
         switch(model.receptorBasic) {
           case Just(rb) ->
             var newRb = updateComment(ty, newVal, rb);
-            (model with receptorBasic = Just(newRb))
-          case Nothing -> model
+            noCmd((model with receptorBasic = Just(newRb)))
+          case Nothing -> noCmd(model)
         }
 
       case EditInteraction(interactionInfo) ->
         var affinityValues =
           mkAffinityValues(interactionInfo.interaction);
+        var referenceQuery = emptyReferenceQuery;
         var ei =
           (=interactionInfo, =affinityValues,
            selectedMalariaStage = hd(model.malariaStages).malaria_stage_id,
-           selectedReference = hd(model.references)
+           =referenceQuery, referenceQueryResults = Just([])
           );
         redirect("#interactionEditor");
-        (model with errors = [], currentInteraction = Just(ei))
+        noCmd((model with errors = [], currentInteraction = Just(ei)))
 
       case SubmitCurrentInteraction ->
-        submitCurrentInteraction()
+        noCmd(submitCurrentInteraction())
 
       case DeleteInteraction(id) ->
-        (model with interactions = deleteInteraction(id))
+        noCmd((model with interactions = deleteInteraction(id)))
 
       case DeleteCurrentInteraction ->
         switch(model.currentInteraction) {
           case Just(ei) ->
             var int = ei.interactionInfo;
             var interactions = deleteInteraction(int.interaction.interaction_id);
-            (model with =interactions, currentInteraction = Nothing)
-          case Nothing -> (model with currentInteraction = Nothing)
+            noCmd((model with =interactions, currentInteraction = Nothing))
+          case Nothing -> noCmd((model with currentInteraction = Nothing))
         }
 
       case CancelCurrentInteraction ->
-        (model with currentInteraction = Nothing)
+        noCmd((model with currentInteraction = Nothing))
 
       # Editing
       case ChangeDisplayOption(displayOption, val) ->
-        updateCurrentInteraction(fun(int) {
+        noCmd(updateCurrentInteraction(fun(int) {
           var interaction = int.interaction;
           var interaction =
             switch (displayOption) {
@@ -748,125 +799,136 @@ fun updt(msg, model) {
               case OnlyInConcise -> (interaction with only_grac = val)
               case Hide -> (interaction with hide = val)
             };
-          (int with =interaction) })
+          (int with =interaction) }))
 
       case ChangeSpeciesID(speciesID) ->
-        updateCurrentInteraction(fun(int) {
-            var interaction = int.interaction;
-            var interaction = (interaction with species_id = speciesID);
-            (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+              var interaction = int.interaction;
+              var interaction = (interaction with species_id = speciesID);
+              (int with =interaction)
+          }))
 
       case ChangeInteractionType(type) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction = (interaction with =type);
-          (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction = (interaction with =type);
+            (int with =interaction)
+          }))
 
       case ChangeAction(action) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction = (interaction with =action);
-          (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction = (interaction with =action);
+            (int with =interaction)
+          }))
 
       case ChangeSelectivity(selectivity) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction = (interaction with =selectivity);
-          (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction = (interaction with =selectivity);
+            (int with =interaction)
+          }))
 
       case ChangeInteractionProperty(prop, val) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction =
-            switch(prop) {
-              case Endogenous -> (interaction with endogenous = val)
-              case UseDependent -> (interaction with use_dependent = val)
-              case VoltageDependent -> (interaction with voltage_dependent = val)
-              case PrimaryTarget -> (interaction with primary_target = val)
-              case WholeOrganismAssay -> (interaction with whole_organism_assay = val)
-            };
-          (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction =
+              switch(prop) {
+                case Endogenous -> (interaction with endogenous = val)
+                case UseDependent -> (interaction with use_dependent = val)
+                case VoltageDependent -> (interaction with voltage_dependent = val)
+                case PrimaryTarget -> (interaction with primary_target = val)
+                case WholeOrganismAssay -> (interaction with whole_organism_assay = val)
+              };
+            (int with =interaction)
+          }))
 
       case UpdateField(field, val) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction =
-            switch(field) {
-              case LigandContext ->
-                (interaction with ligand_context = val)
-              case ReceptorSite ->
-                (interaction with receptor_site = val)
-              case ActionComment ->
-                (interaction with action_comment = val)
-              case AssayDescription ->
-                (interaction with assay_description = val)
-              case AssayConditions ->
-                (interaction with assay_conditions = val)
-              case AssayURL ->
-                (interaction with assay_url = val)
-              case ConcentrationRange ->
-                (interaction with concentration_range = val)
-            };
-            (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction =
+              switch(field) {
+                case LigandContext ->
+                  (interaction with ligand_context = val)
+                case ReceptorSite ->
+                  (interaction with receptor_site = val)
+                case ActionComment ->
+                  (interaction with action_comment = val)
+                case AssayDescription ->
+                  (interaction with assay_description = val)
+                case AssayConditions ->
+                  (interaction with assay_conditions = val)
+                case AssayURL ->
+                  (interaction with assay_url = val)
+                case ConcentrationRange ->
+                  (interaction with concentration_range = val)
+              };
+              (int with =interaction)
+          }))
 
       case ChangeAffinity(ty, box, val) ->
-        updateAffinityValues(fun(affinityValues) {
-          switch ((ty, box)) {
-            case (AffinityLog, Low) ->
-              (affinityValues with logLow = val)
-            case (AffinityLog, Median) ->
-              (affinityValues with logMedian = val)
-            case (AffinityLog, High) ->
-              (affinityValues with logHigh = val)
-            case (AffinityVoltage, Low) ->
-              (affinityValues with avLow = val)
-            case (AffinityVoltage, Median) ->
-              (affinityValues with avMedian = val)
-            case (AffinityVoltage, High) ->
-              (affinityValues with avHigh = val)
-            case (AffinityOriginal, Low) ->
-              (affinityValues with origLow = val)
-            case (AffinityOriginal, Median) ->
-              (affinityValues with origMedian = val)
-            case (AffinityOriginal, High) ->
-              (affinityValues with origHigh = val)
-          }
-        })
+        noCmd(
+          updateAffinityValues(fun(affinityValues) {
+            switch ((ty, box)) {
+              case (AffinityLog, Low) ->
+                (affinityValues with logLow = val)
+              case (AffinityLog, Median) ->
+                (affinityValues with logMedian = val)
+              case (AffinityLog, High) ->
+                (affinityValues with logHigh = val)
+              case (AffinityVoltage, Low) ->
+                (affinityValues with avLow = val)
+              case (AffinityVoltage, Median) ->
+                (affinityValues with avMedian = val)
+              case (AffinityVoltage, High) ->
+                (affinityValues with avHigh = val)
+              case (AffinityOriginal, Low) ->
+                (affinityValues with origLow = val)
+              case (AffinityOriginal, Median) ->
+                (affinityValues with origMedian = val)
+              case (AffinityOriginal, High) ->
+                (affinityValues with origHigh = val)
+            }
+          }))
 
       case ChangePercentActivity(str) ->
-        updateAffinityValues(fun(avs) {
-          (avs with percentActivity = str)
-        })
+        noCmd(
+          updateAffinityValues(fun(avs) {
+            (avs with percentActivity = str)
+          }))
 
       case SetPhysiologicalVoltage(val) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction =
-            (interaction with affinity_physiological_voltage = val);
-          (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction =
+              (interaction with affinity_physiological_voltage = val);
+            (int with =interaction)
+          }))
 
       case ChangeOriginalAffinityUnits(val) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction =
-            (interaction with original_affinity_units = val);
-          (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction =
+              (interaction with original_affinity_units = val);
+            (int with =interaction)
+          }))
 
       case ChangeOriginalAffinityRelation(val) ->
-        updateCurrentInteraction(fun(int) {
-          var interaction = int.interaction;
-          var interaction =
-            (interaction with original_affinity_relation= val);
-          (int with =interaction)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var interaction = int.interaction;
+            var interaction =
+              (interaction with original_affinity_relation= val);
+            (int with =interaction)
+          }))
 
      #case ChangeAffinityUnits(val) ->
      #  updateCurrentInteraction(fun(int) {
@@ -877,73 +939,111 @@ fun updt(msg, model) {
      #  })
 
       case ChangeRank(str) ->
-        updateAffinityValues(fun(avs) {
-          (avs with rank = str)
-        })
+        noCmd(
+          updateAffinityValues(fun(avs) {
+            (avs with rank = str)
+          }))
 
       case CalculateLogAffinity ->
-        updateAffinityValues(fun(avs) {
-          calculateLogAffinity(avs)
-        })
+        noCmd(
+          updateAffinityValues(fun(avs) {
+            calculateLogAffinity(avs)
+          }))
 
       case ChangeMalariaStage(id) ->
-        updateEditInfo(fun(ei) {
-          (ei with selectedMalariaStage = id)
-        })
+        noCmd(
+          updateEditInfo(fun(ei) {
+            (ei with selectedMalariaStage = id)
+          }))
 
       case AddMalariaStage ->
-        updateEditInfo(fun(ei) {
-          var int = ei.interactionInfo;
-          var id = ei.selectedMalariaStage;
-          if (not(elem(id, int.malariaStages))) {
-            var malariaStages = int.malariaStages ++ [id];
-            (ei with interactionInfo = (int with =malariaStages))
-          } else {
-            ei
-          }
-        })
+        noCmd(
+          updateEditInfo(fun(ei) {
+            var int = ei.interactionInfo;
+            var id = ei.selectedMalariaStage;
+            if (not(elem(id, int.malariaStages))) {
+              var malariaStages = int.malariaStages ++ [id];
+              (ei with interactionInfo = (int with =malariaStages))
+            } else {
+              ei
+            }
+          }))
 
       case DeleteMalariaStage(id) ->
-        updateCurrentInteraction(fun(int) {
-          var malariaStages = filter(fun(x) { x <> id }, int.malariaStages);
-          (int with =malariaStages)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var malariaStages = filter(fun(x) { x <> id }, int.malariaStages);
+            (int with =malariaStages)
+          }))
 
-      case AddReference ->
-        updateEditInfo(fun(ei) {
-          var int = ei.interactionInfo;
-          var ref = ei.selectedReference;
-          if (not(elem(ref, int.references))) {
-            var references = int.references ++ [ref];
-            (ei with interactionInfo = (int with =references))
-          } else {
-            ei
-          }
-        })
-
-      case ChangeReference(ref) ->
-        updateEditInfo(fun(ei) {
-          (ei with selectedReference = ref)
-        })
+      case AddReference(ref) ->
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            if (not(elem(ref, int.references))) {
+              var references = int.references ++ [ref];
+              (int with =references)
+            } else {
+              int
+            }
+          }))
 
       case DeleteReference(ref) ->
-        updateCurrentInteraction(fun(int) {
-          var references = filter(fun(x) { x <> ref }, int.references);
-          (int with =references)
-        })
+        noCmd(
+          updateCurrentInteraction(fun(int) {
+            var references = filter(fun(x) { x <> ref }, int.references);
+            (int with =references)
+          }))
+
+      case UpdateReferenceQuery(field) ->
+        noCmd(updateEditInfo(fun(ei) {
+            var rq = ei.referenceQuery;
+            var referenceQuery = {
+              switch(field) {
+                case Authors(x) ->
+                  (rq with authors = x)
+                case Title(x) ->
+                  (rq with title = x)
+                case Journal(x) ->
+                  (rq with journal = x)
+                case Year(x) ->
+                  (rq with year = x)
+              }
+            };
+            (ei with =referenceQuery)
+        }))
+
+      case SubmitReferenceQuery ->
+        switch(model.currentInteraction) {
+          case Just(ei) ->
+            var rq = ei.referenceQuery;
+            var ei = (ei with referenceQueryResults = Nothing);
+            var model = (model with currentInteraction = Just(ei));
+            (model, MvuCommands.spawnProc(fun() { submitReferenceQuery(rq) }))
+
+          case Nothing -> (model, MvuCommands.empty)
+        }
+
+      case ReferenceQueryResults(xs) ->
+        noCmd(updateEditInfo(fun(ei) {
+            (ei with referenceQueryResults = Just(xs))
+        }))
 
       # Submission
       case Submit ->
-        model.submit(model.receptorBasic, model.interactions); model
+        model.submit(model.receptorBasic, model.interactions);
+        noCmd(model)
 
       case Cancel ->
-        redirect("/"); model
+        redirect("/");
+        noCmd(model)
     }
   }
 
   switch(model)  {
-    case Just(model) -> Just(updtModel(model))
-    case Nothing -> Nothing
+    case Just(model) ->
+      var (model, cmd) = updtModel(model);
+      (Just(model), cmd)
+    case Nothing -> noCmd(Nothing)
   }
 }
 
@@ -1535,15 +1635,46 @@ fun view(model) {
       };
 
       var references = {
-        var dropdown = {
-          MvuHTML.empty
+        fun renderRef(reference) {
+          var issueNode =
+            if(reference.issue == "") {
+              ""
+            } else {
+              " (" ^^ reference.issue ^^ ")"
+            };
+          var volumeNode =
+            if (reference.volume == "") {
+              ""
+            } else {
+              reference.volume
+            };
+
+          var pubMedStr =
+            if (reference.pubmed_id == (-1)) {
+              ""
+            } else {
+              "[PMID:" ^^ intToString(reference.pubmed_id) ^^ "]"
+            };
+
+            reference.authors
+            ^^ ". "
+            ^^ reference.article_title
+            ^^ ". "
+            ^^ reference.title
+            ^^ ", "
+            ^^ volumeNode
+            ^^ issueNode
+            ^^ ": "
+            ^^ reference.pages
+            ^^ ". "
+            ^^ pubMedStr
+        }
+
+        var queryPane = {
+          textNode("TODO: Query pane")
         };
 
         var refTable = {
-          fun renderRef(ref) {
-            MvuHTML.empty
-          }
-
           fun renderRow(ref) {
             var icon =
               i(class("fas fa-trash fa-fw") +@
@@ -1551,7 +1682,7 @@ fun view(model) {
                   onClick(fun() { DeleteReference(ref) }), h0);
 
             tr(a0,
-              td(a0, renderRef(ref)) +*
+              td(a0, textNode(renderRef(ref))) +*
               td(a0, icon))
           }
 
@@ -1564,7 +1695,7 @@ fun view(model) {
           }
         };
 
-        var contents = dropdown +* refTable;
+        var contents = queryPane +* refTable;
         panel("Affinity references", contents)
       };
 
@@ -1630,7 +1761,7 @@ fun mainPage() {
         }
       case Nothing -> Nothing
     };
-  Mvu.runSimple("placeholder", initialModel, view, updt);
+  Mvu.runCmd("placeholder", initialModel, view, updt, MvuCommands.empty);
   Template.template()
 }
 
