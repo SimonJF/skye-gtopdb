@@ -60,7 +60,9 @@ typename InteractionInfo =
 typename EditingInfo =
   (interactionInfo: InteractionInfo,
    affinityValues: AffinityValues,
-   selectedMalariaStage: MalariaStageID);
+   selectedMalariaStage: MalariaStageID,
+   selectedReference: Tables.DbReference
+  );
 
 typename Error = String;
 
@@ -135,6 +137,9 @@ typename Message =
    | ChangeMalariaStage:MalariaStageID
    | AddMalariaStage
    | DeleteMalariaStage:MalariaStageID
+   | AddReference
+   | ChangeReference:Tables.DbReference
+   | DeleteReference:Tables.DbReference
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -709,7 +714,9 @@ fun updt(msg, model) {
           mkAffinityValues(interactionInfo.interaction);
         var ei =
           (=interactionInfo, =affinityValues,
-           selectedMalariaStage = hd(model.malariaStages).malaria_stage_id);
+           selectedMalariaStage = hd(model.malariaStages).malaria_stage_id,
+           selectedReference = hd(model.references)
+          );
         redirect("#interactionEditor");
         (model with errors = [], currentInteraction = Just(ei))
 
@@ -900,6 +907,29 @@ fun updt(msg, model) {
         updateCurrentInteraction(fun(int) {
           var malariaStages = filter(fun(x) { x <> id }, int.malariaStages);
           (int with =malariaStages)
+        })
+
+      case AddReference ->
+        updateEditInfo(fun(ei) {
+          var int = ei.interactionInfo;
+          var ref = ei.selectedReference;
+          if (not(elem(ref, int.references))) {
+            var references = int.references ++ [ref];
+            (ei with interactionInfo = (int with =references))
+          } else {
+            ei
+          }
+        })
+
+      case ChangeReference(ref) ->
+        updateEditInfo(fun(ei) {
+          (ei with selectedReference = ref)
+        })
+
+      case DeleteReference(ref) ->
+        updateCurrentInteraction(fun(int) {
+          var references = filter(fun(x) { x <> ref }, int.references);
+          (int with =references)
         })
 
       # Submission
@@ -1510,11 +1540,31 @@ fun view(model) {
         };
 
         var refTable = {
-          MvuHTML.empty
+          fun renderRef(ref) {
+            MvuHTML.empty
+          }
+
+          fun renderRow(ref) {
+            var icon =
+              i(class("fas fa-trash fa-fw") +@
+                  title("Delete Reference") +@
+                  onClick(fun() { DeleteReference(ref) }), h0);
+
+            tr(a0,
+              td(a0, renderRef(ref)) +*
+              td(a0, icon))
+          }
+
+          if (listEmpty(interaction.references)) {
+            textNode("No references associated with this interaction.")
+          } else {
+            var renderedRefs =
+              MvuHTML.concatMap(renderRow, interaction.references);
+            table_(class("table table-bordered table-sm"), renderedRefs)
+          }
         };
 
         var contents = dropdown +* refTable;
-
         panel("Affinity references", contents)
       };
 
