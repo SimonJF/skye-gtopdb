@@ -304,7 +304,7 @@ typename DbReceptorBasic =
 var receptor_basic = table "receptor_basic" with DbReceptorBasic from db;
 
 typename DbReference =
-  (reference_id: Int, type: String, title: String, article_title: String, year: Int, issue: String, volume: String, pages: String, publisher: String, publisher_address: String, editors: String, pubmed_id: Int, isbn: String, pub_status: String, topics: String, comments: String, read: Bool, useful: Bool, website: String, url: String, doi: String, accessed: Int, modified: Int, patent_number: String, priority: Int, publication: Int, authors: String, assignee: String);
+  (reference_id: Int, type: String, title: String, article_title: String, year: Int, issue: String, volume: String, pages: String, publisher: String, publisher_address: String, editors: String, pubmed_id: Int, isbn: String, pub_status: String, topics: String, comments: String, read: Bool, useful: Bool, website: String, url: String, doi: String, accessed: String, modified: String, patent_number: String, priority: String, publication: String, authors: String, assignee: String);
 var reference = table "reference" with DbReference from db;
 
 var reference2immuno = table "reference2immuno" with (reference_id: Int, type: String) from db;

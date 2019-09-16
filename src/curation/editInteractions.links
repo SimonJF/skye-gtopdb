@@ -487,25 +487,24 @@ fun getInitialModel(objectID) {
   switch (object) {
     case [] -> Nothing
     case x :: _ ->
-      # TODO: Unfortunately this blows the stack. And is slow. Alas.
-      # We might have to have a user-unfriendly "enter a ligand ID" for now...
-      var allLigands = [];
-      #query {
-      #  for (l <-- Tables.ligand)
-      #    [(ligand_id = l.ligand_id, name = l.name)]
-      #};
+      var allLigands =
+        query {
+          for (l <-- Tables.ligand)
+            [(ligand_id = l.ligand_id, name = l.name)]
+        };
 
-      var allReferences = [];
-       #query {
-       #  for (r <-- Tables.reference)
-       #    [r]
-       #};
+      var allReferences =
+        query {
+          for (r <-- Tables.reference)
+            [r]
+         };
 
       var allMalariaStages =
-        query {
-          for (ms <-- Tables.malaria_stage)
-            [ms]
-        };
+        sortBy(fun(ms) { ms.malaria_stage_id },
+          query {
+            for (ms <-- Tables.malaria_stage)
+              [ms]
+          });
 
       var rb =
         switch(x.rbs) {
@@ -941,7 +940,7 @@ fun view(model) {
     fun renderDropdown(selectID, caption, renderEntry, changeFn, entries) {
       var options = MvuHTML.concatMap(renderEntry, entries);
       div(class("form-group"),
-        label(for_(selectID), textNode(caption)) +*
+        label(class("mx-sm-3") +@ for_(selectID), textNode(caption)) +*
         select_(id(selectID) +@ class("form-control") +@
           onChange(changeFn), options))
     }
