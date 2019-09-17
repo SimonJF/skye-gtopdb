@@ -62,11 +62,11 @@ typename ReferenceQuery = (
   authors: String,
   title: String,
   journal: String,
-  year: Int
+  year: String
 );
 
 typename ReferenceQueryField =
-  [| Authors:String | Title:String | Journal:String | Year:Int |];
+  [| Authors:String | Title:String | Journal:String | Year:String |];
 
 typename EditingInfo =
   (interactionInfo: InteractionInfo,
@@ -514,11 +514,11 @@ fun getInitialModel(objectID) {
     case [] -> Nothing
     case x :: _ ->
       # We may not need this.
-      var allLigands =
-        query {
-          for (l <-- Tables.ligand)
-            [(ligand_id = l.ligand_id, name = l.name)]
-        };
+      var allLigands = [];
+       #query {
+       #  for (l <-- Tables.ligand)
+       #    [(ligand_id = l.ligand_id, name = l.name)]
+       #};
 
       var allMalariaStages =
         sortBy(fun(ms) { ms.malaria_stage_id },
@@ -555,28 +555,39 @@ fun getInitialModel(objectID) {
 
 fun submitReferenceQuery(rq) server {
 
+  var year =
+    if (isInt(rq.year)) {
+      stringToInt(rq.year)
+    } else {
+      (-1)
+    };
+
   fun pred(ref) {
-    var authorsPred =
-      if (rq.authors <> "") {
-        ref.authors =~ /^{rq.authors}.*/
-      } else { true };
+    var authorsPred = true;
+  #   if (rq.authors <> "") {
+  #     ref.authors =~ /^{rq.authors}.*/
+  #   } else { true };
 
-    var titlePred =
-      if (rq.title <> "") {
-        ref.article_title =~ /^{rq.title}.*/
-      } else { true };
+    var titlePred = true;
+  #   if (rq.title <> "") {
+  #     ref.article_title =~ /^{rq.title}.*/
+  #   } else { true };
 
-    var journalPred =
-      if (rq.journal <> "") {
-        ref.title =~ /^{rq.journal}.*/
-      } else { true };
+    var journalPred = true;
+  #   if (rq.journal <> "") {
+  #     ref.title =~ /^{rq.journal}.*/
+  #   } else { true };
 
-    var yearPred =
-      if (rq.year > 0) {
-        ref.year == rq.year
-      } else { true };
+    var yearPred = {
+      if (year > 0) {
+        ref.year == year
+      } else { true }
+    };
 
-    authorsPred && titlePred && journalPred && yearPred
+    var allEmpty =
+      rq.authors == "" && rq.title == "" && rq.journal == "" && rq.year == "";
+
+    not(allEmpty) && authorsPred && titlePred && journalPred && yearPred
   }
 
   var res = query {
@@ -591,7 +602,7 @@ fun submitReferenceQuery(rq) server {
 #### CLIENT FUNCTIONS ####
 
 var emptyReferenceQuery =
-  (authors = "", title = "", journal = "", year = (-1));
+  (authors = "", title = "", journal = "", year = "");
 
 
 sig updt : (Message, Model) {}~> (Model, MvuCommands.Command(Message))
@@ -1672,10 +1683,24 @@ fun view(model) {
 
         var queryPane = {
 
+          var rq = ei.referenceQuery;
           var results = ei.referenceQueryResults;
 
-          # TODO: Go from here
-          var queryBoxes = MvuHTML.empty;
+          var queryBoxes = {
+            var contents =
+              renderTextBox("queryAuthors", "Authors", rq.authors,
+                  fun(str) { UpdateReferenceQuery(Authors(str)) }) +*
+              renderTextBox("queryTitle", "Title", rq.title,
+                  fun(str) { UpdateReferenceQuery(Title(str)) }) +*
+              renderTextBox("queryJournal", "Journal", rq.journal,
+                  fun(str) { UpdateReferenceQuery(Journal(str)) }) +*
+              renderTextBox("queryYear", "Year", rq.year,
+                  fun(str) { UpdateReferenceQuery(Year(str)) }) +*
+              div(class("form-group"),
+                renderButton(fun() { SubmitReferenceQuery }, "Find References",
+                    "btn btn-primary"));
+            panel("Find references", contents)
+          };
 
           var resultsTable = {
             fun renderRow(ref) {
@@ -1689,21 +1714,23 @@ fun view(model) {
                 td(a0, icon))
             }
 
-            switch(results) {
-              case Nothing ->
-                div(class("text-center"),
-                  div(class("spinner-border") +@ role("status"),
-                    span(class("sr-only"), textNode("Loading..."))))
+            var contents =
+              switch(results) {
+                case Nothing ->
+                  div(class("text-center"),
+                    div(class("spinner-border") +@ role("status"),
+                      span(class("sr-only"), textNode("Loading..."))))
 
-              case Just(results) ->
-                if (listEmpty(results)) {
-                  textNode("No results.")
-                } else {
-                  var renderedResults =
-                    MvuHTML.concatMap(renderRow, results);
-                  table_(class("table table-bordered table-sm"), renderedResults)
-                }
-            }
+                case Just(results) ->
+                  if (listEmpty(results)) {
+                    textNode("No results.")
+                  } else {
+                    var renderedResults =
+                      MvuHTML.concatMap(renderRow, results);
+                    table_(class("table table-bordered table-sm"), renderedResults)
+                  }
+              };
+            panel("Results", contents)
           };
 
           queryBoxes +* resultsTable
@@ -1717,17 +1744,19 @@ fun view(model) {
                   onClick(fun() { DeleteReference(ref) }), h0);
 
             tr(a0,
-              td(a0, textNode(renderRef(ref))) +*
+              td(a0, unescapedTextNode(renderRef(ref))) +*
               td(a0, icon))
           }
 
-          if (listEmpty(interaction.references)) {
-            textNode("No references associated with this interaction.")
-          } else {
-            var renderedRefs =
-              MvuHTML.concatMap(renderRow, interaction.references);
-            table_(class("table table-bordered table-sm"), renderedRefs)
-          }
+          var contents =
+            if (listEmpty(interaction.references)) {
+              textNode("No references associated with this interaction.")
+            } else {
+              var renderedRefs =
+                MvuHTML.concatMap(renderRow, interaction.references);
+              table_(class("table table-bordered table-sm"), renderedRefs)
+            };
+          panel("Current references", contents)
         };
 
         var contents = queryPane +* refTable;
