@@ -563,20 +563,20 @@ fun submitReferenceQuery(rq) server {
     };
 
   fun pred(ref) {
-    var authorsPred = true;
-  #   if (rq.authors <> "") {
-  #     ref.authors =~ /^{rq.authors}.*/
-  #   } else { true };
+    var authorsPred =
+      if (rq.authors <> "") {
+        ref.authors =~ /^.*{rq.authors}.*/
+      } else { true };
 
-    var titlePred = true;
-  #   if (rq.title <> "") {
-  #     ref.article_title =~ /^{rq.title}.*/
-  #   } else { true };
+    var titlePred =
+      if (rq.title <> "") {
+        ref.article_title =~ /^.*{rq.title}.*/
+      } else { true };
 
-    var journalPred = true;
-  #   if (rq.journal <> "") {
-  #     ref.title =~ /^{rq.journal}.*/
-  #   } else { true };
+    var journalPred =
+      if (rq.journal <> "") {
+        ref.title =~ /^.*{rq.journal}.*/
+      } else { true };
 
     var yearPred = {
       if (year > 0) {
@@ -590,7 +590,7 @@ fun submitReferenceQuery(rq) server {
     not(allEmpty) && authorsPred && titlePred && journalPred && yearPred
   }
 
-  var res = query {
+  var res = query plain {
     for (r <-- Tables.reference)
       where (pred(r))
       [r]
