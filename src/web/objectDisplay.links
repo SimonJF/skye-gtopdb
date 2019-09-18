@@ -286,6 +286,10 @@ typename Substrate = (
 
 typename URL = String;
 
+
+typename SelectivitySummary =
+  (speciesName: String, rankOrder: String, references: [ReferenceID]);
+
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
 typename ObjectInfo = (
     objectId: Int,
@@ -327,6 +331,7 @@ typename ObjectInfo = (
     objectSubstrates: SortableTable(Substrate, Message),
     objectProducts: [Product],
     objectCofactors: SortableTable(Cofactor, Message),
+    objectSelectivitySummaries: [SelectivitySummary],
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -581,7 +586,23 @@ fun getInitialModel() {
                     refs =
                       for (pr <-- Tables.product_refs)
                       where (pr.product_id == p.product_id)
-                      [pr.reference_id])]
+                      [pr.reference_id])],
+              conductance =
+                for (c <-- Tables.conductance)
+                  where (c.object_id == objectId)
+                  [(conductance = c,
+                    refs =
+                      for (r <-- Tables.conductance_refs)
+                      where (r.conductance_id == c.conductance_id)
+                      [r.reference_id])],
+              selectivity =
+                for (s <-- Tables.selectivity)
+                  where (s.object_id == objectId)
+                  [(selectivity = s,
+                    refs =
+                      for (r <-- Tables.selectivity_refs)
+                      where (r.selectivity_id == s.selectivity_id)
+                      [r.reference_id])]
              )]
     };
 
@@ -1304,6 +1325,55 @@ fun getInitialModel() {
           (DataTable.makeTable(cols, data, sortMessage), refs, ligands)
       }
 
+
+      fun generateSelectivitySummaries(selectivityData) {
+        # We begin by grouping by species
+        var groups = groupBy(fun(x) { x.selectivity.species_id }, selectivityData);
+        # For each group, we sort the selectivity in descending order,
+        # and insert symbols to generate the rank order string.
+        fun comparator(x, y) {
+          var cmpX = Utility.getAverage(x.selectivity.conductance_high,
+              x.selectivity.conductance_median, x.selectivity.conductance_low);
+          var cmpY = Utility.getAverage(y.selectivity.conductance_high,
+              y.selectivity.conductance_median, y.selectivity.conductance_low);
+          Utility.simpleCmp(cmpX, cmpY) * (-1) # Flip to get descending order
+        }
+
+        fun generateRankOrder(xs) {
+          var xs = cmpSort(comparator, xs);
+          var (_, acc) =
+            fold_right(fun(x, (prev, acc)) {
+              var xVal =
+                Utility.getAverage(x.selectivity.conductance_high,
+                    x.selectivity.conductance_median, x.selectivity.conductance_low);
+              switch(prev) {
+                case Just(prev) ->
+                  if (prev == xVal) {
+                    (Just(xVal), acc ^^ " = " ^^ x.selectivity.ion)
+                  } else {
+                    (Just(xVal), acc ^^ " > " ^^ x.selectivity.ion)
+                  }
+                case Nothing -> (Just(xVal), x.selectivity.ion)
+              }
+            }, (Nothing, ""), xs);
+          acc
+        }
+
+        fun getReferences(xs) {
+          listConcatMap(fun(x) { x.refs }, xs)
+        }
+
+        fun generateSelectivitySummary((speciesID, xs)) {
+          (speciesName = speciesLongName(speciesID),
+           rankOrder = generateRankOrder(xs),
+           references = getReferences(xs))
+        }
+
+        var summaries = map(generateSelectivitySummary, groups);
+        var references = listConcatMap(fun(x) { x.references }, summaries);
+        (summaries, references)
+      }
+
       var dbLinks = transformDBLinks(raw.databaseLinks);
 
       var (variants, variantRefs, variantLigands) =
@@ -1361,6 +1431,9 @@ fun getInitialModel() {
       var (cofactors, cofactorRefs, cofactorLigands) =
         transformCofactors(raw.cofactors);
 
+      var (selectivitySummaries, ssRefs) =
+        generateSelectivitySummaries(raw.selectivity);
+
       var refIDs =
         uniquify(
           variantRefs ++
@@ -1379,6 +1452,7 @@ fun getInitialModel() {
           substrateRefs ++
           productRefs ++
           cofactorRefs ++
+          ssRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1442,6 +1516,7 @@ fun getInitialModel() {
        objectSubstrates = substrateTbl,
        objectProducts = products,
        objectCofactors = cofactors,
+       objectSelectivitySummaries = selectivitySummaries,
        objectContributors = transformContributors(raw.contributors))
     }
 

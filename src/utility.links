@@ -250,3 +250,28 @@ fun isChanged(proj, newVal, oldVals) {
   go(oldVals)
 }
 
+
+# Copies logic from GtoPdb HighMedianLowNumber, with caveat
+# that 0.0 and nulls are conflated.
+fun getAverage(high, median, low) {
+  if (high == 0.0 && median == 0.0 && low == 0.0) {
+    0.0
+  } else if (low == 0.0 && high <> 0.0) {
+    if (median <> 0.0) {
+      (median +. high) /. 2.0
+    } else {
+      high
+    }
+  } else if (low <> 0.0 && high == 0.0) {
+    if (median <> 0.0) {
+      (low +. median) /. 2.0
+    } else {
+      low
+    }
+  } else if (low == 0.0 && high == 0.0) {
+    median
+  } else {
+    (low +. high) /. 2.0
+  }
+}
+

@@ -11,7 +11,7 @@ fun notImplemented() {
   var a0 = MvuAttrs.empty;
   var h0 = MvuHTML.empty;
   Mvu.runStatic("placeholder", (), fun (_) {
-      div(a0, h1(a0, textNode("Not implemented")))
+      div(a0, h1(a0, textNode("Welcome to the curation interface!")))
   });
   Template.template()
 }
