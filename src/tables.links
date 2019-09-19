@@ -18,7 +18,8 @@ var binding_partner = table "binding_partner" with (binding_partner_id: Int, obj
 
 var binding_partner_refs = table "binding_partner_refs" with (binding_partner_id: Int, reference_id: Int) from db;
 
-var catalytic_receptor = table "catalytic_receptor" with (object_id: Int, rtk_class: String) from db;
+typename DbCatalyticReceptor = (object_id: Int, rtk_class: String);
+var catalytic_receptor = table "catalytic_receptor" with DbCatalyticReceptor from db;
 
 var celltype_assoc = table "celltype_assoc" with (celltype_assoc_id: Int, object_id: Int, immuno_celltype_id: Int, comment: String) from db;
 
@@ -131,7 +132,9 @@ var go_process = table "go_process" with (go_process_id: Int, term: String, defi
 
 var go_process_rel = table "go_process_rel" with (parent_id: Int, child_id: Int) from db;
 
-var gpcr = table "gpcr" with (object_id: Int, class: String, ligand: String) from db;
+
+typename DbGPCR = (object_id: Int, class: String, ligand: String);
+var gpcr = table "gpcr" with DbGPCR from db;
 
 var grac_family_text = table "grac_family_text" with (family_id: Int, overview: String, comments: String, last_modified: String) from db;
 

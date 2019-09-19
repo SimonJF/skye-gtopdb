@@ -30,6 +30,7 @@
 # functional assays
 # physiological functions
 # physiological consequences of altering (mutations)
+# Ion selectivity and conductance
 # Natural / endogenous ligands
 ## activators
 ## inhibitors
@@ -43,7 +44,6 @@
 ## Not done
 
 # Quaternary structure
-# Ion selectivity and conductance
 # Single channel conductance
 # voltage dependence
 # rank order lists
@@ -81,6 +81,29 @@ open import ToggleBox;
 open import AnnotationStatus;
 open import DbLinks;
 open import Object;
+open import Tables;
+
+
+typename GPCRInfo = (class: Markup, ligand: String);
+
+typename VGICInfo =
+  (physiologicalIon: String, selectivityComments: Markup, voltageDependenceComments: Markup);
+
+typename LGICInfo =
+  (ligand: String, selectivityComments: Markup);
+
+typename OtherICInfo = (selectivityComments: Markup);
+
+typename TransporterInfo = (stoichiometry: Markup);
+
+typename NHRInfo =
+  (ligand: String, bindingPartnerComments: Markup, coregulatorComments: Markup,
+   dnaBindingComments: Markup, targetGeneComments: Markup);
+
+typename ObjectType = [|
+  GPCR:GPCRInfo | VGIC:VGICInfo | LGIC:LGICInfo | OtherIC:OtherICInfo | Enzyme
+  | CatalyticReceptor:DbCatalyticReceptor | Transporter:TransporterInfo | NHR:NHRInfo | Other
+|];
 
 typename Table = [|
   # Interaction Tables
@@ -253,7 +276,6 @@ typename ReceptorComments = (
   generalComments: Markup,
   immunoComments: Markup,
   malariaComments: Markup,
-  stoichiometryComments: Markup,
   functionalCharacteristicsComments: Markup
 );
 
@@ -289,6 +311,16 @@ typename URL = String;
 
 typename SelectivitySummary =
   (speciesName: String, rankOrder: String, references: [ReferenceID]);
+
+typename ConductanceInfo =
+  (speciesName: String, data: Markup, references: [ReferenceID]);
+
+typename SelectivityInfo =
+  (summaries: [SelectivitySummary],
+   singleChannelConductance: [ConductanceInfo],
+   singleChannelCurrentRectification: [ConductanceInfo],
+   macroscopicCurrentRectification: [ConductanceInfo],
+   selectivityComments: Markup);
 
 # TODO: Best to do this all gradually, and uncomment things as they're implemented
 typename ObjectInfo = (
@@ -331,7 +363,7 @@ typename ObjectInfo = (
     objectSubstrates: SortableTable(Substrate, Message),
     objectProducts: [Product],
     objectCofactors: SortableTable(Cofactor, Message),
-    objectSelectivitySummaries: [SelectivitySummary],
+    objectSelectivityInfo: SelectivityInfo,
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -423,10 +455,6 @@ fun getInitialModel() {
                                [srr.reference_id])])],
              annotationStatus = o.annotation_status,
              generalComments = o.comments,
-             gpcrComments =
-               for (gpcr <-- Tables.gpcr)
-                where (gpcr.object_id == objectId)
-                  [gpcr.class],
              geneInformation =
                for (si <-- Tables.structural_info)
                  where (si.object_id == objectId)
@@ -554,10 +582,6 @@ fun getInitialModel() {
                    for (c <-- Tables.contributor_copy)
                      where (c.contributor_id == c2o.contributor_id)
                      [(c = c, order=c2o.display_order)],
-              stoichiometry =
-                for (t <-- Tables.transporter)
-                  where (t.object_id == objectId)
-                  [t.grac_stoichiometry],
               functionalCharacteristics =
                 for (gfc <-- Tables.grac_functional_characteristics)
                   where (gfc.object_id == objectId)
@@ -602,7 +626,39 @@ fun getInitialModel() {
                     refs =
                       for (r <-- Tables.selectivity_refs)
                       where (r.selectivity_id == s.selectivity_id)
-                      [r.reference_id])]
+                      [r.reference_id])],
+              gpcr =
+                for (gpcr <-- Tables.gpcr)
+                  where (gpcr.object_id == objectId)
+                  [gpcr],
+              lgic =
+                for (l <-- Tables.lgic)
+                  where (l.object_id == objectId)
+                  [l],
+              vgic =
+                for (v <-- Tables.vgic)
+                  where (v.object_id == objectId)
+                  [v],
+              otherIC =
+                for (oic <-- Tables.other_ic)
+                  where (oic.object_id == objectId)
+                  [oic],
+              nhr =
+                for (nhr <-- Tables.nhr)
+                  where (nhr.object_id == objectId)
+                  [nhr],
+              enzyme =
+                for (e <-- Tables.enzyme)
+                  where (e.object_id == objectId)
+                  [e],
+              transporter =
+                for (t <-- Tables.transporter)
+                  where (t.object_id == objectId)
+                  [t],
+              catalytic_receptor =
+                for (cr <-- Tables.catalytic_receptor)
+                  where (cr.object_id == objectId)
+                  [cr]
              )]
     };
 
@@ -925,7 +981,6 @@ fun getInitialModel() {
           }
         }
 
-        var stoic = fromList(raw.stoichiometry);
         var fcs = fromList(raw.functionalCharacteristics);
 
         var res = (
@@ -949,7 +1004,6 @@ fun getInitialModel() {
           generalComments = parseOrError(raw.comments),
           immunoComments = parseOrError(raw.immuno_comments),
           malariaComments = parseOrError(raw.malaria_comments),
-          stoichiometryComments = stoic,
           functionalCharacteristicsComments = fcs
           );
 
@@ -965,7 +1019,7 @@ fun getInitialModel() {
             res.allostericModulatorsComments, res.activatorsComments,
             res.inhibitorsComments, res.channelBlockersComments,
             res.gatingInhibitorsComments, res.generalComments,
-            res.immunoComments, res.malariaComments, res.stoichiometryComments,
+            res.immunoComments, res.malariaComments,
             res.functionalCharacteristicsComments
           ]);
         (res, commentRefs, commentLigands)
@@ -1001,17 +1055,8 @@ fun getInitialModel() {
             (res :: gis_rev, references ++ refs)
           }, ([], []), gis);
 
-        var (comment, commentRefs, commentLigands) =
-          fold_right(fun(gc, (comment, commentRefs, commentLigands)) {
-            var parsedComment = parseOrError(gc);
-            var (refIDs, ligandIDs) = RenderMarkup.collectIds(parsedComment);
-            (MarkupAppend(parsedComment, comment),
-             refIDs ++ commentRefs,
-             ligandIDs ++ commentLigands)
-          }, (MarkupEmpty, [], []), gpcrComments);
-
-        ((giComments = comment, giEntries = reverse(gisRev)),
-           giRefs ++ commentRefs, commentLigands)
+        ((giComments = gpcrComments, giEntries = reverse(gisRev)),
+           giRefs)
       }
 
       sig mkDataTableBox : (String, [DataTableEntry]) ~%~> DataTableBox
@@ -1325,54 +1370,176 @@ fun getInitialModel() {
           (DataTable.makeTable(cols, data, sortMessage), refs, ligands)
       }
 
+      ## TODO: add conductance info
+      fun generateSelectivityInfo(selectivityData, conductanceInfo, selectivityComments) {
+        var (selectivitySummaries, summaryReferences) = {
+          # We begin by grouping by species
+          var groups = groupBy(fun(x) { x.selectivity.species_id }, selectivityData);
+          # For each group, we sort the selectivity in descending order,
+          # and insert symbols to generate the rank order string.
+          fun comparator(x, y) {
+            var cmpX = Utility.getAverage(x.selectivity.conductance_high,
+                x.selectivity.conductance_median, x.selectivity.conductance_low);
+            var cmpY = Utility.getAverage(y.selectivity.conductance_high,
+                y.selectivity.conductance_median, y.selectivity.conductance_low);
+            Utility.simpleCmp(cmpX, cmpY)
+          }
 
-      fun generateSelectivitySummaries(selectivityData) {
-        # We begin by grouping by species
-        var groups = groupBy(fun(x) { x.selectivity.species_id }, selectivityData);
-        # For each group, we sort the selectivity in descending order,
-        # and insert symbols to generate the rank order string.
-        fun comparator(x, y) {
-          var cmpX = Utility.getAverage(x.selectivity.conductance_high,
-              x.selectivity.conductance_median, x.selectivity.conductance_low);
-          var cmpY = Utility.getAverage(y.selectivity.conductance_high,
-              y.selectivity.conductance_median, y.selectivity.conductance_low);
-          Utility.simpleCmp(cmpX, cmpY) * (-1) # Flip to get descending order
-        }
+          fun generateRankOrder(xs) {
+            var xs = cmpSort(comparator, xs);
+            var (_, acc) =
+              fold_right(fun(x, (prev, acc)) {
+                var xVal =
+                  Utility.getAverage(x.selectivity.conductance_high,
+                      x.selectivity.conductance_median, x.selectivity.conductance_low);
+                switch(prev) {
+                  case Just(prev) ->
+                    if (prev == xVal) {
+                      (Just(xVal), acc ^^ " = " ^^ x.selectivity.ion)
+                    } else {
+                      (Just(xVal), acc ^^ " > " ^^ x.selectivity.ion)
+                    }
+                  case Nothing -> (Just(xVal), x.selectivity.ion)
+                }
+              }, (Nothing, ""), xs);
+            acc
+          }
 
-        fun generateRankOrder(xs) {
-          var xs = cmpSort(comparator, xs);
-          var (_, acc) =
-            fold_right(fun(x, (prev, acc)) {
-              var xVal =
-                Utility.getAverage(x.selectivity.conductance_high,
-                    x.selectivity.conductance_median, x.selectivity.conductance_low);
-              switch(prev) {
-                case Just(prev) ->
-                  if (prev == xVal) {
-                    (Just(xVal), acc ^^ " = " ^^ x.selectivity.ion)
+          fun getReferences(xs) {
+            listConcatMap(fun(x) { x.refs }, xs)
+          }
+
+          fun generateSelectivitySummary((speciesID, xs)) {
+            (speciesName = speciesLongName(speciesID),
+             rankOrder = generateRankOrder(xs),
+             references = getReferences(xs))
+          }
+
+          var summaries = map(generateSelectivitySummary, groups);
+          var references = listConcatMap(fun(x) { x.references }, summaries);
+          (summaries, references)
+        };
+
+        var ((scConductance, scRectification, mRectification), conductanceRefs, conductanceLigands) = {
+          fun makeConductanceInfo(speciesName, data, references) {
+            (=speciesName, =data, =references)
+          }
+
+          fun transformConductanceInfo(xs) {
+            fun parseMarkup(str) {
+              var markup = parseOrError(str);
+              var (mRefs, mLigands) = collectIds(markup);
+              (markup, mRefs, mLigands)
+            }
+
+            fun go(xs, (scConductance, scRectification, mRectification, refs, ligands)) {
+              switch (xs) {
+                case [] -> (scConductance, scRectification, mRectification, refs, ligands)
+                case x :: xs ->
+                  if (x.conductance.overall_channel_conductance <> "") {
+                    var (m, rs, ls) =
+                      parseMarkup(x.conductance.overall_channel_conductance);
+                    var refs = x.refs ++ rs ++ refs;
+                    var y =
+                      makeConductanceInfo(speciesLongName(x.conductance.species_id),
+                          m, x.refs);
+                    go(xs, (y :: scConductance, scRectification, mRectification, refs, ls ++ ligands))
+                  } else if (x.conductance.single_channel_current_rectification <> "") {
+                    var (m, rs, ls) =
+                      parseMarkup(x.conductance.single_channel_current_rectification);
+                    var refs = x.refs ++ rs ++ refs;
+                    var y =
+                      makeConductanceInfo(speciesLongName(x.conductance.species_id),
+                          m, x.refs);
+                    go(xs, (scConductance, y :: scRectification, mRectification, refs, ls ++ ligands))
+                  } else if (x.conductance.macroscopic_current_rectification <> "") {
+                    var (m, rs, ls) =
+                      parseMarkup(x.conductance.macroscopic_current_rectification);
+                    var refs = x.refs ++ rs ++ refs;
+                    var y =
+                      makeConductanceInfo(speciesLongName(x.conductance.species_id),
+                          m, x.refs);
+                    go(xs, (scConductance, scRectification, y :: mRectification, refs, ls ++ ligands))
                   } else {
-                    (Just(xVal), acc ^^ " > " ^^ x.selectivity.ion)
+                    go(xs, (scConductance, scRectification, mRectification, x.refs ++ refs, ligands))
                   }
-                case Nothing -> (Just(xVal), x.selectivity.ion)
               }
-            }, (Nothing, ""), xs);
-          acc
-        }
+            }
 
-        fun getReferences(xs) {
-          listConcatMap(fun(x) { x.refs }, xs)
-        }
+            go(xs, ([], [], [], [], []))
+          }
 
-        fun generateSelectivitySummary((speciesID, xs)) {
-          (speciesName = speciesLongName(speciesID),
-           rankOrder = generateRankOrder(xs),
-           references = getReferences(xs))
-        }
+          var (scConductance, scRectification, mRectification, refs, ligands) =
+            transformConductanceInfo(conductanceInfo);
 
-        var summaries = map(generateSelectivitySummary, groups);
-        var references = listConcatMap(fun(x) { x.references }, summaries);
-        (summaries, references)
+          ((scConductance, scRectification, mRectification), refs, ligands)
+        };
+
+        var selInfo =
+          (summaries = selectivitySummaries,
+           singleChannelConductance = scConductance,
+           singleChannelCurrentRectification = scRectification,
+           macroscopicCurrentRectification = mRectification,
+           =selectivityComments);
+        (selInfo, conductanceRefs ++ summaryReferences,
+         conductanceLigands)
+
       }
+
+
+      sig transformObjectType : () ~%~> (ObjectType, [ReferenceID], [LigandID])
+      fun transformObjectType() {
+        fun nonempty(x) { not(listEmpty(x)) }
+
+        if (nonempty(raw.gpcr)) {
+          var rawGPCR = hd(raw.gpcr);
+          var class = parseOrError(rawGPCR.class);
+          var (refs, ligands) = collectIds(class);
+          (GPCR((=class, ligand = rawGPCR.ligand)), refs, ligands)
+        } else if (nonempty(raw.vgic)) {
+          var rawVGIC = hd(raw.vgic);
+          var selectivityComments = parseOrError(rawVGIC.selectivity_comments);
+          var voltageDependenceComments = parseOrError(rawVGIC.voltage_dependence_comments);
+          var (refs, ligands) = collectAllIds([selectivityComments, voltageDependenceComments]);
+          (VGIC((physiologicalIon = rawVGIC.physiological_ion, =selectivityComments, =voltageDependenceComments)),
+           refs, ligands)
+        } else if (nonempty(raw.lgic)) {
+          var rawLGIC = hd(raw.lgic);
+          var selectivityComments = parseOrError(rawLGIC.selectivity_comments);
+          var (refs, ligands) = collectIds(selectivityComments);
+          (LGIC((ligand=rawLGIC.ligand, =selectivityComments)), refs, ligands)
+        } else if (nonempty(raw.otherIC)) {
+          var rawIC = hd(raw.otherIC);
+          var selectivityComments = parseOrError(rawIC.selectivity_comments);
+          var (refs, ligands) = collectIds(selectivityComments);
+          (OtherIC((=selectivityComments)), refs, ligands)
+        } else if (nonempty(raw.enzyme)) {
+          (Enzyme, [], [])
+        } else if (nonempty(raw.catalytic_receptor)) {
+          (CatalyticReceptor(hd(raw.catalytic_receptor)), [], [])
+        } else if (nonempty(raw.transporter)) {
+          var stoichiometry = parseOrError((hd(raw.transporter)).grac_stoichiometry);
+          var (refs, ligands) = collectIds(stoichiometry);
+          (Transporter((=stoichiometry)), refs, ligands)
+        } else if (nonempty(raw.nhr)) {
+          var rawNHR = hd(raw.nhr);
+          var bindingPartnerComments = parseOrError(rawNHR.binding_partner_comments);
+          var coregulatorComments = parseOrError(rawNHR.coregulator_comments);
+          var dnaBindingComments = parseOrError(rawNHR.dna_binding_comments);
+          var targetGeneComments = parseOrError(rawNHR.target_gene_comments);
+          var (refs, ligands) = collectAllIds([bindingPartnerComments, coregulatorComments,
+              dnaBindingComments, targetGeneComments]);
+          var res =
+            (ligand = rawNHR.ligand, =bindingPartnerComments, =coregulatorComments,
+             =dnaBindingComments, =targetGeneComments);
+          (NHR(res), refs, ligands)
+        } else {
+          (Other, [], [])
+        }
+      }
+
+      var (objectType, otRefs, otLigands) =
+        transformObjectType();
 
       var dbLinks = transformDBLinks(raw.databaseLinks);
 
@@ -1410,8 +1577,12 @@ fun getInitialModel() {
       var (tissueDistribution, tdRefs, tdLigands) =
         transformTissueDistribution(raw.tissueDistribution);
 
-      var (geneProteinInfo, gpiRefs, gpiLigands) =
-        transformGeneProteinInfo(raw.gpcrComments, raw.geneInformation);
+      var gpcrComments = switch(objectType) {
+        case GPCR(x) -> x.class
+        case _ -> MarkupEmpty
+      };
+      var (geneProteinInfo, gpiRefs) =
+        transformGeneProteinInfo(gpcrComments, raw.geneInformation);
 
       var (cellTypeAssociations, ctaRefs, ctaLigands) =
         transformCellTypeAssociations(raw.cellTypeAssociations);
@@ -1431,11 +1602,28 @@ fun getInitialModel() {
       var (cofactors, cofactorRefs, cofactorLigands) =
         transformCofactors(raw.cofactors);
 
-      var (selectivitySummaries, ssRefs) =
-        generateSelectivitySummaries(raw.selectivity);
+     #var selectivityComments = {
+     #  var comments =
+     #    map(fun(x) { x.selectivity_comments }, raw.vgic) ++
+     #    map(fun(x) { x.selectivity_comments }, raw.lgic) ++
+     #    map(fun(x) { x.selectivity_comments }, raw.other_ic);
+     #  fold_right(fun(x, acc) { x ^^ " " ^^ acc }, "", comments)
+     #};
+      var selectivityComments =
+        switch(objectType) {
+          case VGIC(x) -> x.selectivityComments
+          case LGIC(x) -> x.selectivityComments
+          case OtherIC(x) -> x.selectivityComments
+          case _ -> MarkupEmpty
+        };
+
+      var (selectivityInfo, siRefs, siLigands) =
+        generateSelectivityInfo(raw.selectivity,
+            raw.conductance, selectivityComments);
 
       var refIDs =
         uniquify(
+          otRefs ++
           variantRefs ++
           interactionRefs ++
           pdbRefs ++
@@ -1452,23 +1640,24 @@ fun getInitialModel() {
           substrateRefs ++
           productRefs ++
           cofactorRefs ++
-          ssRefs ++
+          siRefs ++
           commentRefs);
 
       var ligandIDs =
         uniquify(
+          otLigands ++
           variantLigands ++
           pdbLigands ++
           transductionLigands ++
           faLigands ++
           pfLigands ++
           pcLigands ++
-          gpiLigands ++
           tdLigands ++
           ctaLigands ++
           enzymeLigands ++
           substrateLigands ++
           cofactorLigands ++
+          siLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -1485,8 +1674,8 @@ fun getInitialModel() {
       var systematicName = parseIfNonempty(raw.systematicName);
       var abbreviation = parseIfNonempty(raw.abbreviation);
 
-      (objectId = objectId,
-       objectType = Object.classifyObject(objectId),
+      (=objectId,
+       =objectType,
        objectName = parseOrError(raw.name),
        objectSystematicName = systematicName,
        objectAbbreviation = abbreviation,
@@ -1516,7 +1705,7 @@ fun getInitialModel() {
        objectSubstrates = substrateTbl,
        objectProducts = products,
        objectCofactors = cofactors,
-       objectSelectivitySummaries = selectivitySummaries,
+       objectSelectivityInfo = selectivityInfo,
        objectContributors = transformContributors(raw.contributors))
     }
 
@@ -1558,6 +1747,10 @@ fun view(model) {
       tr(a0,
         td(class("key"), textNode(key ^^ ":")) +*
         td(class("value"), val))
+    }
+
+    fun renderCitations(refs) {
+      Reference.renderCitationList(uniquify(refs), objectInfo.objectReferences)
     }
 
     fun renderIfJust(heading, x) {
@@ -2243,7 +2436,14 @@ fun view(model) {
 
           }
           var tables = {
-            if (objectInfo.objectType == IC) {
+
+            var isIC = switch (objectInfo.objectType) {
+              case VGIC(_) -> true
+              case LGIC(_) -> true
+              case OtherIC(_) -> true
+              case _ -> false
+            };
+            if (isIC) {
               # Render 3 specific IC tables
               renderICTable("Heteromeric Pore-forming Subunits", "left", oaps.hpfSubunits) +*
               renderICTable("Auxiliary Subunits", "center", oaps.auxiliarySubunits) +*
@@ -2367,7 +2567,13 @@ fun view(model) {
     };
 
     var substratesBox = {
-      if (objectInfo.objectType == Enzyme || objectInfo.objectType == Transporter &&
+      var shouldDisplay =
+        switch(objectInfo.objectType) {
+          case Enzyme -> true
+          case Transporter(_) -> true
+          case _ -> false
+        };
+      if (shouldDisplay &&
           not(tableEmpty(objectInfo.objectSubstrates))) {
         fun renderRow(subs) {
           var nameCol =
@@ -2502,10 +2708,90 @@ fun view(model) {
     };
 
     var stoichiometryBox =
-      commentsBox("Stoichiometry", objectInfo.objectComments.stoichiometryComments);
+      switch(objectInfo.objectType) {
+        case Transporter(t) ->
+          commentsBox("Stoichiometry", t.stoichiometry)
+        case _ -> MvuHTML.empty
+      };
+
     var fcsBox =
       commentsBox("Functional Characteristics",
           objectInfo.objectComments.functionalCharacteristicsComments);
+
+    var selectivityBox = {
+      fun nonempty(x) { not(listEmpty(x)) }
+      var si = objectInfo.objectSelectivityInfo;
+      if (nonempty(si.summaries) || nonempty(si.singleChannelConductance) ||
+          nonempty(si.singleChannelCurrentRectification) ||
+          nonempty(si.macroscopicCurrentRectification) ||
+          not(markupEmpty(si.selectivityComments))) {
+
+
+          fun renderSummary(x) {
+            tr(a0,
+              td(class("info"),
+                table_(class("inner_receptor_data_tables"),
+                  renderKeyVal(("Species", textNode(x.speciesName))) +*
+                  renderKeyVal(("Rank order", textNode(x.rankOrder))) +*
+                  renderKeyVal(("References", renderCitations(x.references))))))
+          }
+
+          fun renderConductanceInfo(dataKey, data) {
+            if (not(listEmpty(data))) {
+              var colStyle = "width:120px;padding:0px 20px 0px 0px;vertical-align:top;";
+
+              var speciesCols =
+                MvuHTML.concatMap(fun(x) {
+                    td(style(colStyle), textNode(x.speciesName)) }, data);
+
+              var dataCols =
+                MvuHTML.concatMap(fun(x) {
+                    td(style(colStyle), renderM(x.data)) }, data);
+
+              var refsCols =
+                MvuHTML.concatMap(fun(x) {
+                    td(style(colStyle), renderCitations(x.references)) }, data);
+
+              tr(a0,
+                td(class("info"),
+                  table_(class("inner_receptor_data_tables"),
+                    renderKeyVal(("Species", speciesCols)) +*
+                    renderKeyVal((dataKey, dataCols)) +*
+                    renderKeyVal(("References", refsCols)))))
+            } else {
+              MvuHTML.empty
+            }
+          }
+
+          var selectivitySummaries = MvuHTML.concatMap(renderSummary, si.summaries);
+          var singleChannelConductance =
+            renderConductanceInfo("Single channel conductance (pS)",
+                si.singleChannelConductance);
+
+          var singleChannelRectification =
+            renderConductanceInfo("Single channel current rectification",
+                si.singleChannelCurrentRectification);
+
+          var macroscopicRectification =
+            renderConductanceInfo("Macroscopic current rectification",
+                si.singleChannelConductance);
+
+          a(name("IonSelectivity"), h0) +*
+          table_(class("receptor_data_tables fullwidth"),
+            thead(a0,
+              tr(a0,
+                td(class("info category"), textNode("Ion Selectivity and Conductance")))) +*
+            tbody(a0,
+              selectivitySummaries +*
+              singleChannelConductance +*
+              singleChannelRectification +*
+              macroscopicRectification)) +*
+          commentsBox("Ion Selectivity and Conductance Comments", si.selectivityComments)
+
+      } else {
+        MvuHTML.empty
+      }
+    };
 
     var dataBoxes =
       div(class("grid_16 alpha"),
@@ -2523,6 +2809,7 @@ fun view(model) {
             cofactorsBox +*
             stoichiometryBox +*
             fcsBox +*
+            selectivityBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
             interactionsTables +*

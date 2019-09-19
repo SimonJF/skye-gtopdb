@@ -25,8 +25,8 @@ fun mkHtmlTag(tagName, attrs, contents) {
 # Useful parser combinators for us
 
 # streamChar: runs of characters that are not used to start or end tags.
-var streamChar = sat(fun(c) { implode([c]) =~ /[^<>]/ });
-var noQuoteChar = sat(fun(c) { implode([c]) =~ /[^"]/ });
+var streamChar = sat(fun(c) { c <> '<' && c <> '>' });
+var noQuoteChar = sat(fun(c) { c <> '\"' });
 
 var textStream =
   many1(streamChar) >>=
@@ -68,6 +68,7 @@ mutual {
 
   fun brTag() {
     (stringE("br>") ++!
+     stringE("Br>") ++!
      stringE("br/>") ++!
      stringE("br />")) >>
     return(mkHtmlTag("br", [], MarkupEmpty))
