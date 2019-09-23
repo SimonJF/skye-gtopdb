@@ -18,6 +18,8 @@ typename InteractionID = Int;
 typename ReferenceID = Int;
 typename MalariaStageID = Int;
 
+typename QueryResults(a) =
+  [| Waiting | Results:[a] | NotTriggered |];
 
 # Affinity values are stored in the database as floats.  We can't modify the
 # model directly as we do with other fields since it's perfectly reasonable to
@@ -51,7 +53,7 @@ fun mkAffinityValues(int) {
 
 typename InteractionInfo =
   (interaction: Tables.DbInteraction,
-   ligand: Tables.RawLigand,
+   ligand: Maybe(Tables.RawLigand),
    malariaStages: [MalariaStageID],
    # Since we don't have an efficient map type, I'm resorting to storing all
    # reference data here instead of just the reference ID. This is worth
@@ -73,7 +75,9 @@ typename EditingInfo =
    affinityValues: AffinityValues,
    selectedMalariaStage: MalariaStageID,
    referenceQuery: ReferenceQuery,
-   referenceQueryResults: Maybe([Tables.DbReference])
+   ligandQuery: String, # Ligand name
+   ligandResults: QueryResults(Tables.RawLigand),
+   referenceQueryResults: QueryResults(Tables.DbReference)
   );
 
 typename Error = String;
@@ -82,7 +86,6 @@ typename Model =
   Maybe((
       object: Tables.RawObject,
       receptorBasic: Maybe(Tables.DbReceptorBasic),
-      ligands: [(ligand_id: Int, name: String)],
       malariaStages: [Tables.DbMalariaStage],
       interactions: [InteractionInfo],
       currentInteraction: Maybe(EditingInfo),
@@ -148,11 +151,19 @@ typename Message =
    | ChangeMalariaStage:MalariaStageID
    | AddMalariaStage
    | DeleteMalariaStage:MalariaStageID
+   # Reference editing
    | AddReference:Tables.DbReference
    | DeleteReference:Tables.DbReference
    | UpdateReferenceQuery:ReferenceQueryField
    | SubmitReferenceQuery
    | ReferenceQueryResults:[Tables.DbReference]
+   # Ligand editing
+   | EditLigand
+   | SubmitLigandQuery
+   | UpdateLigandQuery:String
+   | SetLigand:Tables.RawLigand
+   | LigandQueryResults:[Tables.RawLigand]
+   # Submission
    | Submit | Cancel |];
 
 fun emptyInteraction(objectID) {
@@ -494,13 +505,13 @@ fun getInitialModel(objectID) {
               where (i.object_id == objectID)
               for (l <-- Tables.ligand)
               where (l.ligand_id == i.ligand_id)
-              [(interaction = i,
-                ligand = l,
-                malariaStages =
+              [(iInteraction = i,
+                iLigand = l,
+                iMalariaStages =
                   for (ms2i <-- Tables.malaria_stage2interaction)
                     where (ms2i.interaction_id == i.interaction_id)
                     [ms2i.malaria_stage_id],
-                references =
+                iReferences =
                   for (iar <-- Tables.interaction_affinity_refs)
                     where (iar.interaction_id == i.interaction_id)
                     for (r <-- Tables.reference)
@@ -513,13 +524,6 @@ fun getInitialModel(objectID) {
   switch (object) {
     case [] -> Nothing
     case x :: _ ->
-      # We may not need this.
-      var allLigands = [];
-       #query {
-       #  for (l <-- Tables.ligand)
-       #    [(ligand_id = l.ligand_id, name = l.name)]
-       #};
-
       var allMalariaStages =
         sortBy(fun(ms) { ms.malaria_stage_id },
           query {
@@ -533,18 +537,25 @@ fun getInitialModel(objectID) {
           case rb :: _ -> Just(rb)
         };
 
+      # Irritating hack since variant injection isn't supported in nested
+      # queries
+      var interactions =
+        map(fun(i) { (interaction = i.iInteraction,
+              malariaStages = i.iMalariaStages,
+              references = i.iReferences,
+              ligand = Just(i.iLigand)) }, x.interactions);
+
       sig submit : (Maybe(Tables.DbReceptorBasic), [InteractionInfo]) {}~> ()
       fun submit(newRb, newInteractions) {
-        commit(objectID, (rb, x.interactions), (newRb, newInteractions));
+        commit(objectID, (rb, interactions), (newRb, newInteractions));
         redirect("/")
       }
 
       Just((object = x.obj,
-            ligands = allLigands,
             malariaStages = allMalariaStages,
             receptorBasic = rb,
             =submit,
-            interactions = x.interactions,
+            =interactions,
             currentInteraction = Nothing,
             speciesMap = Species.getSpeciesMap(),
             errors = []))
@@ -597,6 +608,16 @@ fun submitReferenceQuery(rq) server {
   };
 
   ReferenceQueryResults(res)
+}
+
+fun submitLigandQuery(lq) server {
+  var results =
+    query plain {
+      for (l <-- Tables.ligand)
+        where (l.name =~ /^.*{lq}.*/)
+        [l]
+    };
+  LigandQueryResults(results)
 }
 
 #### CLIENT FUNCTIONS ####
@@ -659,9 +680,11 @@ fun updt(msg, model) {
         } else if (str == "") { true } else { false }
       }
 
-      fun validate(avs) {
+      fun validate(ei) {
+        var avs = ei.affinityValues;
         var conditions =
           [
+           (isJust(ei.interactionInfo.ligand), "The interaction must have a target"),
            (isValid(avs.origHigh),
               "Original Affinity Value (High) must be a floating-point number"),
            (isValid(avs.origMedian),
@@ -693,7 +716,7 @@ fun updt(msg, model) {
         case Just(ei) ->
           var int = ei.interactionInfo;
           var avs = ei.affinityValues;
-          var errors = validate(avs);
+          var errors = validate(ei);
           var isOK = listEmpty(errors);
           # Only update interaction if no errors
           if (isOK) {
@@ -777,7 +800,8 @@ fun updt(msg, model) {
         var ei =
           (=interactionInfo, =affinityValues,
            selectedMalariaStage = hd(model.malariaStages).malaria_stage_id,
-           =referenceQuery, referenceQueryResults = Just([])
+           =referenceQuery, ligandQuery = "", referenceQueryResults = NotTriggered,
+           ligandResults = NotTriggered
           );
         redirect("#interactionEditor");
         noCmd((model with errors = [], currentInteraction = Just(ei)))
@@ -1027,7 +1051,7 @@ fun updt(msg, model) {
         switch(model.currentInteraction) {
           case Just(ei) ->
             var rq = ei.referenceQuery;
-            var ei = (ei with referenceQueryResults = Nothing);
+            var ei = (ei with referenceQueryResults = Waiting);
             var model = (model with currentInteraction = Just(ei));
             (model, MvuCommands.spawnProc(fun() { submitReferenceQuery(rq) }))
 
@@ -1036,7 +1060,41 @@ fun updt(msg, model) {
 
       case ReferenceQueryResults(xs) ->
         noCmd(updateEditInfo(fun(ei) {
-            (ei with referenceQueryResults = Just(xs))
+            (ei with referenceQueryResults = Results(xs))
+        }))
+
+      case EditLigand ->
+        noCmd(updateCurrentInteraction(fun(int) {
+            (int with ligand = Nothing)
+        }))
+
+      case SubmitLigandQuery ->
+        switch(model.currentInteraction) {
+          case Just(ei) ->
+            var ei = (ei with ligandResults = Waiting);
+            var model = (model with currentInteraction = Just(ei));
+            (model, MvuCommands.spawnProc(fun() { submitLigandQuery(ei.ligandQuery) }))
+
+          case Nothing -> (model, MvuCommands.empty)
+        }
+
+      case UpdateLigandQuery(str) ->
+        noCmd(updateEditInfo(fun(ei) {
+            (ei with ligandQuery = str)
+        }))
+
+      case SetLigand(dbLigand) ->
+        noCmd(updateEditInfo(fun (ei) {
+            var interaction =
+              (ei.interactionInfo.interaction with ligand_id = dbLigand.ligand_id);
+            var interactionInfo =
+              (ei.interactionInfo with ligand = Just(dbLigand), =interaction);
+            (ei with =interactionInfo, ligandQuery = "", ligandResults = NotTriggered)
+        }))
+
+      case LigandQueryResults(results) ->
+        noCmd(updateEditInfo(fun(ei) {
+            (ei with ligandResults = Results(results))
         }))
 
       # Submission
@@ -1185,11 +1243,22 @@ fun view(model) {
           }
         };
 
+        var ligandCol =
+          switch(int.ligand) {
+            case Just(ligand) ->
+              td(a0,
+                unescapedTextNode(ligand.name) +*
+                br(a0, h0) +*
+                textNode(" { ID: " ^^ intToString(ligand.ligand_id) ^^ "i }"))
+
+            case Nothing ->
+              # Really, this shouldn't happen, since we shouldn't be saving
+              # ligands which aren't associated with an interaction.
+              MvuHTML.empty
+          };
+
         tr(a0,
-          td(a0,
-            unescapedTextNode(int.ligand.name) +*
-            br(a0, h0) +*
-            textNode(" { ID: " ^^ intToString(int.ligand.ligand_id) ^^ "i }")) +*
+          ligandCol +*
           td(a0, textNode(int.interaction.type)) +*
           td(a0, textNode(int.interaction.action)) +*
           td(a0, textNode(speciesShortName(int.interaction.species_id))) +*
@@ -1257,31 +1326,76 @@ fun view(model) {
       };
 
       var ligandInfo = {
-        # TODO: This does not (yet) allow changes in ligands, since dumping the
-        # entire ligand list overflows the stack.
-        panel("Ligand information",
-          form(a0,
-            div(class("form-group"),
-              label(for_("lInfoID"), textNode("Ligand: ")) +*
-              div(id("lInfoID") +@ class("form-control"),
-                unescapedTextNode(interaction.ligand.name ^^
-                  " { ID: " ^^ intToString(interaction.ligand.ligand_id) ^^ " }"))) +*
-            div(class("form-group"),
-              label(for_("lInfoContext"), textNode("Ligand context: ")) +*
-              input(id("lInfoContext") +@
-                class("form-control") +@
-                type("input") +@
-                value(int.ligand_context) +@
-                onInput(fun(str) { UpdateField(LigandContext, str) }), h0)) +*
-            div(class("form-group"),
-              label(for_("lInfoSite"), textNode("Receptor site of action: ")) +*
-              input(id("lInfoSite") +@
-                class("form-control") +@
-                type("input") +@
-                value(int.receptor_site) +@
-                onInput(fun(str) { UpdateField(ReceptorSite, str) }), h0))
 
-        ))
+        var ligandSelection = {
+          # Either the Ligand is set, or we need to select one.
+          switch (interaction.ligand) {
+            case Just(ligand) ->
+              var display =
+                label(for_("lInfoID"), textNode("Ligand: ")) +*
+                div(id("lInfoID") +@ class("form-control"),
+                  unescapedTextNode(ligand.name ^^
+                  " { ID: " ^^ intToString(ligand.ligand_id) ^^ " }"));
+
+              var editButton =
+                i(class("fas fa-edit fa-fw") +@
+                  title("Edit ligand") +@
+                  onClick(fun() { EditLigand }), h0);
+
+              div(class("form-inline"), display +* editButton)
+
+            case Nothing ->
+              var contents = {
+                var queryText =
+                  renderTextBox("ligandSearch", "Ligand name",
+                    ei.ligandQuery, fun(str) { UpdateLigandQuery(str) });
+                var button =
+                  renderButton(fun() { SubmitLigandQuery }, "Find Ligands", "btn btn-primary");
+                div(class("form-group"), queryText +* button)
+              };
+
+              var results = {
+                fun renderRow(x) {
+                  tr(a0,
+                    td(a0, unescapedTextNode(x.name)) +*
+                    td(a0, renderButton(fun() { SetLigand(x) }, "Set as target", "btn btn-primary")))
+                }
+
+                switch(ei.ligandResults) {
+                  case NotTriggered -> MvuHTML.empty
+                  case Results(xs) ->
+                    var renderedResults = MvuHTML.concatMap(renderRow, xs);
+                    var contents = table_(class("table table-bordered table-sm"), renderedResults);
+                    panel("Results", contents)
+                  case Waiting ->
+                    panel("Results",
+                      div(class("text-center"),
+                        div(class("spinner-border") +@ role("status"),
+                          span(class("sr-only"), textNode("Loading...")))))
+
+                }
+              };
+              panel("Search for ligand", contents +* results)
+          }
+
+        };
+
+        panel("Ligand information",
+          ligandSelection +*
+          div(class("form-group"),
+            label(for_("lInfoContext"), textNode("Ligand context: ")) +*
+            input(id("lInfoContext") +@
+              class("form-control") +@
+              type("input") +@
+              value(int.ligand_context) +@
+              onInput(fun(str) { UpdateField(LigandContext, str) }), h0)) +*
+          div(class("form-group"),
+            label(for_("lInfoSite"), textNode("Receptor site of action: ")) +*
+            input(id("lInfoSite") +@
+              class("form-control") +@
+              type("input") +@
+              value(int.receptor_site) +@
+              onInput(fun(str) { UpdateField(ReceptorSite, str) }), h0)))
       };
 
       var displayOptions = {
@@ -1714,23 +1828,26 @@ fun view(model) {
                 td(a0, icon))
             }
 
-            var contents =
-              switch(results) {
-                case Nothing ->
+            switch(results) {
+              case NotTriggered -> MvuHTML.empty
+
+              case Waiting ->
+                panel("Results",
                   div(class("text-center"),
                     div(class("spinner-border") +@ role("status"),
-                      span(class("sr-only"), textNode("Loading..."))))
+                      span(class("sr-only"), textNode("Loading...")))))
 
-                case Just(results) ->
+              case Results(results) ->
+                var contents =
                   if (listEmpty(results)) {
                     textNode("No results.")
                   } else {
                     var renderedResults =
                       MvuHTML.concatMap(renderRow, results);
                     table_(class("table table-bordered table-sm"), renderedResults)
-                  }
-              };
-            panel("Results", contents)
+                  };
+                panel("Results", contents)
+            }
           };
 
           queryBoxes +* resultsTable
