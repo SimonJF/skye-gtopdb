@@ -33,6 +33,7 @@
 # Ion selectivity and conductance
 # Natural / endogenous ligands
 # main co-regulators
+# dna binding
 ## activators
 ## inhibitors
 ## gating inhibitors
@@ -50,7 +51,6 @@
 # rank order lists
 # whole organism assay data
 # screening data
-# dna binding
 # co-binding partners
 # main target genes
 # expression datasets
@@ -375,6 +375,7 @@ typename ObjectInfo = (
     objectPhysiologicalFunctions: DataTableBox,
     objectPhysiologicalConsequences: DataTableBox,
    # objectPhenotypes: SortableTable(Phenotype, Message),
+    objectDNABindings: DataTableBox,
     objectVariants: [Variant],
     objectComments: ReceptorComments,
     objectShowReferences: Bool,
@@ -691,7 +692,15 @@ fun getInitialModel() {
                      refs =
                        for (r <-- coregulator_refs)
                        where (r.coregulator_id == c.coregulator_id)
-                       [r.reference_id])]
+                       [r.reference_id])],
+              dnaBinding =
+                for (dna <-- Tables.dna_binding)
+                where (dna.object_id == objectId)
+                  [(=dna,
+                   refs =
+                     for (r <-- Tables.dna_binding_refs)
+                     where (r.dna_binding_id == dna.dna_binding_id)
+                     [r.reference_id])]
              )]
     };
 
@@ -888,7 +897,7 @@ fun getInitialModel() {
          antibodies =
            mkActivatorTable(AntibodiesTable, parsedInteractions.antibodies),
          other =
-           mkActivatorTable(GatingInhibitorsTable, parsedInteractions.other)
+           mkStandardTable(GatingInhibitorsTable, parsedInteractions.other)
            );
         res
       }
@@ -1161,6 +1170,18 @@ fun getInitialModel() {
               [("Species", parseOrError(resolveSpeciesLongName(td.species_id, speciesMap))),
                ("Technique", parseOrError(td.technique))], references)
           }, tds)
+      }
+
+      fun transformDNABindingBox(dna) {
+        transformDataTableBox("DNA Binding",
+          fun(dna) {
+            var references = dna.refs;
+            var dna = dna.dna;
+            mkDataTableEntry(MarkupEmpty,
+                [("Structure", parseOrError(dna.structure)),
+                 ("HRE core sequence", parseOrError(dna.sequence)),
+                 ("Response element", parseOrError(dna.response_element))], references)
+            }, dna)
       }
 
       fun transformDBLinks(dbls) {
@@ -1600,6 +1621,9 @@ fun getInitialModel() {
             data, comments)
       }
 
+      var (dnaBindings, dnaRefs, dnaLigands) =
+        transformDNABindingBox(raw.dnaBinding);
+
       var (objectType, otRefs, otLigands) =
         transformObjectType();
 
@@ -1710,6 +1734,7 @@ fun getInitialModel() {
           cofactorRefs ++
           siRefs ++
           coregRefs ++
+          dnaRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1728,6 +1753,7 @@ fun getInitialModel() {
           cofactorLigands ++
           siLigands ++
           coregLigands ++
+          dnaLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -1777,6 +1803,7 @@ fun getInitialModel() {
        objectCofactors = cofactors,
        objectSelectivityInfo = selectivityInfo,
        objectCoregulators = coregulators,
+       objectDNABindings = dnaBindings,
        objectContributors = transformContributors(raw.contributors))
     }
 
@@ -2211,6 +2238,15 @@ fun view(model) {
             td(class("info category"), textNode(box.boxName)))) +*
         tbody(name("toggle"), renderedRows))
     }
+
+    var dnaBindingsBox =
+      renderDataBox(objectInfo.objectDNABindings);
+    var dnaComments =
+      switch (objectInfo.objectType) {
+        case NHR(x) ->
+          commentsBox("DNA Binding Comments", x.dnaBindingComments)
+        case _ -> MvuHTML.empty
+      };
 
     var coregulatorsBox =
       renderSimpleTable(objectInfo.objectCoregulators,
@@ -2894,6 +2930,8 @@ fun view(model) {
             immunoProcessAssociationsBox +*
             transductionMechanismsBoxes +*
             coregulatorsBox +*
+            dnaBindingsBox +*
+            dnaComments +*
             tissueDistributionBox +*
             functionalAssaysBox +*
             physiologicalFunctionsBox +*
