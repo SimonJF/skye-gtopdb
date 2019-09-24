@@ -322,7 +322,27 @@ typename SelectivityInfo =
    macroscopicCurrentRectification: [ConductanceInfo],
    selectivityComments: Markup);
 
-# TODO: Best to do this all gradually, and uncomment things as they're implemented
+
+typename CoregulatorGene = (
+  coregulatorGeneID: Int,
+  primaryName: String,
+  officialGeneID: String,
+  otherNames: String,
+  speciesName: String,
+  nursaID: String,
+  comments: Markup,
+  geneLongName: String
+);
+
+typename Coregulator =
+  (coregulatorID: Int,
+   activity: Markup,
+   specific: Bool,
+   ligandDependent: Bool,
+   af2Dependent: Bool,
+   comments: Markup,
+   gene: CoregulatorGene);
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -364,6 +384,7 @@ typename ObjectInfo = (
     objectProducts: [Product],
     objectCofactors: SortableTable(Cofactor, Message),
     objectSelectivityInfo: SelectivityInfo,
+    objectCoregulators: [Coregulator],
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -658,7 +679,18 @@ fun getInitialModel() {
               catalytic_receptor =
                 for (cr <-- Tables.catalytic_receptor)
                   where (cr.object_id == objectId)
-                  [cr]
+                  [cr],
+              coregulators =
+                for (c <-- Tables.coregulator)
+                where (c.object_id == objectId)
+                  for (g <-- Tables.coregulator_gene)
+                  where (g.coregulator_gene_id == c.coregulator_gene_id)
+                  [ (coregulator = c,
+                     gene = g,
+                     refs =
+                       for (r <-- coregulator_refs)
+                       where (r.coregulator_id == c.coregulator_id)
+                       [r.reference_id])]
              )]
     };
 
@@ -1538,6 +1570,43 @@ fun getInitialModel() {
         }
       }
 
+      fun transformCoregulators(cs) {
+
+        fun transformGene(x) {
+          var comments = parseOrError(x.comments);
+          var (commentsRefs, commentsLigands) = collectIds(comments);
+          var res =
+            (coregulatorGeneID = x.coregulator_gene_id,
+             primaryName = x.primary_name,
+             officialGeneID = x.official_gene_id,
+             otherNames = x.other_names,
+             speciesName = speciesShortName(x.species_id),
+             nursaID = x.nursa_id,
+             =comments,
+             geneLongName = x.gene_long_name);
+          (res, commentsRefs, commentsLigands)
+        }
+
+        fold_left(fun((acc, refs, ligands), x) {
+            var (gene, geneRefs, geneLigands) = transformGene(x.gene);
+            var c = x.coregulator;
+            var activity = parseOrError(c.activity);
+            var comments = parseOrError(c.comments);
+            var (commentRefs, commentLigands) =
+              collectAllIds([activity, comments]);
+            var res = (
+              coregulatorID = c.coregulator_id,
+              =activity,
+              specific = c.specific,
+              ligandDependent = c.ligand_dependent,
+              af2Dependent = c.af2_dependent,
+              =comments,
+              =gene);
+            (res :: acc, geneRefs ++ commentRefs ++ x.refs ++ refs,
+              geneLigands ++ commentLigands ++ ligands)
+          }, ([], [], []), cs)
+      }
+
       var (objectType, otRefs, otLigands) =
         transformObjectType();
 
@@ -1621,6 +1690,9 @@ fun getInitialModel() {
         generateSelectivityInfo(raw.selectivity,
             raw.conductance, selectivityComments);
 
+      var (coregulators, coregRefs, coregLigands) =
+        transformCoregulators(raw.coregulators);
+
       var refIDs =
         uniquify(
           otRefs ++
@@ -1641,6 +1713,7 @@ fun getInitialModel() {
           productRefs ++
           cofactorRefs ++
           siRefs ++
+          coregRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1658,6 +1731,7 @@ fun getInitialModel() {
           substrateLigands ++
           cofactorLigands ++
           siLigands ++
+          coregLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -1706,6 +1780,7 @@ fun getInitialModel() {
        objectProducts = products,
        objectCofactors = cofactors,
        objectSelectivityInfo = selectivityInfo,
+       objectCoregulators = coregulators,
        objectContributors = transformContributors(raw.contributors))
     }
 

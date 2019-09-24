@@ -32,8 +32,7 @@ typename AffinityValues =
   (logHigh: String, logMedian: String, logLow: String,
    avHigh: String, avMedian: String, avLow: String,
    origHigh: String, origMedian: String, origLow: String,
-   rank:String, percentActivity:String
-  );
+   rank:String, percentActivity:String);
 
 fun mkAffinityValues(int) {
   # Hack, since we can't currently distinguish between nulls and 0.0.
