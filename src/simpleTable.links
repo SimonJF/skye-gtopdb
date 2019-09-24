@@ -1,0 +1,101 @@
+open import Parser;
+open import RenderMarkup;
+open import Utility;
+import Reference;
+import MvuHTML;
+import MvuAttrs;
+
+typename ReferenceID = Int;
+typename RowData = [| StringData:String | References:[ReferenceID] |];
+
+typename TransformedRowData =
+  [| MarkupData:Markup | References:[ReferenceID] |];
+
+typename Row = [TransformedRowData];
+
+typename SimpleTable =
+  (name: String, columns: [String], rows: [Row], comments: Maybe(Markup));
+
+sig transformTable : (String, [String], [[RowData]], Maybe(Markup)) ~%~> (SimpleTable, [Int], [Int])
+fun transformTable(name, columns, rows, comments) {
+
+  fun transformRow(rowData) {
+    fold_right(fun(x, (acc, refs, ligands)) {
+      switch(x) {
+        case StringData(x) ->
+          var parsed = parseOrError(x);
+          var (mRefs, mLigands) = collectIds(parsed);
+          (MarkupData(parsed) :: acc, mRefs ++ refs, mLigands ++ ligands)
+        case References(xs) ->
+          (References(xs) :: acc, xs ++ refs, ligands)
+      }
+    }, ([], [], []), rowData)
+  }
+
+  var (transformedRows, refs, ligands) =
+    fold_right(fun(x, (acc, refs, ligands)) {
+        var (row, rowRefs, rowLigands) = transformRow(x);
+        (row :: acc, rowRefs ++ refs, rowLigands ++ ligands)
+    }, ([], [], []), rows);
+
+  ((=name, =columns, rows = transformedRows, =comments),
+    refs, ligands)
+}
+
+fun renderSimpleTable(tbl, refs, ligands) {
+  open MvuHTML;
+  open MvuAttrs;
+
+  var a0 = MvuAttrs.empty;
+  var h0 = MvuHTML.empty;
+  var colCount = length(tbl.columns);
+
+  fun renderCitations(xs) {
+    Reference.renderCitationList(uniquify(xs), refs)
+  }
+
+  fun renderHeader(col) {
+    td(a0, textNode(col))
+  }
+
+  fun renderM(m) {
+    renderMarkup(m, refs, ligands)
+  }
+
+  fun renderRow(xs) {
+    fun renderCol(x) {
+      var contents =
+        switch(x) {
+          case MarkupData(m) -> renderM(m)
+          case References(xs) -> renderCitations(xs)
+        };
+      td(a0, contents)
+    }
+
+    var renderedCols = MvuHTML.concatMap(renderCol, xs);
+    tr(class("info"), renderedCols)
+  }
+
+  var renderedHeaders = MvuHTML.concatMap(renderHeader, tbl.columns);
+  var renderedRows = MvuHTML.concatMap(renderRow, tbl.rows);
+
+  var comments =
+    switch(tbl.comments) {
+      case Just(m) ->
+        tr(a0,
+          td(class("info category") +@ colSpan(colCount), textNode(tbl.name ^^ " Comments"))) +*
+        tr(a0,
+          td(class("info") +@ colSpan(colCount), renderM(m)))
+      case Nothing -> MvuHTML.empty
+    };
+
+  table_(class("receptor_data_tables fullwidth"),
+    thead(a0,
+      tr(name("hotspot") +@ class("hotspot"),
+        td(class("info category") +@ colSpan(colCount), textNode(tbl.name)))) +*
+    tbody(name("toggle"),
+      tr(class("info heading"), renderedHeaders) +*
+      renderedRows +*
+      comments
+    ))
+}

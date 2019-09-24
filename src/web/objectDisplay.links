@@ -32,6 +32,7 @@
 # physiological consequences of altering (mutations)
 # Ion selectivity and conductance
 # Natural / endogenous ligands
+# main co-regulators
 ## activators
 ## inhibitors
 ## gating inhibitors
@@ -51,7 +52,6 @@
 # screening data
 # dna binding
 # co-binding partners
-# main co-regulators
 # main target genes
 # expression datasets
 # xenobiotics
@@ -82,6 +82,7 @@ open import AnnotationStatus;
 open import DbLinks;
 open import Object;
 open import Tables;
+open import SimpleTable;
 
 
 typename GPCRInfo = (class: Markup, ligand: String);
@@ -384,7 +385,7 @@ typename ObjectInfo = (
     objectProducts: [Product],
     objectCofactors: SortableTable(Cofactor, Message),
     objectSelectivityInfo: SelectivityInfo,
-    objectCoregulators: [Coregulator],
+    objectCoregulators: SimpleTable,
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -1570,45 +1571,40 @@ fun getInitialModel() {
         }
       }
 
-      fun transformCoregulators(cs) {
+      sig transformCoregulators : (ObjectType, %) ~%~> (SimpleTable, [Int], [Int])
+      fun transformCoregulators(objectType, coregs) {
+        var comments =
+          switch (objectType) {
+            case NHR(x) ->
+              if (x.coregulatorComments <> MarkupEmpty) {
+                Just(x.coregulatorComments)
+              } else {
+                Nothing
+              }
+            case _ -> Nothing
+          };
 
-        fun transformGene(x) {
-          var comments = parseOrError(x.comments);
-          var (commentsRefs, commentsLigands) = collectIds(comments);
-          var res =
-            (coregulatorGeneID = x.coregulator_gene_id,
-             primaryName = x.primary_name,
-             officialGeneID = x.official_gene_id,
-             otherNames = x.other_names,
-             speciesName = speciesShortName(x.species_id),
-             nursaID = x.nursa_id,
-             =comments,
-             geneLongName = x.gene_long_name);
-          (res, commentsRefs, commentsLigands)
-        }
+        fun b2s(b) { if (b) { "Yes" } else { "No" } }
 
-        fold_left(fun((acc, refs, ligands), x) {
-            var (gene, geneRefs, geneLigands) = transformGene(x.gene);
-            var c = x.coregulator;
-            var activity = parseOrError(c.activity);
-            var comments = parseOrError(c.comments);
-            var (commentRefs, commentLigands) =
-              collectAllIds([activity, comments]);
-            var res = (
-              coregulatorID = c.coregulator_id,
-              =activity,
-              specific = c.specific,
-              ligandDependent = c.ligand_dependent,
-              af2Dependent = c.af2_dependent,
-              =comments,
-              =gene);
-            (res :: acc, geneRefs ++ commentRefs ++ x.refs ++ refs,
-              geneLigands ++ commentLigands ++ ligands)
-          }, ([], [], []), cs)
+        var data =
+          map(fun(x) {
+              var c = x.coregulator;
+              [StringData(x.gene.primary_name), StringData(c.activity), StringData(b2s(c.specific)),
+               StringData(b2s(c.specific)),
+               StringData(b2s(c.af2_dependent)), StringData(c.comments), References(x.refs)]
+          }, coregs);
+
+        transformTable("Main Co-regulators",
+            ["Name", "Activity", "Specific", "Ligand dependent",
+             "AF2-dependent", "Comments", "References"],
+            data, comments)
       }
 
       var (objectType, otRefs, otLigands) =
         transformObjectType();
+
+      var (coregs, crRefs, crLigands) =
+        transformCoregulators(objectType, raw.coregulators);
 
       var dbLinks = transformDBLinks(raw.databaseLinks);
 
@@ -1691,7 +1687,7 @@ fun getInitialModel() {
             raw.conductance, selectivityComments);
 
       var (coregulators, coregRefs, coregLigands) =
-        transformCoregulators(raw.coregulators);
+        transformCoregulators(objectType, raw.coregulators);
 
       var refIDs =
         uniquify(
@@ -2215,6 +2211,10 @@ fun view(model) {
             td(class("info category"), textNode(box.boxName)))) +*
         tbody(name("toggle"), renderedRows))
     }
+
+    var coregulatorsBox =
+      renderSimpleTable(objectInfo.objectCoregulators,
+          objectInfo.objectReferences, objectInfo.objectLigandNames);
 
     var tissueDistributionBox =
       renderDataBox(objectInfo.objectTissueDistribution);
@@ -2893,6 +2893,7 @@ fun view(model) {
             cellTypeAssociationsBox +*
             immunoProcessAssociationsBox +*
             transductionMechanismsBoxes +*
+            coregulatorsBox +*
             tissueDistributionBox +*
             functionalAssaysBox +*
             physiologicalFunctionsBox +*
