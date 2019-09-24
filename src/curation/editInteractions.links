@@ -135,6 +135,7 @@ typename InteractionProperty =
 typename Message =
   [| UpdateComment:(CommentType, String)
    | UpdateField:(Field, String)
+   | NewInteraction
    | EditInteraction:InteractionInfo | DeleteInteraction:InteractionID
    | SubmitCurrentInteraction | CancelCurrentInteraction | DeleteCurrentInteraction
    | ChangeDisplayOption:(DisplayOption, Bool)
@@ -166,8 +167,28 @@ typename Message =
    # Submission
    | Submit | Cancel |];
 
+
+fun nameSourceLoop(n) {
+  receive {
+    case Request(pid) ->
+      pid ! n;
+      nameSourceLoop(n - 1)
+  }
+}
+
+var nameSource = spawn { nameSourceLoop((-1)) };
+
+fun freshID() {
+  spawnWait {
+    nameSource ! Request(self());
+    receive { case x -> x }
+  }
+}
+
+sig emptyInteraction : (Int) ~%~> Tables.DbInteraction
 fun emptyInteraction(objectID) {
-  (interaction_id = (-1),
+  var interaction_id = freshID();
+  (=interaction_id,
    ligand_id = (-1),
    object_id = objectID,
    type = "None",
@@ -208,9 +229,9 @@ fun emptyInteraction(objectID) {
    hide = false)
 }
 
-fun emptyInteractionInfo(objectID, ligand) {
+fun emptyInteractionInfo(objectID) {
   (interaction = emptyInteraction(objectID),
-   =ligand,
+   ligand = Nothing,
    malariaStages = [],
    references = [])
 }
@@ -274,7 +295,7 @@ fun commit(objectID, oldInfo, newInfo) server {
           case ([], _) ->
             # Should not happen; any newIs should have negative IDs and thus be
             # in the "inserted" list
-            error("Non-empty newI list")
+            error("Non-empty newI list: " ^^ (show(newI)))
           case (olds, []) ->
             # Olds not in list, so should be deleted
             (modified, unmodified, deleted ++ olds)
@@ -295,10 +316,9 @@ fun commit(objectID, oldInfo, newInfo) server {
 
 
     var sortedOld = sortBy(fun(x) { x.interaction.interaction_id }, oldInteractions);
-    var sortedNew = sortBy(fun(x) { x.interaction.interaction_id }, newInteractions);
-    var (modified, unmodified, deleted) = diff(oldInteractions, newInteractions);
+    var sortedNew = sortBy(fun(x) { x.interaction.interaction_id }, toUpdate);
+    var (modified, unmodified, deleted) = diff(sortedOld, sortedNew);
 
-    print("Diffed. Doing updates...\n");
     # Now perform the updates
     iter(fun((oldI, newI)) {
 
@@ -325,7 +345,6 @@ fun commit(objectID, oldInfo, newInfo) server {
        #}
 
       if (oldI.interaction <> newI.interaction) {
-        print("Before update...\n");
 
         update (i <-- Tables.interaction)
           where (i.interaction_id == newI.interaction.interaction_id)
@@ -361,10 +380,8 @@ fun commit(objectID, oldInfo, newInfo) server {
             # target_ligand_id = newI.interaction.target_ligand_id,
             whole_organism_assay = newI.interaction.whole_organism_assay,
             hide = newI.interaction.hide);
-        print("After update...\n")
-      } else { print("Not updating\n") };
+      } else { () };
 
-      print("Before updating refs\n");
    #  # Update affinity references
    #  updateIntLists(newI.interaction, oldI.references, newI.references, Tables.interaction_affinity_refs,
    #      fun(x) { x.reference_id },
@@ -414,12 +431,9 @@ fun commit(objectID, oldInfo, newInfo) server {
           insertRecords
 
       } else { () };
-      print("After updating refs\n");
 
     }, modified);
 
-
-    print("Updated. Doing deletions...\n");
 
     ## Do the deletions
     var pred = contains(map(fun(x) { x.interaction.interaction_id }, deleted));
@@ -429,8 +443,6 @@ fun commit(objectID, oldInfo, newInfo) server {
       where (pred(ms2i.interaction_id));
     delete (i <-- Tables.interaction)
       where (pred(i.interaction_id));
-
-    print("Deleted. Doing insertions...\n");
 
     ## And finally do the insertions
     iter(fun(i) {
@@ -471,19 +483,20 @@ fun commit(objectID, oldInfo, newInfo) server {
             hide = i.interaction.hide)]
         returning interaction_id;
       # Next, insert all references using new interaction ID
-      #var newRefs =
-      #  map(fun(r) { (r with interaction_id = interactionID) }, newI.references);
-      iter(fun(r) {
-        insert Tables.interaction_affinity_refs
-        values [(interaction_id = interactionID, reference_id = r.reference_id)]
-      }, i.references);
-    }, toInsert);
-    print("Done!\n")
+      var affinityRefs =
+        map(fun(r) { (interaction_id = interactionID, reference_id = r.reference_id) },
+            i.references);
+      insert Tables.interaction_affinity_refs
+        values (interaction_id, reference_id) affinityRefs;
 
-   #print("Zipped: " ^^ show(zipped));
-   #print("\n\n\n ---- \n\n\n");
-   #print("Deleted: " ^^ show(deleted));
-   #()
+      # And all malaria stage information, too
+      var malariaStages =
+        map(fun(m) { (interaction_id = interactionID, malaria_stage_id = m) },
+            i.malariaStages);
+      insert Tables.malaria_stage2interaction
+        values (interaction_id, malaria_stage_id) malariaStages
+
+    }, toInsert);
   }
 
   updateComments();
@@ -744,7 +757,7 @@ fun updt(msg, model) {
 
             fun go(xs) {
               switch(xs) {
-                case [] -> []
+                case [] -> [int]
                 case x :: xs ->
                   if (x.interaction.interaction_id == int.interaction.interaction_id) {
                     int :: xs
@@ -753,8 +766,8 @@ fun updt(msg, model) {
                   }
               }
             }
-            (model with interactions = go(model.interactions),
-             currentInteraction = Nothing, errors = [])
+            var interactions = go(model.interactions);
+            (model with =interactions, currentInteraction = Nothing, errors = [])
           } else {
             redirect("#interactionEditor");
             (model with =errors)
@@ -882,6 +895,20 @@ fun updt(msg, model) {
               };
             (int with =interaction)
           }))
+
+      case NewInteraction ->
+        var newInteraction = emptyInteractionInfo(model.object.object_id);
+        var affinityValues =
+          mkAffinityValues(newInteraction.interaction);
+        var referenceQuery = emptyReferenceQuery;
+        var ei =
+          (interactionInfo = newInteraction, =affinityValues,
+           selectedMalariaStage = hd(model.malariaStages).malaria_stage_id,
+           =referenceQuery, ligandQuery = "", referenceQueryResults = NotTriggered,
+           ligandResults = NotTriggered
+          );
+        redirect("#interactionEditor");
+        noCmd((model with errors = [], currentInteraction = Just(ei)))
 
       case UpdateField(field, val) ->
         noCmd(
@@ -1291,7 +1318,15 @@ fun view(model) {
           tbody(a0, MvuHTML.concatMap(renderInteraction, model.interactions)))
       };
 
-      panel("Existing interactions", interactionsTable)
+      var newInteractionButton =
+        switch (model.currentInteraction) {
+          case Just(_) -> MvuHTML.empty
+          case Nothing ->
+            renderButton(fun() { NewInteraction }, "New Interaction", "btn btn-primary")
+        };
+
+
+      panel("Existing interactions", interactionsTable +* newInteractionButton)
     };
 
     fun mkInteractionEditor(ei) {
@@ -1342,7 +1377,7 @@ fun view(model) {
                   title("Edit ligand") +@
                   onClick(fun() { EditLigand }), h0);
 
-              div(class("form-inline"), display +* editButton)
+              div(class("form-group"), display +* editButton)
 
             case Nothing ->
               var contents = {
@@ -1879,7 +1914,6 @@ fun view(model) {
         var contents = queryPane +* refTable;
         panel("Affinity references", contents)
       };
-
 
       var contents =
         errorBox +*
