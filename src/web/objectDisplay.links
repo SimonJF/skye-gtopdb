@@ -33,6 +33,7 @@
 # Ion selectivity and conductance
 # Natural / endogenous ligands
 # main co-regulators
+# co-binding partners
 # dna binding
 ## activators
 ## inhibitors
@@ -51,7 +52,6 @@
 # rank order lists
 # whole organism assay data
 # screening data
-# co-binding partners
 # main target genes
 # expression datasets
 # xenobiotics
@@ -387,6 +387,7 @@ typename ObjectInfo = (
     objectCofactors: SortableTable(Cofactor, Message),
     objectSelectivityInfo: SelectivityInfo,
     objectCoregulators: SimpleTable,
+    objectBindingPartners: SimpleTable,
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -700,7 +701,19 @@ fun getInitialModel() {
                    refs =
                      for (r <-- Tables.dna_binding_refs)
                      where (r.dna_binding_id == dna.dna_binding_id)
-                     [r.reference_id])]
+                     [r.reference_id])],
+              bindingPartners =
+                for (bp <-- Tables.binding_partner)
+                  where (bp.object_id == objectId)
+                    [(=bp,
+                      obj =
+                        for (obj <-- Tables.object)
+                        where (obj.object_id == bp.partner_object_id)
+                        [obj],
+                      refs =
+                        for (r <-- Tables.binding_partner_refs)
+                        where (r.binding_partner_id == bp.binding_partner_id)
+                        [r.reference_id])]
              )]
     };
 
@@ -1621,6 +1634,40 @@ fun getInitialModel() {
             data, comments)
       }
 
+      sig transformBindingPartners : (ObjectType, %) ~%~> (SimpleTable, [Int], [Int])
+      fun transformBindingPartners(objectType, bps) {
+        var comments =
+          switch (objectType) {
+            case NHR(x) ->
+              if (x.bindingPartnerComments <> MarkupEmpty) {
+                Just(x.bindingPartnerComments)
+              } else {
+                Nothing
+              }
+            case _ -> Nothing
+          };
+
+        var data =
+          map(fun(x) {
+              var bp = x.bp;
+
+              var name =
+                switch(x.obj) {
+                  case [] -> StringData(bp.name)
+                  case o :: _ ->
+                    LinkData((text = o.name,
+                      url = ("/objectDisplay?objectId=" ^^ intToString(o.object_id))))
+                };
+
+              [name, StringData(bp.interaction), StringData(bp.effect),
+               References(x.refs)]
+          }, bps);
+
+        transformTable("Co-binding partners",
+            ["Name", "Interaction", "Effect", "References"],
+            data, comments)
+      }
+
       var (dnaBindings, dnaRefs, dnaLigands) =
         transformDNABindingBox(raw.dnaBinding);
 
@@ -1713,6 +1760,9 @@ fun getInitialModel() {
       var (coregulators, coregRefs, coregLigands) =
         transformCoregulators(objectType, raw.coregulators);
 
+      var (bindingPartners, bpRefs, bpLigands) =
+        transformBindingPartners(objectType, raw.bindingPartners);
+
       var refIDs =
         uniquify(
           otRefs ++
@@ -1735,6 +1785,7 @@ fun getInitialModel() {
           siRefs ++
           coregRefs ++
           dnaRefs ++
+          bpRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1754,6 +1805,7 @@ fun getInitialModel() {
           siLigands ++
           coregLigands ++
           dnaLigands ++
+          bpLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -1804,6 +1856,7 @@ fun getInitialModel() {
        objectSelectivityInfo = selectivityInfo,
        objectCoregulators = coregulators,
        objectDNABindings = dnaBindings,
+       objectBindingPartners = bindingPartners,
        objectContributors = transformContributors(raw.contributors))
     }
 
@@ -2251,6 +2304,11 @@ fun view(model) {
     var coregulatorsBox =
       renderSimpleTable(objectInfo.objectCoregulators,
           objectInfo.objectReferences, objectInfo.objectLigandNames);
+
+    var bindingPartnersBox =
+      renderSimpleTable(objectInfo.objectBindingPartners,
+          objectInfo.objectReferences, objectInfo.objectLigandNames);
+
 
     var tissueDistributionBox =
       renderDataBox(objectInfo.objectTissueDistribution);
@@ -2930,6 +2988,7 @@ fun view(model) {
             immunoProcessAssociationsBox +*
             transductionMechanismsBoxes +*
             coregulatorsBox +*
+            bindingPartnersBox +*
             dnaBindingsBox +*
             dnaComments +*
             tissueDistributionBox +*

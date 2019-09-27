@@ -5,11 +5,16 @@ import Reference;
 import MvuHTML;
 import MvuAttrs;
 
+typename LinkDataRecord = (text: String, url: String);
+
 typename ReferenceID = Int;
-typename RowData = [| StringData:String | References:[ReferenceID] |];
+typename RowData =
+  [| StringData:String
+   | LinkData:LinkDataRecord
+   | References:[ReferenceID] |];
 
 typename TransformedRowData =
-  [| MarkupData:Markup | References:[ReferenceID] |];
+  [| MarkupData:Markup | LinkData:LinkDataRecord | References:[ReferenceID] |];
 
 typename Row = [TransformedRowData];
 
@@ -26,6 +31,8 @@ fun transformTable(name, columns, rows, comments) {
           var parsed = parseOrError(x);
           var (mRefs, mLigands) = collectIds(parsed);
           (MarkupData(parsed) :: acc, mRefs ++ refs, mLigands ++ ligands)
+        case LinkData(ldr) ->
+          (LinkData(ldr) :: acc, refs, ligands)
         case References(xs) ->
           (References(xs) :: acc, xs ++ refs, ligands)
       }
@@ -67,6 +74,8 @@ fun renderSimpleTable(tbl, refs, ligands) {
       var contents =
         switch(x) {
           case MarkupData(m) -> renderM(m)
+          case LinkData(ldr) ->
+            a(href(ldr.url), unescapedTextNode(ldr.text))
           case References(xs) -> renderCitations(xs)
         };
       td(a0, contents)
