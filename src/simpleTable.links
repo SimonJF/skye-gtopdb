@@ -89,13 +89,22 @@ fun renderSimpleTable(tbl, refs, ligands) {
       case Nothing -> MvuHTML.empty
     };
 
-  table_(class("receptor_data_tables fullwidth"),
-    thead(a0,
-      tr(name("hotspot") +@ class("hotspot"),
-        td(class("info category") +@ colSpan(colCount), textNode(tbl.name)))) +*
-    tbody(name("toggle"),
-      tr(class("info heading"), renderedHeaders) +*
-      renderedRows +*
-      comments
-    ))
+  var tblData =
+    if (listEmpty(tbl.rows)) {
+      MvuHTML.empty
+    } else {
+      tr(class("info heading"), renderedHeaders) +* renderedRows
+    };
+
+  if (listEmpty(tbl.rows) && tbl.comments == Nothing) {
+    MvuHTML.empty
+  } else {
+    table_(class("receptor_data_tables fullwidth"),
+      thead(a0,
+        tr(name("hotspot") +@ class("hotspot"),
+          td(class("info category") +@ colSpan(colCount), textNode(tbl.name)))) +*
+      tbody(name("toggle"),
+        tblData +* comments
+      ))
+  }
 }
