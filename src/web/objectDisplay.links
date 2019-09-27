@@ -36,6 +36,7 @@
 # co-binding partners
 # dna binding
 # main target genes
+# xenobiotics
 ## activators
 ## inhibitors
 ## gating inhibitors
@@ -54,7 +55,6 @@
 # whole organism assay data
 # screening data
 # expression datasets
-# xenobiotics
 # phenotypes, alleles, disease models
 # clinically-relevant mutations
 # gene expression / pathophysiology
@@ -385,6 +385,7 @@ typename ObjectInfo = (
     objectCoregulators: SimpleTable,
     objectBindingPartners: SimpleTable,
     objectTargetGenes: SimpleTable,
+    objectXenobioticExpressions: DataTableBox,
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -718,6 +719,14 @@ fun getInitialModel() {
                     refs =
                       for (r <-- Tables.target_gene_refs)
                       where (r.target_gene_id == tg.target_gene_id)
+                      [r.reference_id])],
+              xenobiotics =
+                for (xe <-- Tables.xenobiotic_expression)
+                  where (xe.object_id == objectId)
+                  [(=xe,
+                    refs =
+                      for (r <-- Tables.xenobiotic_expression_refs)
+                      where (r.xenobiotic_expression_id == xe.xenobiotic_expression_id)
                       [r.reference_id])]
              )]
     };
@@ -1200,6 +1209,18 @@ fun getInitialModel() {
                  ("HRE core sequence", parseOrError(dna.sequence)),
                  ("Response element", parseOrError(dna.response_element))], references)
             }, dna)
+      }
+
+      fun transformXenobioticExpressions(comments, xes) {
+        transformDataTableBox("Xenobiotics Influencing Gene Expression",
+          fun(xe) {
+            var references = xe.refs;
+            var xe = xe.xe;
+            mkDataTableEntry(comments,
+              [("Species", parseOrError(resolveSpeciesLongName(xe.species_id, speciesMap))),
+               ("Tissue", parseOrError(xe.tissue)),
+               ("Technique", parseOrError(xe.technique))], references)
+          }, xes)
       }
 
       fun transformDBLinks(dbls) {
@@ -1774,6 +1795,9 @@ fun getInitialModel() {
       var (cofactors, cofactorRefs, cofactorLigands) =
         transformCofactors(raw.cofactors);
 
+      var (xenobiotics, xeRefs, xeLigands) =
+        transformXenobioticExpressions(receptorComments.xenobioticExpressionComments, raw.xenobiotics);
+
      #var selectivityComments = {
      #  var comments =
      #    map(fun(x) { x.selectivity_comments }, raw.vgic) ++
@@ -1827,6 +1851,7 @@ fun getInitialModel() {
           dnaRefs ++
           bpRefs ++
           tgRefs ++
+          xeRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1848,6 +1873,7 @@ fun getInitialModel() {
           dnaLigands ++
           bpLigands ++
           tgLigands ++
+          xeLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -1900,6 +1926,7 @@ fun getInitialModel() {
        objectDNABindings = dnaBindings,
        objectBindingPartners = bindingPartners,
        objectTargetGenes = targetGenes,
+       objectXenobioticExpressions = xenobiotics,
        objectContributors = transformContributors(raw.contributors))
     }
 
@@ -2327,12 +2354,17 @@ fun view(model) {
 
       var renderedRows = MvuHTML.concatMap(renderDataRow, box.boxRows);
 
-      a(name(box.boxName), h0) +*
-      table_(class("receptor_data_tables fullwidth"),
-        thead(a0,
-          tr(name("hotspot") +@ class("hotspot"),
-            td(class("info category"), textNode(box.boxName)))) +*
-        tbody(name("toggle"), renderedRows))
+      if (not(listEmpty(box.boxRows))) {
+        a(name(box.boxName), h0) +*
+          table_(class("receptor_data_tables fullwidth"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("info category"), textNode(box.boxName)))) +*
+            tbody(name("toggle"), renderedRows))
+      } else {
+        MvuHTML.empty
+      }
+
     }
 
     var dnaBindingsBox =
@@ -2364,6 +2396,9 @@ fun view(model) {
       renderDataBox(objectInfo.objectPhysiologicalFunctions);
     var physiologicalConsequencesBox =
       renderDataBox(objectInfo.objectPhysiologicalConsequences);
+    var xenobioticsBox =
+      renderDataBox(objectInfo.objectXenobioticExpressions);
+
     var phenotypesBox = MvuHTML.empty;
     var generalCommentsBox =
       commentsBox("General Comments", comments.generalComments);
@@ -2501,11 +2536,15 @@ fun view(model) {
       var renderedCTAs =
         MvuHTML.concatMap(renderCTA, objectInfo.objectCellTypeAssociations);
 
-      a(name("Celltypes"), h0) +*
-      table_(class("receptor_data_tables fullwidth"),
-        tr(name("hotspot") +@ class("hotspot"),
-          td(class("info category"), textNode("Cell Type Associations"))) +*
-        renderedCTAs)
+      if (not(listEmpty(objectInfo.objectCellTypeAssociations))) {
+        a(name("Celltypes"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          tr(name("hotspot") +@ class("hotspot"),
+            td(class("info category"), textNode("Cell Type Associations"))) +*
+          renderedCTAs)
+      } else {
+        MvuHTML.empty
+      }
     };
 
     var immunoProcessAssociationsBox = {
@@ -3043,6 +3082,7 @@ fun view(model) {
             physiologicalFunctionsBox +*
             physiologicalConsequencesBox +*
             phenotypesBox +*
+            xenobioticsBox +*
             generalCommentsBox)));
 
     var referencesBox =
