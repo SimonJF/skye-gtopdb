@@ -46,10 +46,10 @@
 ## antibodies
 ## other binding ligands
 # Quaternary structure
+# Single channel conductance
 
 ## Not done
 
-# Single channel conductance
 # voltage dependence
 # rank order lists
 # whole organism assay data
@@ -3207,6 +3207,71 @@ fun view(model) {
       }
     };
 
+    var conductanceStatesBox = {
+      if (not(listEmpty(objectInfo.objectConductanceStates))) {
+        fun renderRange(range) {
+          var val =
+            if (range.low == 0.0 && range.high == 0.0) {
+              textNode("-")
+            } else if (range.low <> 0.0 && range.high <> 0.0) {
+              textNode(floatToString(range.low) ^^ " - " ^^ floatToString(range.high))
+            } else if (range.low <> 0.0) {
+              textNode(floatToString(range.low))
+            } else {
+              textNode(floatToString(range.high))
+            };
+          var star = if (range.mostFrequent) { "*" } else { "" };
+          val +* textNode(star)
+        }
+
+        fun renderRow(state) {
+          tr(class("info"),
+            td(a0, unescapedTextNode(state.receptor)) +*
+            td(a0, renderRange(state.state1)) +*
+            td(a0, renderRange(state.state2)) +*
+            td(a0, renderRange(state.state3)) +*
+            td(a0, renderRange(state.state4)) +*
+            td(a0, renderRange(state.state5)) +*
+            td(a0, renderRange(state.state6)) +*
+            td(a0, renderCitations(state.references)))
+        }
+
+        var renderedRows =
+          MvuHTML.concatMap(renderRow, objectInfo.objectConductanceStates);
+
+        var conductanceTable =
+          table_(class("receptor_data_tables"),
+            thead(a0,
+              tr(class("info heading"),
+                th(class("conductance_receptor_header") +@ rowSpan(2), textNode("Recombinant receptor")) +*
+                th(colSpan(6), textNode("Conductance states (pS)")) +*
+                th(class("conductance_reference_header") +@ rowSpan(2), textNode("Reference"))) +*
+              tr(class("info heading"),
+                th(class("conductance_state_header"), textNode("I")) +*
+                th(class("conductance_state_header"), textNode("II")) +*
+                th(class("conductance_state_header"), textNode("III")) +*
+                th(class("conductance_state_header"), textNode("IV")) +*
+                th(class("conductance_state_header"), textNode("V")) +*
+                th(class("conductance_state_header"), textNode("VI")))) +*
+            tbody(a0,
+              renderedRows +*
+              tr(class("info"),
+                td(style("text-align:center;") +@ colSpan(8),
+                  textNode("* the most frequently occurring conductance states")))));
+
+        a(name("ConductanceStates"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(name("hotspot") +@ class("hotspot"),
+              td(class("info category"), textNode("Single Channel Conductance of Recombinant Receptors")))) +*
+          tbody(name("toggle"),
+            tr(a0,
+              td(class("table_container"), conductanceTable))))
+      } else {
+        MvuHTML.empty
+      }
+    };
+
     var dataBoxes =
       div(class("grid_16 alpha"),
         div(class("contentboxfullhelp"),
@@ -3225,6 +3290,7 @@ fun view(model) {
             stoichiometryBox +*
             fcsBox +*
             selectivityBox +*
+            conductanceStatesBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
             interactionsTables +*
