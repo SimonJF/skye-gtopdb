@@ -2,6 +2,8 @@
 fun listEmpty(xs) { empty(xs) }
 fun listSpan(f, xs) { span(f, xs) }
 fun listConcatMap(f, xs) { concatMap(f, xs) }
+var listElem = elem;
+var listContains = listElem;
 ## Useful in defining list predicates in LINQ.
 # sig contains : ([a]) ~> ((a) {}-> Bool)
 # fun contains(l) {
@@ -220,18 +222,6 @@ fun filterMap(f, xs) {
       case Nothing -> []
     }
   }, xs)
-}
-
-fun listContains(x, xs) {
-  switch(xs) {
-    case [] -> false
-    case y :: ys ->
-      if (x == y) {
-        true
-      } else {
-        listContains(x, ys)
-      }
-  }
 }
 
 # True if a given DB link has changed from the original DB capture

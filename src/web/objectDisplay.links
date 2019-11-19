@@ -45,10 +45,10 @@
 ## subunit-specific
 ## antibodies
 ## other binding ligands
+# Quaternary structure
 
 ## Not done
 
-# Quaternary structure
 # Single channel conductance
 # voltage dependence
 # rank order lists
@@ -349,6 +349,19 @@ typename QuaternaryStructure = (
   comments: Markup
 );
 
+typename ConductanceRange = (low: Float, high: Float, mostFrequent: Bool);
+
+typename ConductanceState = (
+  receptor: String,
+  state1: ConductanceRange,
+  state2: ConductanceRange,
+  state3: ConductanceRange,
+  state4: ConductanceRange,
+  state5: ConductanceRange,
+  state6: ConductanceRange,
+  references: [ReferenceID]
+);
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -395,6 +408,7 @@ typename ObjectInfo = (
     objectBindingPartners: SimpleTable,
     objectTargetGenes: SimpleTable,
     objectXenobioticExpressions: DataTableBox,
+    objectConductanceStates: [ConductanceState],
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -651,6 +665,14 @@ fun getInitialModel() {
                       for (r <-- Tables.conductance_refs)
                       where (r.conductance_id == c.conductance_id)
                       [r.reference_id])],
+              conductanceStates =
+                for (cs <-- Tables.conductance_states)
+                  where (cs.object_id == objectId)
+                  [(=cs,
+                    refs =
+                      for (r <-- Tables.conductance_states_refs)
+                      where (r.conductance_states_id == cs.conductance_states_id)
+                        [r.reference_id])],
               selectivity =
                 for (s <-- Tables.selectivity)
                   where (s.object_id == objectId)
@@ -1755,6 +1777,40 @@ fun getInitialModel() {
         (res, refs, ligands)
       }
 
+
+      fun transformConductanceStates(states) {
+        fun transform(state) {
+          var cs = state.cs;
+          # Bit of a hack. Most frequent states are a comma-separated list.
+          # As this list will only contain numbers 1-6, we can just pass in
+          # the character and check whether it's a member of the exploded
+          # list, rather than doing any splitting or anything more complex.
+          fun isMostFrequent(x) {
+            listElem(x, explode(cs.most_frequent_state))
+          }
+
+          fun mkRange(low, high, chr) {
+            (=low, =high, mostFrequent = isMostFrequent(chr))
+          }
+
+          var state1 = mkRange(cs.state1_low, cs.state1_high, '1');
+          var state2 = mkRange(cs.state2_low, cs.state2_high, '2');
+          var state3 = mkRange(cs.state3_low, cs.state3_high, '3');
+          var state4 = mkRange(cs.state4_low, cs.state4_high, '4');
+          var state5 = mkRange(cs.state5_low, cs.state5_high, '5');
+          var state6 = mkRange(cs.state6_low, cs.state6_high, '6');
+          (receptor = cs.receptor, =state1, =state2, =state3, =state4,
+           =state5, =state6, references = state.refs)
+        }
+
+        fold_left(fun((states, refs), x) {
+            var res = transform(x);
+            (res :: states, res.references ++ refs)
+        }, ([], []), states)
+      }
+
+      var (cs, csRefs) = transformConductanceStates(raw.conductanceStates);
+
       var (qs, qsRefs, qsLigands) =
         transformQuaternaryStructure(raw.quaternary_structure_comments,
             raw.receptors, raw.subunits);
@@ -1832,13 +1888,6 @@ fun getInitialModel() {
       var (xenobiotics, xeRefs, xeLigands) =
         transformXenobioticExpressions(receptorComments.xenobioticExpressionComments, raw.xenobiotics);
 
-     #var selectivityComments = {
-     #  var comments =
-     #    map(fun(x) { x.selectivity_comments }, raw.vgic) ++
-     #    map(fun(x) { x.selectivity_comments }, raw.lgic) ++
-     #    map(fun(x) { x.selectivity_comments }, raw.other_ic);
-     #  fold_right(fun(x, acc) { x ^^ " " ^^ acc }, "", comments)
-     #};
       var selectivityComments =
         switch(objectType) {
           case VGIC(x) -> x.selectivityComments
@@ -1887,6 +1936,7 @@ fun getInitialModel() {
           tgRefs ++
           xeRefs ++
           qsRefs ++
+          csRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1964,7 +2014,8 @@ fun getInitialModel() {
        objectTargetGenes = targetGenes,
        objectXenobioticExpressions = xenobiotics,
        objectQuaternaryStructure = qs,
-       objectContributors = transformContributors(raw.contributors))
+       objectContributors = transformContributors(raw.contributors),
+       objectConductanceStates = cs)
     }
 
     switch(raw) {
