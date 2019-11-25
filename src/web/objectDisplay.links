@@ -362,6 +362,22 @@ typename ConductanceState = (
   references: [ReferenceID]
 );
 
+typename ThreeValueRange =
+  (low: Float, median: Float, high: Float);
+
+typename TwoValueRange = (low: Float, high: Float);
+
+typename VoltageDependenceRange =
+  (vRange: ThreeValueRange, tRange: TwoValueRange, refs: [ReferenceID]);
+
+typename VoltageDependence =
+  (cellType: String,
+   speciesID: SpeciesID,
+   activationRange: VoltageDependenceRange,
+   inactivationRange: VoltageDependenceRange,
+   deactivationRange: VoltageDependenceRange,
+   comments: Markup);
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -409,6 +425,7 @@ typename ObjectInfo = (
     objectTargetGenes: SimpleTable,
     objectXenobioticExpressions: DataTableBox,
     objectConductanceStates: [ConductanceState],
+    objectVoltageDependence: [VoltageDependence],
     objectContributors: ContentBox([Contributor.Contributor])
 );
 
@@ -771,7 +788,23 @@ fun getInitialModel() {
                    where (r2s.subunit_id == objectId)
                      for (r <-- Tables.object)
                      where (r.object_id == r2s.receptor_id)
-                       [(id = r.object_id, name = r.name, type = r2s.type)]
+                       [(id = r.object_id, name = r.name, type = r2s.type)],
+                voltageDependence =
+                  for (vd <-- Tables.voltage_dependence)
+                    where (vd.object_id == objectId)
+                      [(=vd,
+                        activationRefs =
+                          for (ar <-- Tables.voltage_dep_activation_refs)
+                          where (ar.voltage_dependence_id == vd.voltage_dependence_id)
+                          [ar.reference_id],
+                        deactivationRefs =
+                          for (dr <-- Tables.voltage_dep_deactivation_refs)
+                          where (dr.voltage_dependence_id == vd.voltage_dependence_id)
+                          [dr.reference_id],
+                        inactivationRefs =
+                          for (ir <-- Tables.voltage_dep_inactivation_refs)
+                          where (ir.voltage_dependence_id == vd.voltage_dependence_id)
+                          [ir.reference_id])]
              )]
     };
 
@@ -1808,6 +1841,66 @@ fun getInitialModel() {
             (res :: states, res.references ++ refs)
         }, ([], []), states)
       }
+#               voltageDependence =
+#                 for (vd <-- Tables.voltage_dependence)
+#                   where (vd.object_id == objectId)
+#                     [(=vd,
+#                       activationRefs =
+#                         for (ar <- Tables.voltage_dep_activation_refs)
+#                         where (ar.voltage_dependence_id == vd.voltage_dependence_id)
+#                         [ar.reference_id],
+#                       deactivationRefs =
+#                         for (dr <- Tables.voltage_dep_deactivation_refs)
+#                         where (dr.voltage_dependence_id == vd.voltage_dependence_id)
+#                         [dr.reference_id],
+#                       inactivationRefs =
+#                         for (ir <- Tables.voltage_dep_inactivation_refs)
+#                         where (ir.voltage_dependence_id == vd.voltage_dependence_id)
+#                         [ir.reference_id])]
+
+      fun transformVoltageDependence(vds) {
+        fun mkRange(low, median, high) {
+          (=low, =median, =high)
+        }
+
+        fun mkTwoValRange(low, high) {
+          (=low, =high)
+        }
+
+        fun mkVDRange(vLow, vMedian, vHigh, tLow, tHigh, refs) {
+          var vRange = mkRange(vLow, vMedian, vHigh);
+          var tRange = mkTwoValRange(tLow, tHigh);
+          (=vRange, =tRange, =refs)
+        }
+
+        fun transformVD(vdInfo) {
+          var vd = vdInfo.vd;
+          var markup = parseOrError(vd.comments);
+          var (refs, ligands) = collectIds(markup);
+          var activationRange =
+            mkVDRange(vd.activation_v_low, vd.activation_v_median, vd.activation_v_high,
+                vd.activation_t_low, vd.activation_t_high, vdInfo.activationRefs);
+          var inactivationRange =
+            mkVDRange(vd.inactivation_v_low, vd.inactivation_v_median, vd.inactivation_v_high,
+                vd.inactivation_t_low, vd.inactivation_t_high, vdInfo.inactivationRefs);
+          var deactivationRange =
+            mkVDRange(vd.deactivation_v_low, vd.deactivation_v_median, vd.deactivation_v_high,
+                vd.deactivation_t_low, vd.deactivation_t_high, vdInfo.deactivationRefs);
+          var allRefs : [Int] = refs ++ vdInfo.activationRefs ++
+            vdInfo.inactivationRefs ++ vdInfo.deactivationRefs;
+
+          ((cellType = vd.cell_type, speciesID = vd.species_id,
+           =activationRange, =inactivationRange, =deactivationRange, comments = markup),
+           allRefs, ligands)
+        }
+
+        fold_left(fun((transformedVDs, refs, ligands), vd) {
+            var (res, vdRefs, vdLigands) = transformVD(vd);
+            (res :: transformedVDs, vdRefs ++ refs, vdLigands ++ ligands)
+        }, ([], [], []), vds)
+      }
+
+      var (vds, vdRefs, vdLigands) = transformVoltageDependence(raw.voltageDependence);
 
       var (cs, csRefs) = transformConductanceStates(raw.conductanceStates);
 
@@ -1937,6 +2030,7 @@ fun getInitialModel() {
           xeRefs ++
           qsRefs ++
           csRefs ++
+          vdRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -1960,6 +2054,7 @@ fun getInitialModel() {
           tgLigands ++
           xeLigands ++
           qsLigands ++
+          vdLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -2015,6 +2110,7 @@ fun getInitialModel() {
        objectXenobioticExpressions = xenobiotics,
        objectQuaternaryStructure = qs,
        objectContributors = transformContributors(raw.contributors),
+       objectVoltageDependence = vds,
        objectConductanceStates = cs)
     }
 
