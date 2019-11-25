@@ -47,10 +47,10 @@
 ## other binding ligands
 # Quaternary structure
 # Single channel conductance
+# voltage dependence
 
 ## Not done
 
-# voltage dependence
 # rank order lists
 # whole organism assay data
 # screening data
@@ -2168,6 +2168,33 @@ fun view(model) {
       }
     }
 
+    #sig renderTwoValRange : (TwoValueRange) ~%~> HTML(Message)
+    fun renderTwoValRange(range) {
+      if (range.low == 0.0 && range.high == 0.0) {
+        textNode("-")
+      } else if (range.low <> 0.0 && range.high <> 0.0) {
+        textNode(floatToString(range.low) ^^ " - " ^^ floatToString(range.high))
+      } else if (range.low <> 0.0) {
+        textNode(floatToString(range.low))
+      } else {
+        textNode(floatToString(range.high))
+      }
+    }
+
+    fun renderThreeValRange(range) {
+      if (range.low == 0.0 && range.median == 0.0 && range.high == 0.0) {
+        textNode("-")
+      } else if (range.median <> 0.0) {
+        textNode(floatToString(range.median))
+      } else if (range.low <> 0.0 && range.high <> 0.0) {
+        textNode(floatToString(range.low) ^^ " - " ^^ floatToString(range.high))
+      } else if (range.low <> 0.0) {
+        textNode(floatToString(range.low))
+      } else {
+        textNode(floatToString(range.high))
+      }
+    }
+
     var sysNomenclature =
       renderIfJust("Systematic Nomenclature", objectInfo.objectSystematicName);
     var abbrev =
@@ -3303,23 +3330,99 @@ fun view(model) {
       }
     };
 
-    var conductanceStatesBox = {
-      if (not(listEmpty(objectInfo.objectConductanceStates))) {
-        fun renderRange(range) {
-          var val =
-            if (range.low == 0.0 && range.high == 0.0) {
-              textNode("-")
-            } else if (range.low <> 0.0 && range.high <> 0.0) {
-              textNode(floatToString(range.low) ^^ " - " ^^ floatToString(range.high))
-            } else if (range.low <> 0.0) {
-              textNode(floatToString(range.low))
+
+    var voltageDependenceBox = {
+      if (not(listEmpty(objectInfo.objectVoltageDependence))) {
+        fun renderVD(vd) {
+          var header =
+            thead(a0,
+              tr(class("info heading"),
+                th(a0, h0) +*
+                th(width("16%"), unescapedTextNode("V<sub>0.5</sub> (mV)")) +*
+                th(width("16%"), unescapedTextNode("&tau; (msec)")) +*
+                th(width("16%"), textNode("References")) +*
+                th(width("16%"), textNode("Cell type")) +*
+                th(width("16%"), textNode("Species"))));
+
+          fun emptyThreeValRange(r) {
+            r.low == 0.0 && r.median == 0.0 && r.high == 0.0
+          }
+          fun emptyTwoValRange(r) {
+            r.low == 0.0 && r.high == 0.0
+          }
+
+          var deact = vd.deactivationRange;
+
+          var displayDeactivation =
+            not(emptyThreeValRange(deact.vRange) && emptyTwoValRange(deact.tRange));
+
+          var rowCount = if (displayDeactivation) { 3 } else { 2 };
+
+          var activationRow =
+            tr(class("info"),
+              td(style("font-weight:bold;"), textNode("Activation")) +*
+              td(a0, renderThreeValRange(vd.activationRange.vRange)) +*
+              td(a0, renderTwoValRange(vd.activationRange.tRange)) +*
+              td(a0, renderCitations(vd.activationRange.refs)) +*
+              td(rowSpan(rowCount), textNode(vd.cellType)) +*
+              td(rowSpan(rowCount), textNode(speciesLongName(vd.speciesID))));
+
+          var inactivationRow =
+            tr(class("info"),
+              td(style("font-weight:bold;"), textNode("Inactivation")) +*
+              td(a0, renderThreeValRange(vd.inactivationRange.vRange)) +*
+              td(a0, renderTwoValRange(vd.inactivationRange.tRange)) +*
+              td(a0, renderCitations(vd.inactivationRange.refs)));
+
+          var deactivationRow =
+            if (displayDeactivation) {
+              tr(class("info"),
+                td(style("font-weight:bold;"), textNode("Inactivation")) +*
+                td(a0, renderThreeValRange(vd.deactivationRange.vRange)) +*
+                td(a0, renderTwoValRange(vd.deactivationRange.tRange)) +*
+                td(a0, renderCitations(vd.deactivationRange.refs)))
             } else {
-              textNode(floatToString(range.high))
+              MvuHTML.empty
             };
-          var star = if (range.mostFrequent) { "*" } else { "" };
-          val +* textNode(star)
+
+
+          var comments =
+            if (not(markupEmpty(vd.comments))) {
+              tr(class("info"),
+                td(style("font-weight:bold;"), textNode("Comments")) +*
+                td(colSpan(5), renderM(vd.comments)))
+            } else {
+              MvuHTML.empty
+            };
+
+          var content =
+            tbody(a0,
+              activationRow +* inactivationRow +* deactivationRow +* comments
+            );
+
+          tr(a0,
+            td(class("table_container"),
+              table_(class("receptor_data_tables") +@ width("98%"),
+                header +* content)))
         }
 
+        var renderedVDs =
+          MvuHTML.concatMap(renderVD, objectInfo.objectVoltageDependence);
+
+        dataBox("Voltage Dependence", 1, renderedVDs)
+      } else {
+        MvuHTML.empty
+      }
+    };
+
+    var conductanceStatesBox = {
+      fun renderRange(r) {
+        var val = renderTwoValRange(r);
+        var star = if (r.mostFrequent) { "*" } else { "" };
+        val +* textNode(star)
+      }
+
+      if (not(listEmpty(objectInfo.objectConductanceStates))) {
         fun renderRow(state) {
           tr(class("info"),
             td(a0, unescapedTextNode(state.receptor)) +*
@@ -3386,6 +3489,7 @@ fun view(model) {
             stoichiometryBox +*
             fcsBox +*
             selectivityBox +*
+            voltageDependenceBox +*
             conductanceStatesBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
