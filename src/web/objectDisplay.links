@@ -125,6 +125,7 @@ typename AnnotationStatus = Int; # TODO: More meaningful datatype here
 typename LigandID = Int;
 typename SpeciesID = Int;
 typename PDBID = String;
+typename TissueName = String;
 
 typename GeneProteinInfo = (
     gpiSpeciesID: Int,
@@ -385,6 +386,14 @@ typename PotencyOrder =
    speciesID: SpeciesID,
    references: [ReferenceID]);
 
+typename GeneExpression =
+  (geneName: String,
+   description: String,
+   technique: String,
+   speciesID: SpeciesID,
+   baseline: Float,
+   data: [(TissueName, Float)]);
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -408,8 +417,7 @@ typename ObjectInfo = (
     objectTissueDistribution: DataTableBox,
     objectCellTypeAssociations: [CellTypeAssociation],
     objectImmunoProcessAssociations: [ImmunoProcessAssociation],
-    # TODO: Expression dataset(!?)
-   # objectExpressionDataset: (),
+    objectGeneExpression: [GeneExpression],
     objectFunctionalAssays: DataTableBox,
     objectPhysiologicalFunctions: DataTableBox,
     objectPhysiologicalConsequences: DataTableBox,
@@ -532,9 +540,11 @@ fun getInitialModel() {
                    expressionLevel =
                      for (el <-- Tables.expression_level)
                      where (el.structural_info_id == si.structural_info_id)
-                       for (experiment <-- Tables.expression_experiment)
-                       where (experiment.expression_experiment_id == el.expression_experiment_id)
-                         [(=el, =experiment)],
+                       for (t <-- Tables.tissue)
+                       where (t.tissue_id == el.tissue_id)
+                         for (experiment <-- Tables.expression_experiment)
+                         where (experiment.expression_experiment_id == el.expression_experiment_id)
+                           [(=el, tissueName = t.name, =experiment)],
                    refs =
                      for (siRef <-- Tables.structural_info_refs)
                        where (siRef.structural_info_id == si.structural_info_id)
@@ -1370,6 +1380,30 @@ fun getInitialModel() {
            giRefs)
       }
 
+      fun transformGeneExpression(gis) {
+        # For each gene, check if there's any registered expression level
+        # data. If so, then group the data by experiment.
+
+        listConcatMap(fun(gene) {
+            var el = gene.expressionLevel;
+            var grouped = groupBy(fun(x) { x.experiment.expression_experiment_id}, el);
+
+            # grouped: [(ExperimentID, [(el, tissueName, experiment)])]
+            map(fun((_, xs)) {
+              var experiment = hd(xs).experiment;
+
+              var data = map(fun(x) { (x.tissueName, x.el.value) }, xs);
+
+              (geneName = gene.si.gene_name,
+               description = experiment.description,
+               technique = experiment.technique,
+               speciesID = experiment.species_id,
+               baseline = experiment.baseline,
+               =data)
+            }, grouped)
+        }, gis)
+      }
+
       sig mkDataTableBox : (String, [DataTableEntry]) ~%~> DataTableBox
       fun mkDataTableBox(name, rows) {
         (boxName = name, boxRows = rows)
@@ -2081,6 +2115,8 @@ fun getInitialModel() {
 
       }
 
+      var ges : [GeneExpression] = transformGeneExpression(raw.geneInformation);
+
       var (pos, poRefs, poLigands) = transformPotencyOrders(raw.potencyOrder);
 
       var (vds, vdRefs, vdLigands) = transformVoltageDependence(raw.voltageDependence);
@@ -2288,6 +2324,7 @@ fun getInitialModel() {
        objectTissueDistribution = tissueDistribution,
        objectCellTypeAssociations = cellTypeAssociations,
        objectImmunoProcessAssociations = immunoProcessAssociations,
+       objectGeneExpression = ges,
        objectAssociatedProteins = associatedProteins,
        objectSpeciesMap = speciesMap,
        objectSubstrates = substrateTbl,
