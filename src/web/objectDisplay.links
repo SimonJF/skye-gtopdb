@@ -50,11 +50,11 @@
 # rank order lists
 # whole organism assay data
 # gene expression / pathophysiology
+# expression datasets
 
 ## Not done
 
 # screening data
-# expression datasets
 # phenotypes, alleles, disease models
 # clinically-relevant mutations
 
@@ -68,6 +68,8 @@ open import Transduction;
 open import Utility;
 open import MvuHTML;
 open import MvuAttrs;
+open import MvuCommands;
+import MvuSubscriptions;
 open import Mvu;
 open import Template;
 open import Ligand;
@@ -78,6 +80,9 @@ open import DbLinks;
 open import Object;
 open import Tables;
 open import SimpleTable;
+
+
+## Data model
 
 typename ObjectID = Int;
 
@@ -116,8 +121,9 @@ typename Table = [|
 typename ColumnName = String;
 
 typename Message = [|
-    SortTable:(Table, ColumnName, SortDirection)
-  | ToggleReferences | ToggleContributors | ToggleShowIEA:Int
+    NoOp
+  | SortTable:(Table, ColumnName, SortDirection)
+  | ToggleReferences | ToggleContributors | ToggleShowIEA:Int | ShowCharts
 |];
 
 typename Family = (familyId: Int, familyName: Markup);
@@ -441,8 +447,27 @@ typename ObjectInfo = (
     objectXenobioticExpressions: DataTableBox,
     objectConductanceStates: [ConductanceState],
     objectVoltageDependence: [VoltageDependence],
-    objectContributors: ContentBox([Contributor.Contributor])
+    objectContributors: ContentBox([Contributor.Contributor]),
+    chartsShown: Bool
 );
+
+## FFI Stuff
+
+# Needed to ensure that virtual-dom is open
+module Highcharts {
+  alien javascript "/js/highcharts.js" {
+    dummy : ();
+  }
+}
+
+# Loads the "vdom.js" file, exposes runDom and updateDom.
+module HighchartsWrapper {
+  alien javascript "/js/highchartsWrapper.js" {
+     renderChart : (GeneExpression, String) ~> ();
+  }
+}
+
+
 
 typename Model = Maybe(ObjectInfo);
 
@@ -2340,7 +2365,8 @@ fun getInitialModel() {
        objectContributors = transformContributors(raw.contributors),
        objectVoltageDependence = vds,
        objectPotencyOrder = pos,
-       objectConductanceStates = cs)
+       objectConductanceStates = cs,
+       chartsShown = false)
     }
 
     switch(raw) {
@@ -2975,6 +3001,43 @@ fun view(model) {
 
     var tissueDistributionBox =
       renderDataBox(objectInfo.objectTissueDistribution);
+
+    var expressionDatasetsBox = {
+      var charts =
+        MvuHTML.concat(
+          mapi(fun(x, i) {
+            htmlWidget("div",
+              [("id", "chart" ^^ intToString(i)),
+               ("style", "width: 910px; height: 400px; margin-top:10px;")])
+          }, objectInfo.objectGeneExpression));
+
+        var showChartsLink =
+       #if (objectInfo.chartsShown) {
+       #  MvuHTML.empty
+       #} else {
+          p(a0,
+            a(href("javascript:void(0)") +@ onClick(fun() { ShowCharts }),
+                  textNode("Show charts")));
+       # };
+
+      var description =
+        p(style("text-align:left;margin-top:10px;"),
+            unescapedTextNode("Log average relative transcript abundance " ^^
+              "in mouse tissues measured by qPCR from Regard, J.B., Sato, " ^^
+              "I.T., and Coughlin, S.R. (2008). Anatomical profiling of " ^^
+              "G protein-coupled receptor expression. <i>Cell</i>, <b>135</b>(3): 561-71."));
+
+      var content =
+        tr(a0,
+          td(class("info"),
+            table_(class("inner_receptor_data_tables"),
+              tr(a0,
+                td(class("description"), showChartsLink +* description +*
+                div(a0, charts))))));
+
+      dataBox("Expression Datasets", 1, content)
+    };
+
     var functionalAssaysBox =
       renderDataBox(objectInfo.objectFunctionalAssays);
     var physiologicalFunctionsBox =
@@ -3834,6 +3897,7 @@ fun view(model) {
             dnaBindingsBox +*
             dnaComments +*
             tissueDistributionBox +*
+            expressionDatasetsBox +*
             functionalAssaysBox +*
             physiologicalFunctionsBox +*
             physiologicalConsequencesBox +*
@@ -3866,7 +3930,7 @@ fun view(model) {
   }
 }
 
-sig updt : (Message, Model) ~%~> Model
+sig updt : (Message, Model) ~%~> (Model, Command(Message))
 fun updt(msg, model) {
   fun updtOI(objectInfo) {
 
@@ -3880,21 +3944,44 @@ fun updt(msg, model) {
         }, ipas)
     }
 
+    fun noCmd(updated) { (updated, MvuCommands.empty) }
+
     switch(msg) {
+      case NoOp -> noCmd(objectInfo)
       case ToggleReferences ->
-        (objectInfo with
-          objectShowReferences=not(objectInfo.objectShowReferences))
+        noCmd(
+          (objectInfo with
+            objectShowReferences=not(objectInfo.objectShowReferences)))
       case ToggleContributors ->
-        (objectInfo with
-          objectContributors = toggleBox(objectInfo.objectContributors))
+        noCmd(
+          (objectInfo with
+            objectContributors = toggleBox(objectInfo.objectContributors)))
       case ToggleShowIEA(procID) ->
-        (objectInfo with
-          objectImmunoProcessAssociations=toggleIEA(procID))
+        noCmd(
+          (objectInfo with
+            objectImmunoProcessAssociations=toggleIEA(procID)))
+      case ShowCharts ->
+        if (not(objectInfo.chartsShown)) {
+          # renderChart : (GeneExpression, String) ~> ();
+          var (_, cmds) =
+            fold_left(fun((i, cmds), x) {
+                var cmd = MvuCommands.spawnProc(fun() {
+                  HighchartsWrapper.renderChart(x, "chart" ^^ intToString(i));
+                  NoOp
+                });
+                (i + 1, cmds +$ cmd)
+            }, (0, MvuCommands.empty), objectInfo.objectGeneExpression);
+
+          ((objectInfo with chartsShown = true), cmds)
+        } else {
+          noCmd(objectInfo)
+        }
       case SortTable(tableTy, colName, dir) ->
         var osi = objectInfo.objectSortedInteractions;
         fun updateOSI(newOSI) {
-          (objectInfo with objectSortedInteractions = newOSI)
+          noCmd((objectInfo with objectSortedInteractions = newOSI))
         }
+
         switch(tableTy) {
           case AgonistsTable ->
             updateOSI((osi with agonists = DataTable.updateSortStatus(osi.agonists, colName, dir)))
@@ -3936,25 +4023,28 @@ fun updt(msg, model) {
               (osi with other =
                  DataTable.updateSortStatus(osi.other, colName, dir)))
           case SubstratesTable ->
-            (objectInfo with objectSubstrates =
-              DataTable.updateSortStatus(objectInfo.objectSubstrates, colName, dir))
+            noCmd((objectInfo with objectSubstrates =
+              DataTable.updateSortStatus(objectInfo.objectSubstrates, colName, dir)))
           case CofactorsTable ->
-            (objectInfo with objectCofactors =
-              DataTable.updateSortStatus(objectInfo.objectCofactors, colName, dir))
+            noCmd((objectInfo with objectCofactors =
+              DataTable.updateSortStatus(objectInfo.objectCofactors, colName, dir)))
 
         }
-      case _ -> objectInfo
+      case _ -> noCmd(objectInfo)
     }
   }
 
   switch(model) {
-    case Just(objectInfo) -> Just(updtOI(objectInfo))
-    case Nothing -> Nothing
+    case Just(objectInfo) ->
+      var (oi, cmds) = updtOI(objectInfo);
+      (Just(oi), cmds)
+    case Nothing -> (Nothing, MvuCommands.empty)
   }
 }
 
 fun mainPage() {
   var initialModel = getInitialModel();
-  runSimple("vdom_placeholder", initialModel, view, updt);
+  run("vdom_placeholder", initialModel, view, updt,
+      fun(_) { SubEmpty }, MvuCommands.empty);
   template("Object Display")
 }
