@@ -49,6 +49,7 @@
 # voltage dependence
 # rank order lists
 # whole organism assay data
+# gene expression / pathophysiology
 
 ## Not done
 
@@ -56,7 +57,6 @@
 # expression datasets
 # phenotypes, alleles, disease models
 # clinically-relevant mutations
-# gene expression / pathophysiology
 
 open import Parser;
 open import RenderMarkup;
@@ -244,6 +244,7 @@ typename Cofactor = (
   references: [ReferenceID]
 );
 
+# TODO: This can be made into a DataTableBox.
 typename Variant = (
     vId: Int,
     vType: String,
@@ -414,6 +415,8 @@ typename ObjectInfo = (
     objectPhysiologicalConsequences: DataTableBox,
    # objectPhenotypes: SortableTable(Phenotype, Message),
     objectDNABindings: DataTableBox,
+    objectPhysiologicalConsequences: DataTableBox,
+    objectExpressionPathophysiology: DataTableBox,
     objectVariants: [Variant],
     objectComments: ReceptorComments,
     objectShowReferences: Bool,
@@ -815,7 +818,15 @@ fun getInitialModel() {
                         inactivationRefs =
                           for (ir <-- Tables.voltage_dep_inactivation_refs)
                           where (ir.voltage_dependence_id == vd.voltage_dependence_id)
-                          [ir.reference_id])]
+                          [ir.reference_id])],
+                expressionPathophysiology =
+                  for (ep <-- Tables.expression_pathophysiology)
+                    where (ep.object_id == objectId)
+                    [(=ep,
+                      refs =
+                        for (r <-- Tables.expression_pathophysiology_refs)
+                        where (r.expression_pathophysiology_id == ep.expression_pathophysiology_id)
+                        [r.reference_id])]
              )]
     };
 
@@ -1399,6 +1410,19 @@ fun getInitialModel() {
               [("Species", parseOrError(resolveSpeciesLongName(pf.species_id, speciesMap))),
                ("Tissue", parseOrError(pf.tissue))], references)
           }, pfs)
+      }
+
+      fun transformExpressionPathophysiology(eps) {
+        transformDataTableBox("Gene Expression and Pathophysiology",
+          fun(ep) {
+            var references = ep.refs;
+            var ep = ep.ep;
+            mkDataTableEntry(parseOrError(ep.change),
+              [("Tissue or cell type", parseOrError(ep.tissue)),
+               ("Pathophysiology", parseOrError(ep.pathophysiology)),
+               ("Species", parseOrError(speciesLongName(ep.species_id))),
+               ("Technique", parseOrError(ep.technique))], references)
+          }, eps)
       }
 
       fun transformPhysiologicalConsequences(aes) {
@@ -2100,6 +2124,9 @@ fun getInitialModel() {
       var (physiologicalFunctions, pfRefs, pfLigands) =
         transformPhysiologicalFunctions(raw.physiologicalFunctions);
 
+      var (expressionPathophysiology, epRefs, epLigands) =
+        transformExpressionPathophysiology(raw.expressionPathophysiology);
+
       var (physiologicalConsequences, pcRefs, pcLigands) =
         transformPhysiologicalConsequences(raw.alteredExpressions);
 
@@ -2185,6 +2212,7 @@ fun getInitialModel() {
           csRefs ++
           vdRefs ++
           poRefs ++
+          epRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -2210,6 +2238,7 @@ fun getInitialModel() {
           qsLigands ++
           vdLigands ++
           poLigands ++
+          epLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -2248,6 +2277,7 @@ fun getInitialModel() {
        objectReferences = refs,
        objectFunctionalAssays = functionalAssays,
        objectPhysiologicalFunctions = physiologicalFunctions,
+       objectExpressionPathophysiology = expressionPathophysiology,
        objectPhysiologicalConsequences = physiologicalConsequences,
        objectTissueDistribution = tissueDistribution,
        objectCellTypeAssociations = cellTypeAssociations,
@@ -2910,6 +2940,14 @@ fun view(model) {
       renderDataBox(objectInfo.objectPhysiologicalConsequences);
     var xenobioticsBox =
       renderDataBox(objectInfo.objectXenobioticExpressions);
+
+    var expressionPathophysiologyBox =
+      renderDataBox(objectInfo.objectExpressionPathophysiology);
+
+    var expressionPathophysiologyComments =
+      commentsBox("Gene Expression and Pathophysiology Comments",
+          objectInfo.objectComments.expressionPathophysiologyComments);
+
 
     var phenotypesBox = MvuHTML.empty;
     var generalCommentsBox =
@@ -3758,6 +3796,8 @@ fun view(model) {
             physiologicalConsequencesBox +*
             phenotypesBox +*
             xenobioticsBox +*
+            expressionPathophysiologyBox +*
+            expressionPathophysiologyComments +*
             generalCommentsBox)));
 
     var referencesBox =
