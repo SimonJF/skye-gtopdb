@@ -529,6 +529,12 @@ fun getInitialModel() {
                for (si <-- Tables.structural_info)
                  where (si.object_id == objectId)
                  [(si=si,
+                   expressionLevel =
+                     for (el <-- Tables.expression_level)
+                     where (el.structural_info_id == si.structural_info_id)
+                       for (experiment <-- Tables.expression_experiment)
+                       where (experiment.expression_experiment_id == el.expression_experiment_id)
+                         [(=el, =experiment)],
                    refs =
                      for (siRef <-- Tables.structural_info_refs)
                        where (siRef.structural_info_id == si.structural_info_id)
