@@ -378,6 +378,12 @@ typename VoltageDependence =
    deactivationRange: VoltageDependenceRange,
    comments: Markup);
 
+typename PotencyOrder =
+  (description: Markup,
+   potencyOrder: Markup,
+   speciesID: SpeciesID,
+   references: [ReferenceID]);
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -391,13 +397,11 @@ typename ObjectInfo = (
       (giComments: Markup, giEntries: [GeneProteinInfo]),
     objectAssociatedProteins: SortedAssociatedProteins,
     objectEnzymeReactions: [EnzymeReaction],
-    # TODO: Suss this out and add it in
     objectQuaternaryStructure: QuaternaryStructure,
     objectDatabaseLinks: [DatabaseLink],
     objectPDBData: [PDBData],
     objectEndogenousLigands: [EndogenousLigandSummary],
-    # TODO: Potency order(!?)
-  # objectPotencyOrder: (),
+    objectPotencyOrder: [PotencyOrder],
     objectSortedInteractions: SortedInteractions,
     objectTransductionMechanisms: [TransductionMechanism],
     objectTissueDistribution: DataTableBox,
@@ -541,7 +545,14 @@ fun getInitialModel() {
                        for (pdbR <-- Tables.pdb_structure_refs)
                          where (pdbR.pdb_structure_id == pdb.pdb_structure_id)
                          [pdbR.reference_id])],
-             potencyOrder = (), # FIXME: FILL ME IN
+             potencyOrder =
+               for (p <-- Tables.grac_ligand_rank_potency)
+                 where (p.object_id == objectId)
+                   [(=p,
+                     refs =
+                       for (r <-- Tables.grac_ligand_rank_potency_refs)
+                       where (r.grac_ligand_rank_potency_id == p.grac_ligand_rank_potency_id)
+                       [r.reference_id])],
              receptorBasic = rb,
              cellTypeAssociations =
                for (cta <-- Tables.celltype_assoc)
@@ -1541,7 +1552,6 @@ fun getInitialModel() {
           (DataTable.makeTable(cols, data, sortMessage), refs, ligands)
       }
 
-      ## TODO: add conductance info
       fun generateSelectivityInfo(selectivityData, conductanceInfo, selectivityComments) {
         var (selectivitySummaries, summaryReferences) = {
           # We begin by grouping by species
@@ -1841,22 +1851,6 @@ fun getInitialModel() {
             (res :: states, res.references ++ refs)
         }, ([], []), states)
       }
-#               voltageDependence =
-#                 for (vd <-- Tables.voltage_dependence)
-#                   where (vd.object_id == objectId)
-#                     [(=vd,
-#                       activationRefs =
-#                         for (ar <- Tables.voltage_dep_activation_refs)
-#                         where (ar.voltage_dependence_id == vd.voltage_dependence_id)
-#                         [ar.reference_id],
-#                       deactivationRefs =
-#                         for (dr <- Tables.voltage_dep_deactivation_refs)
-#                         where (dr.voltage_dependence_id == vd.voltage_dependence_id)
-#                         [dr.reference_id],
-#                       inactivationRefs =
-#                         for (ir <- Tables.voltage_dep_inactivation_refs)
-#                         where (ir.voltage_dependence_id == vd.voltage_dependence_id)
-#                         [ir.reference_id])]
 
       fun transformVoltageDependence(vds) {
         fun mkRange(low, median, high) {
@@ -1899,6 +1893,29 @@ fun getInitialModel() {
             (res :: transformedVDs, vdRefs ++ refs, vdLigands ++ ligands)
         }, ([], [], []), vds)
       }
+
+
+      fun transformPotencyOrders(pos) {
+        fun transformPO(po) {
+          var p = po.p;
+          var description = parseOrError(p.description);
+          var potencyOrder = parseOrError(p.rank_potency);
+          var references = po.refs;
+          var (refs, ligands) =
+            collectAllIds([description, potencyOrder]);
+          var res =
+            (=description, =potencyOrder, speciesID = p.species_id, =references);
+          (res, references ++ refs, ligands)
+        }
+
+        fold_left(fun((pos, refs, ligands), x) {
+            var (res, poRefs, poLigands) = transformPO(x);
+            (res :: pos, refs ++ poRefs, ligands ++ poLigands)
+        }, ([], [], []), pos)
+
+      }
+
+      var (pos, poRefs, poLigands) = transformPotencyOrders(raw.potencyOrder);
 
       var (vds, vdRefs, vdLigands) = transformVoltageDependence(raw.voltageDependence);
 
@@ -2031,6 +2048,7 @@ fun getInitialModel() {
           qsRefs ++
           csRefs ++
           vdRefs ++
+          poRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -2055,6 +2073,7 @@ fun getInitialModel() {
           xeLigands ++
           qsLigands ++
           vdLigands ++
+          poLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -2111,6 +2130,7 @@ fun getInitialModel() {
        objectQuaternaryStructure = qs,
        objectContributors = transformContributors(raw.contributors),
        objectVoltageDependence = vds,
+       objectPotencyOrder = pos,
        objectConductanceStates = cs)
     }
 
@@ -2337,20 +2357,24 @@ fun view(model) {
                 renderM(els.elsName))))
       }
 
-      var renderedSummaries =
-        MvuHTML.concatMap(renderSummary, objectInfo.objectEndogenousLigands);
+      if (not(listEmpty(objectInfo.objectEndogenousLigands))) {
+        var renderedSummaries =
+          MvuHTML.concatMap(renderSummary, objectInfo.objectEndogenousLigands);
 
-      a(name("Endogenous"), h0) +*
-      table_(class("receptor_data_tables fullwidth"),
-        thead(a0,
-          tr(a0,
-            td(class("info category"), textNode("Natural/Endogenous Ligands")))) +*
-        tbody(a0,
-          renderedSummaries +*
-          tr(class("info"),
-            td(a0,
-              b(a0, textNode("Comments: ")) +*
-              renderM(objectInfo.objectComments.listComments)))))
+        a(name("Endogenous"), h0) +*
+        table_(class("receptor_data_tables fullwidth"),
+          thead(a0,
+            tr(a0,
+              td(class("info category"), textNode("Natural/Endogenous Ligands")))) +*
+          tbody(a0,
+            renderedSummaries +*
+            tr(class("info"),
+              td(a0,
+                b(a0, textNode("Comments: ")) +*
+                renderM(objectInfo.objectComments.listComments)))))
+      } else {
+        MvuHTML.empty
+      }
     };
 
     var potencyOrderBox = MvuHTML.empty;
@@ -3313,16 +3337,26 @@ fun view(model) {
             renderConductanceInfo("Macroscopic current rectification",
                 si.singleChannelConductance);
 
+          var dataTables = {
+            if (nonempty(si.summaries) || nonempty(si.singleChannelConductance) ||
+                nonempty(si.singleChannelCurrentRectification) ||
+                nonempty(si.macroscopicCurrentRectification)) {
+              table_(class("receptor_data_tables fullwidth"),
+                thead(a0,
+                  tr(a0,
+                    td(class("info category"), textNode("Ion Selectivity and Conductance")))) +*
+                tbody(a0,
+                  selectivitySummaries +*
+                  singleChannelConductance +*
+                  singleChannelRectification +*
+                  macroscopicRectification))
+            } else {
+              MvuHTML.empty
+            }
+          };
+
           a(name("IonSelectivity"), h0) +*
-          table_(class("receptor_data_tables fullwidth"),
-            thead(a0,
-              tr(a0,
-                td(class("info category"), textNode("Ion Selectivity and Conductance")))) +*
-            tbody(a0,
-              selectivitySummaries +*
-              singleChannelConductance +*
-              singleChannelRectification +*
-              macroscopicRectification)) +*
+          dataTables +*
           commentsBox("Ion Selectivity and Conductance Comments", si.selectivityComments)
 
       } else {
@@ -3415,6 +3449,14 @@ fun view(model) {
       }
     };
 
+    var voltageDependenceCommentsBox = {
+      switch(objectInfo.objectType) {
+        case VGIC(info) ->
+          commentsBox("Voltage Dependence Comments", info.voltageDependenceComments)
+        case _ -> MvuHTML.empty
+      }
+    };
+
     var conductanceStatesBox = {
       fun renderRange(r) {
         var val = renderTwoValRange(r);
@@ -3490,6 +3532,7 @@ fun view(model) {
             fcsBox +*
             selectivityBox +*
             voltageDependenceBox +*
+            voltageDependenceCommentsBox +*
             conductanceStatesBox +*
             endogenousLigandsBox +*
             potencyOrderBox +*
