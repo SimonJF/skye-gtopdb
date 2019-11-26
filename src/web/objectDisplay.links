@@ -1,4 +1,3 @@
-# Ooft, the one I've been dreading.
 # Detailed information about objects (i.e., ligand targets: receptors,
 # ion channels, etc.)
 
@@ -49,10 +48,10 @@
 # Single channel conductance
 # voltage dependence
 # rank order lists
+# whole organism assay data
 
 ## Not done
 
-# whole organism assay data
 # screening data
 # expression datasets
 # phenotypes, alleles, disease models
@@ -108,7 +107,7 @@ typename Table = [|
     AgonistsTable         | AntagonistsTable | AllostericModulatorsTable
   | ActivatorsTable       | InhibitorsTable  | ChannelBlockersTable
   | GatingInhibitorsTable | SubunitSpecificTable
-  | AntibodiesTable | OtherBindingLigandTable
+  | AntibodiesTable | OtherBindingLigandTable | WholeOrganismAssaysTable
   # Other Tables
   | SubstratesTable
   | CofactorsTable
@@ -199,6 +198,7 @@ typename SortedInteractions = (
   gatingInhibitors: SortableTable(InteractionInfo, Message),
   antibodies: SortableTable(InteractionInfo, Message),
   other: SortableTable(InteractionInfo, Message),
+  wholeOrganismAssays: SortableTable(InteractionInfo, Message),
   subunitSpecific: SortableTable(InteractionInfo, Message));
 
 typename AssociatedProtein = (
@@ -840,7 +840,7 @@ fun getInitialModel() {
           (agonists = [], antagonists = [], allostericModulators = [],
            activators = [], inhibitors = [], channelBlockers = [],
            gatingInhibitors = [], subunitSpecific = [], endogenous = [],
-           antibodies = [], other = [],
+           antibodies = [], wholeOrganismAssays = [], other = [],
            references = []);
 
         fold_left(fun(acc, i) {
@@ -888,6 +888,8 @@ fun getInitialModel() {
               (acc with subunitSpecific = ( parsed :: acc.subunitSpecific ))
             } else if (i.interactionType == "Antibody") {
               (acc with antibodies = ( parsed :: acc.antibodies ))
+            } else if (i.wholeOrganismAssay) {
+              (acc with wholeOrganismAssays = (parsed :: acc.wholeOrganismAssays))
             } else {
               (acc with other = ( parsed :: acc.other ))
             };
@@ -906,6 +908,108 @@ fun getInitialModel() {
       }
 
       fun mkTables(parsedInteractions) {
+        # Some interactions are curated by adding multiple data points in, rather
+        # than curating a range directly in the DB.
+        # In this case, we need to group them and calculate a range ourselves.
+        fun groupAffinities(interactions) {
+          # First, group the interactions
+          var grouped =
+            groupBy(fun(x) {
+              (x.interaction.ligandID, x.interaction.speciesID,
+               x.interaction.affinity.affinityUnits) }, interactions);
+          # Reduce each group, and flatten.
+          map(fun((_, group)) {
+            # First, sort the group
+            var group =
+              cmpSort(fun(x, y) {
+                  sortAffinity(x.interaction.affinity, y.interaction.affinity)
+              }, group);
+
+            # Next, take the extrema, and generate a new interaction range
+            var first = hd(group);
+            var final = last(group);
+            if (first == final) {
+              first
+            } else {
+              var min = {
+                var affinity = first.interaction.affinity;
+                if (affinity.affinityLow <> 0.0) {
+                  affinity.affinityLow
+                } else {
+                  affinity.affinityMedian
+                }
+              };
+
+              var max = {
+                var affinity = final.interaction.affinity;
+                if (affinity.affinityHigh <> 0.0) {
+                  affinity.affinityHigh
+                } else {
+                  affinity.affinityMedian
+                }
+              };
+
+              var firstAffinity = first.interaction.affinity;
+              var newInteraction =
+                (first.interaction with affinity =
+                 (affinityUnits = firstAffinity.affinityUnits,
+                  affinityLow = min, affinityHigh = max, affinityMedian = 0.0));
+
+              (first with interaction = newInteraction)
+            }
+          }, grouped)
+        }
+
+        ## TODO: Probably could abstract this
+        fun groupAffinityVoltages(interactions) {
+            # First, group the interactions
+            var grouped =
+              groupBy(fun(x) {
+                (x.interaction.ligandID, x.interaction.speciesID) }, interactions);
+            map(fun((_, group)) {
+              # First, sort the group
+              var group =
+                cmpSort(fun(x, y) {
+                    sortAffinityVoltage(x.interaction.affinityVoltage, y.interaction.affinityVoltage)
+                }, group);
+
+              # Next, take the extrema, and generate a new interaction range
+              var first = hd(group);
+              var final = last(group);
+              if (first == final) {
+                first
+              } else {
+                var min = {
+                  var affinity = first.interaction.affinityVoltage;
+                  if (affinity.affinityVoltageLow <> 0.0) {
+                    affinity.affinityVoltageLow
+                  } else {
+                    affinity.affinityVoltageMedian
+                  }
+                };
+
+                var max = {
+                  var affinity = final.interaction.affinityVoltage;
+                  if (affinity.affinityVoltageHigh <> 0.0) {
+                    affinity.affinityVoltageHigh
+                  } else {
+                    affinity.affinityVoltageMedian
+                  }
+                };
+
+                var firstAffinity = first.interaction.affinityVoltage;
+                var newInteraction =
+                  (first.interaction with affinityVoltage =
+                   (affinityVoltageLow = min, affinityVoltageHigh = max, affinityVoltageMedian = 0.0,
+                    affinityPhysiologicalVoltage = firstAffinity.affinityPhysiologicalVoltage
+                  ));
+
+                (first with interaction = newInteraction)
+              }
+            }, grouped)
+        }
+
+
         # Columns are slightly different based on the type of interaction.
         # Agonists / antagonists / channel blockers / allosteric modulators:
         #  ligand, data cols, species, action, affinity, parameter, references
@@ -913,6 +1017,7 @@ fun getInitialModel() {
         #  ligand, data cols, species, action, affinity, parameter, holding voltage, reference
 
         fun mkStandardTable(tableTy, interactions) {
+          var interactions = groupAffinities(interactions);
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
                 simpleCmp(x.interaction.interactionLigand.name,
@@ -938,6 +1043,7 @@ fun getInitialModel() {
         }
 
         fun mkActivatorTable(tableTy, interactions) {
+          var interactions = groupAffinityVoltages(interactions);
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
                 simpleCmp(x.interaction.interactionLigand.name,
@@ -970,7 +1076,35 @@ fun getInitialModel() {
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
+        fun mkAssayTable(interactions) {
+          var interactions = groupAffinities(interactions);
+          var cols = [
+            ("Ligand", ("", Sortable(fun(x, y) {
+                simpleCmp(x.interaction.interactionLigand.name,
+                    y.interaction.interactionLigand.name) }))),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("Sp.", ("action_header",
+              Sortable(fun(x, y) { simpleCmp(x.interaction.speciesID,
+                  y.interaction.speciesID) }))),
+            ("Assay description", ("assay_long_header header", Sortable(fun(x, y) {
+                simpleCmp(x.interaction.assayDescription,
+                    y.interaction.assayDescription) }))),
+            ("Value", ("affinity_header", Sortable(fun(x, y) {
+                InteractionUtilities.sortAffinity(x.interaction.affinity,
+                    y.interaction.affinity)}))),
+            ("Parameter", ("units_header", Sortable(fun(x, y) {
+                simpleCmp(x.interaction.affinity.affinityUnits,
+                          y.interaction.affinity.affinityUnits) }))),
+            ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
+          ];
+          fun sortMessage(colName, sortDir) { SortTable(WholeOrganismAssaysTable, colName, sortDir) }
+          DataTable.makeTable(cols, interactions, sortMessage)
+        }
+
         fun mkSubunitTable(interactions) {
+          var interactions = groupAffinities(interactions);
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
                 simpleCmp(x.interaction.interactionLigand.name,
@@ -1011,6 +1145,8 @@ fun getInitialModel() {
            mkSubunitTable(parsedInteractions.subunitSpecific),
          antibodies =
            mkActivatorTable(AntibodiesTable, parsedInteractions.antibodies),
+         wholeOrganismAssays =
+          mkAssayTable(parsedInteractions.wholeOrganismAssays),
          other =
            mkStandardTable(GatingInhibitorsTable, parsedInteractions.other)
            );
@@ -2536,7 +2672,7 @@ fun view(model) {
         }
       }
 
-      fun renderSubunitTable() {
+      var subunitTable = {
         var tbl = objectInfo.objectSortedInteractions.subunitSpecific;
         if (DataTable.getTableData(tbl) == []) {
           MvuHTML.empty
@@ -2572,7 +2708,48 @@ fun view(model) {
             tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
             DataTable.renderTable(tbl, renderRow))))
         }
-      }
+      };
+
+      var wholeOrganismAssayTable = {
+        var tbl = objectInfo.objectSortedInteractions.wholeOrganismAssays;
+        if (DataTable.getTableData(tbl) == []) {
+          MvuHTML.empty
+        } else {
+
+          fun renderRow(x) {
+            var x : InteractionInfo = x;
+            var i = x.interaction;
+            var imgCols = renderImgCols(x);
+
+            var nameCol =
+              td(a0,
+                a(href("/ligandDisplay?ligandId=" ^^ intToString(i.ligandID)), renderM(x.parsedName)));
+            var speciesCol =
+              td(a0, textNode(x.speciesShort));
+            var assayDescriptionCol =
+              td(a0, unescapedTextNode(i.assayDescription));
+            var affinityCol =
+              td(a0, InteractionUtilities.displayAffinity(i.affinity, false));
+            var parameterCol =
+              td(a0, textNode(i.affinity.affinityUnits));
+            var referenceCol =
+              td(a0, Reference.renderCitationList(i.references, objectInfo.objectReferences));
+            tr(class("info"),
+              nameCol +*
+              imgCols +*
+              speciesCol +*
+              assayDescriptionCol +*
+              affinityCol +*
+              parameterCol +*
+              referenceCol)
+          }
+
+          dataBox("Whole Organism Assay Data Linked to This Target", 1,
+            a(name("WholeOrganismAssays"), h0) +*
+            tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
+            DataTable.renderTable(tbl, renderRow))))
+        }
+      };
 
       var si = objectInfo.objectSortedInteractions;
       var oc = objectInfo.objectComments;
@@ -2597,7 +2774,8 @@ fun view(model) {
 
       MvuHTML.concatMap(renderReceptorTable, receptorTables) +*
       MvuHTML.concatMap(renderICTable, channelTables) +*
-      renderSubunitTable()
+      wholeOrganismAssayTable +*
+      subunitTable
 
     };
 
@@ -3662,13 +3840,17 @@ fun updt(msg, model) {
             updateOSI(
               (osi with subunitSpecific =
                  DataTable.updateSortStatus(osi.subunitSpecific, colName, dir)))
+          case WholeOrganismAssaysTable ->
+            updateOSI(
+              (osi with wholeOrganismAssays =
+                 DataTable.updateSortStatus(osi.wholeOrganismAssays, colName, dir)))
           case AntibodiesTable ->
             updateOSI(
-              (osi with subunitSpecific =
+              (osi with antibodies =
                  DataTable.updateSortStatus(osi.antibodies, colName, dir)))
           case OtherBindingLigandTable ->
             updateOSI(
-              (osi with subunitSpecific =
+              (osi with other =
                  DataTable.updateSortStatus(osi.other, colName, dir)))
           case SubstratesTable ->
             (objectInfo with objectSubstrates =
