@@ -48,10 +48,10 @@
 # Quaternary structure
 # Single channel conductance
 # voltage dependence
+# rank order lists
 
 ## Not done
 
-# rank order lists
 # whole organism assay data
 # screening data
 # expression datasets
@@ -2377,7 +2377,34 @@ fun view(model) {
       }
     };
 
-    var potencyOrderBox = MvuHTML.empty;
+    var potencyOrderBox = {
+      fun renderPO(po) {
+        var species = {
+          var speciesName = speciesLongName(po.speciesID);
+          if (speciesName <> "None" && speciesName <> "Unknown") {
+            textNode(" (" ^^ speciesName ^^ ")")
+          } else {
+            MvuHTML.empty
+          }
+        };
+
+
+        tr(a0,
+          td(class("info category"),
+            renderM(po.description) +* species)) +*
+        tr(class("info"),
+          td(a0,
+            renderM(po.potencyOrder) +* textNode(" ") +*
+            renderCitations(po.references)))
+      }
+
+      if (not(listEmpty(objectInfo.objectPotencyOrder))) {
+        table_(class("receptor_data_tables fullwidth"),
+          MvuHTML.concatMap(renderPO, objectInfo.objectPotencyOrder))
+      } else {
+        MvuHTML.empty
+      }
+    };
 
     var interactionsTables = {
       fun renderImgCols(x) {
