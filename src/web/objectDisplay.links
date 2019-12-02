@@ -119,12 +119,14 @@ typename Table = [|
 |];
 
 typename ColumnName = String;
+typename ScreenID = Int;
+typename ScreenTableName = String;
 
 typename Message = [|
     NoOp
   | SortTable:(Table, ColumnName, SortDirection)
   | ToggleReferences | ToggleContributors | ToggleShowIEA:Int | ShowCharts
-  | SortScreenTable:(Int, ColumnName, SortDirection)
+  | SortScreenTable:(ScreenID, ScreenTableName, ColumnName, SortDirection)
 |];
 
 typename Family = (familyId: Int, familyName: Markup);
@@ -413,7 +415,7 @@ typename Screen =
    companyLogoFilename: String,
    technologyLogoFilename: String,
    references: [ReferenceID],
-   data: SortableTable(ParsedScreenInteraction, Message));
+   data: [(String, SortableTable(ParsedScreenInteraction, Message))]);
 
 typename ObjectInfo = (
     objectId: Int,
@@ -2169,7 +2171,7 @@ fun getInitialModel() {
       }
 
       fun transformScreens(screens) {
-        fun mkScreenTable(screenID, interactions) {
+        fun mkScreenTable(screenID, targetName, interactions) {
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
                 simpleCmp(x.interaction.interactionLigand.name,
@@ -2192,7 +2194,7 @@ fun getInitialModel() {
                 simpleCmp(x.interaction.affinity.affinityUnits,
                           y.interaction.affinity.affinityUnits) })))
           ];
-          fun sortMessage(colName, sortDir) { SortScreenTable(screenID, colName, sortDir) }
+          fun sortMessage(colName, sortDir) { SortScreenTable(screenID, targetName, colName, sortDir) }
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
@@ -2207,7 +2209,12 @@ fun getInitialModel() {
                 (interaction = InteractionUtilities.makeScreenInteraction(x),
                  speciesShort = speciesShortName(x.si.species_id))
               }, group);
-            var data = mkScreenTable(scr.screen_id, interactions);
+            # Now need to group by action comment
+            var groupedInteractions =
+              groupBy(fun(x) { x.interaction.interactionActionComment }, interactions);
+            var data = map(fun((name, interactions)) {
+                (name, mkScreenTable(scr.screen_id, name, interactions))
+              }, groupedInteractions);
             var res =
               (name = scr.name, description = scr.description,
                url = scr.url, affinityCutoff = scr.affinity_cut_off_nm,
@@ -2960,6 +2967,80 @@ fun view(model) {
       subunitTable
 
     };
+
+ #  var screens = {
+ #    fun renderScreen(scr) {
+ #      var contents = {
+
+
+      #   <table class="receptor_data_tables fullwidth">
+
+      #       <thead>
+      #           <tr name="hotspot" class="hotspot">
+      #               <td class="info category" colspan="3"><c:out value="${screen.name}" escapeXml="false"/> <a style="color:#CCCCCC;" href="JavaScript:callRef('helpPagePopup.jsp#screens', 800, 400)" title="Click here for help"><img id="logo" style="vertical-align:baseline;" src="images/help_blue_small_transparent_bkground.png" alt="Click here for help"/></a></td>
+      #           </tr>
+
+      #       </thead>
+      #       <tbody name="toggle">
+      #           <c:if test="${not empty screen.description || not empty screen.url || not empty screen.refs.refsHTML || not empty screen.companyLogoFilename || not empty screen.technologyLogoFilename}">
+      #               <tr>
+      #                   <td class="table_instructions" <c:choose><c:when test="${not empty screen.companyLogoFilename || not empty screen.technologyLogoFilename}">style="border-style: solid none solid solid;" colspan="2"</c:when><c:otherwise>colspan="3"</c:otherwise></c:choose>>
+      #                       <c:out value="${screen.description}" escapeXml="false"/><c:if test="${not empty screen.url}"><br/><small ><a href="<c:out value="${screen.url}" escapeXml="false"/>" target="_blank"><c:out value="${screen.url}" escapeXml="false"/></a></small></c:if><c:if test="${not empty screen.refs.refsHTML}"><br/>Reference: <c:out value="${screen.refs.refsHTML}" escapeXml="false"/></c:if>
+      #                   </td>
+      #                   <c:if test="${not empty screen.companyLogoFilename || not empty screen.technologyLogoFilename}">
+      #                       <td class="table_instructions" style="text-align:right; border-style: solid solid solid none;">
+      #                           <c:if test="${not empty screen.companyLogoFilename}">
+      #                               <img src="images/${screen.companyLogoFilename}"/><c:if test="${not empty screen.technologyLogoFilename}"><br/></c:if>
+      #                           </c:if>
+      #                           <c:if test="${not empty screen.technologyLogoFilename}">
+      #                               <img src="images/${screen.technologyLogoFilename}"/>
+      #                           </c:if>
+      #                       </td>
+      #                   </c:if>
+      #               </tr>
+      #           </c:if>
+      #           <tr>
+      #               <td class="table_instructions" style="text-align:left; border-style: solid none solid solid;font-weight:bold;">
+      #                   <a  href="JavaScript:callRef('helpPagePopup.jsp#ligandTables', 800, 620)">Key to terms and symbols</a>
+      #               </td>
+      #               <td class="table_instructions" style="text-align:center; border-style: solid none solid none;font-size:105%;font-weight:bold;">
+      #                   <%--<c:if test="${agonistStructures}"><a  href='javascript:newWindow("ObjectInteractionStructuresDisplayForward?objectId=${object.id}&familyId=${object.family.id}&type=Agonists", 960, 800)'> View all chemical structures</a></c:if>--%>
+      #               </td>
+      #               <td class="table_instructions" style="border-style: solid solid solid none;text-align:right;">
+      #                   Click column headers to sort
+      #               </td>
+      #           </tr>
+      #           <c:forEach var="subtype" items="${screen.interactions}">
+      #               <tr class="info heading">
+      #                   <th class="info category embedded_link" colspan="3" style="padding:8px"><i>Target used in screen:</i> <c:if test="${not empty subtype.value[0].assayUrl}"><a href="<c:out value="${subtype.value[0].assayUrl}" escapeXml="false"/>" target="_blank" title="Click here for assay information"></c:if><c:out value="${subtype.key}" escapeXml="false"/><c:if test="${not empty subtype.value[0].assayUrl}"></a></c:if></th>
+      #               </tr>
+      #               <tr>
+      #                   <td class="table_container" <%--<c:if test="${screen.cutoff != '0'}">--%> style="border-style:solid solid none solid;"<%--</c:if>--%><%--<c:if test="${multiSpAgonist == 'true'}"> style="border-style:solid solid none solid;"</c:if>--%> colspan="3">
+
+      #                  <%-- <c:forEach var="subtype" items="${screen.interactions}">--%>
+
+      #                       <%-- now embed sortable table as a data cell--%>
+
+      #                      <%-- <table class = "sortable inner_receptor_data_tables">--%>
+      #                       <table id="${screen.id}_<c:out value="${subtype.key}" escapeXml="false"/>" class = "tablesorter inner_receptor_data_tables">
+      #                           <thead>
+      #                              <%-- <tr class="info heading">
+      #                                   <th class="info category" colspan="10" style="padding:8px"><i>Target used in screen:</i> <c:out value="${subtype.key}" escapeXml="false"/></th>
+      #                               </tr>--%>
+      #                               <tr class="info heading">
+
+      #                                   <th class="ligand_header header" style="border-style:solid none solid solid;">Ligand</th>
+      #                                   <th class="tablesorter-noSort" style="border-style:solid none solid none;"></th>
+      #                                   <th class="tablesorter-noSort" style="border-style:solid none solid none;"></th>
+      #  };
+
+      #  dataBox(scr.name, 3, contents)
+      #}
+#
+#     MvuHTML.concatMap(renderScreen, object.objectScreens)
+#   };
+
+    var screens = MvuHTML.empty;
 
     var immunoCommentsBox =
       commentsBox("Immunopharmacology Comments", comments.immunoComments);
@@ -3969,6 +4050,7 @@ fun view(model) {
             endogenousLigandsBox +*
             potencyOrderBox +*
             interactionsTables +*
+            screens +*
             immunoCommentsBox +*
             malariaCommentsBox +*
             cellTypeAssociationsBox +*
