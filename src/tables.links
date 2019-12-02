@@ -316,7 +316,17 @@ var reference2ligand = table "reference2ligand" with (reference_id: Int, ligand_
 
 var screen = table "screen" with (screen_id: Int, name: String, description: String, url: String, affinity_cut_off_nm: Int, company_logo_filename: String, technology_logo_filename: String) from db;
 
-var screen_interaction = table "screen_interaction" with (screen_interaction_id: Int, screen_id: Int, ligand_id: Int, object_id: Int, type: String, action: String, action_comment: String, species_id: Int, endogenous: Bool, affinity_units: String, affinity_high: Float, affinity_median: Float, affinity_low: Float, concentration_range: String, original_affinity_low_nm: Float, original_affinity_median_nm: Float, original_affinity_high_nm: Float, original_affinity_units: String, original_affinity_relation: String, assay_description: String, percent_activity: Float, assay_url: String) from db;
+typename RawScreenInteraction =
+  (screen_interaction_id: Int, screen_id: Int, ligand_id: Int, object_id: Int,
+   type: String, action: String, action_comment: String, species_id: Int,
+   endogenous: Bool, affinity_units: String, affinity_high: Float,
+   affinity_median: Float, affinity_low: Float, concentration_range: String,
+   original_affinity_low_nm: Float, original_affinity_median_nm: Float,
+   original_affinity_high_nm: Float, original_affinity_units: String,
+   original_affinity_relation: String, assay_description: String,
+   percent_activity: Float, assay_url: String);
+
+var screen_interaction = table "screen_interaction" with RawScreenInteraction from db;
 
 var screen_refs = table "screen_refs" with (screen_id: Int, reference_id: Int) from db;
 

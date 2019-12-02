@@ -74,6 +74,24 @@ typename Interaction =
    hide: Bool,
    references: [Int]);
 
+typename ScreenInteraction =
+  (screenInteractionID: Int,
+   ligandID: Int,
+   objectID: Int,
+   interactionType: String,
+   interactionLigand: RawLigand,
+   interactionAction: String,
+   interactionActionComment: String,
+   speciesID: Int,
+   endogenous: Bool,
+   affinity: InteractionAffinity,
+   concentrationRange: String,
+   originalAffinity: InteractionAffinity,
+   originalAffinityRelation: String,
+   assayDescription: String,
+   percentActivity: Float,
+   assayURL: String);
+
 fun classifyInteractionType(objectID, targetLigandID) {
   if (targetLigandID > 0) {
     TargetLigand
@@ -135,7 +153,32 @@ fun makeInteraction(raw) {
    references = raw.references)
 }
 
-#   original_affinity_low_nm: Float, original_affinity_median_nm: Float, original_affinity_high_nm: Float, original_affinity_units: String, original_affinity_relation: String, assay_description: String, assay_conditions: String, from_grac: Bool, only_grac: Bool, receptor_site: String, ligand_context: String, percent_activity: Float, assay_url: String, primary_target: Bool, target_ligand_id: Int, whole_organism_assay: Bool, hide: Bool)
+# Makes an interaction from screening data. Similar, but doesn't have
+# affinity voltages.
+sig makeScreenInteraction : (%) ~%~> ScreenInteraction
+fun makeScreenInteraction(raw) {
+  var i = raw.si;
+  var ligand = raw.ligand;
+  (screenInteractionID = i.screen_interaction_id,
+   ligandID = i.ligand_id,
+   objectID = i.object_id,
+   interactionType = i.type,
+   interactionLigand = ligand,
+   interactionAction = i.action,
+   interactionActionComment = i.action_comment,
+   speciesID = i.species_id,
+   endogenous = i.endogenous,
+   affinity = mkAffinity(i.affinity_units, i.affinity_high, i.affinity_median, i.affinity_low),
+   originalAffinity =
+    mkAffinity(i.original_affinity_units,
+      i.original_affinity_high_nm, i.original_affinity_median_nm,
+      i.original_affinity_low_nm),
+   concentrationRange = i.concentration_range,
+   originalAffinityRelation = i.original_affinity_relation,
+   assayDescription = i.assay_description,
+   percentActivity = i.percent_activity,
+   assayURL = i.assay_url)
+}
 
 fun sortAffinity(a1, a2) {
   var a1Key =

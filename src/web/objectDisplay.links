@@ -124,6 +124,7 @@ typename Message = [|
     NoOp
   | SortTable:(Table, ColumnName, SortDirection)
   | ToggleReferences | ToggleContributors | ToggleShowIEA:Int | ShowCharts
+  | SortScreenTable:(Int, ColumnName, SortDirection)
 |];
 
 typename Family = (familyId: Int, familyName: Markup);
@@ -400,6 +401,20 @@ typename GeneExpression =
    baseline: Float,
    data: [(TissueName, Float)]);
 
+
+typename ParsedScreenInteraction =
+  (interaction: InteractionUtilities.ScreenInteraction, speciesShort: String);
+
+typename Screen =
+  (name: String,
+   description: String,
+   url: String,
+   affinityCutoff: Int,
+   companyLogoFilename: String,
+   technologyLogoFilename: String,
+   references: [ReferenceID],
+   data: SortableTable(ParsedScreenInteraction, Message));
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -448,6 +463,7 @@ typename ObjectInfo = (
     objectConductanceStates: [ConductanceState],
     objectVoltageDependence: [VoltageDependence],
     objectContributors: ContentBox([Contributor.Contributor]),
+    objectScreens: [Screen],
     chartsShown: Bool
 );
 
@@ -867,7 +883,20 @@ fun getInitialModel() {
                       refs =
                         for (r <-- Tables.expression_pathophysiology_refs)
                         where (r.expression_pathophysiology_id == ep.expression_pathophysiology_id)
-                        [r.reference_id])]
+                        [r.reference_id])],
+                screens =
+                  for (si <-- Tables.screen_interaction)
+                    where (si.object_id == objectId)
+                    for (l <-- Tables.ligand)
+                    where (l.ligand_id == si.ligand_id)
+                      for (scr <-- Tables.screen)
+                      where (si.screen_id == scr.screen_id)
+                        [(=si, ligand = l, screen =
+                            (=scr,
+                             refs =
+                               for (sr <-- Tables.screen_refs)
+                               where (sr.screen_id == scr.screen_id)
+                               [sr.reference_id]))]
              )]
     };
 
@@ -2137,8 +2166,60 @@ fun getInitialModel() {
             var (res, poRefs, poLigands) = transformPO(x);
             (res :: pos, refs ++ poRefs, ligands ++ poLigands)
         }, ([], [], []), pos)
-
       }
+
+      fun transformScreens(screens) {
+        fun mkScreenTable(screenID, interactions) {
+          var cols = [
+            ("Ligand", ("", Sortable(fun(x, y) {
+                simpleCmp(x.interaction.interactionLigand.name,
+                    y.interaction.interactionLigand.name) }))),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("", ("", NotSortable)), ("", ("", NotSortable)),
+            ("Sp.", ("keybox_header",
+              Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
+            ("Type", ("action_header",
+              Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
+                  y.interaction.interactionAction) }))),
+            ("Action", ("action_header",
+              Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
+                  y.interaction.interactionAction) }))),
+            ("Value", ("affinity_header", Sortable(fun(x, y) {
+                InteractionUtilities.sortAffinity(x.interaction.affinity,
+                    y.interaction.affinity)}))),
+            ("Parameter", ("units_header", Sortable(fun(x, y) {
+                simpleCmp(x.interaction.affinity.affinityUnits,
+                          y.interaction.affinity.affinityUnits) })))
+          ];
+          fun sortMessage(colName, sortDir) { SortScreenTable(screenID, colName, sortDir) }
+          DataTable.makeTable(cols, interactions, sortMessage)
+        }
+
+        # First, we want to group by the individual screen interactions by screen ID
+        var grouped = groupBy(fun(x) { x.si.screen_id }, screens);
+        # Transform each group into a screen
+        fold_left(fun((acc, refs), (_, group)) {
+            var scr = hd(group).screen.scr;
+            var scrRefs = hd(group).screen.refs;
+            var interactions : [ParsedScreenInteraction] =
+              map(fun(x) {
+                (interaction = InteractionUtilities.makeScreenInteraction(x),
+                 speciesShort = speciesShortName(x.si.species_id))
+              }, group);
+            var data = mkScreenTable(scr.screen_id, interactions);
+            var res =
+              (name = scr.name, description = scr.description,
+               url = scr.url, affinityCutoff = scr.affinity_cut_off_nm,
+               companyLogoFilename = scr.company_logo_filename,
+               technologyLogoFilename = scr.technology_logo_filename,
+               references = refs,
+               =data);
+            (res :: acc, scrRefs ++ refs)
+        }, ([], []), grouped)
+      }
+
+      var (screens, scrRefs) = transformScreens(raw.screens);
 
       var ges : [GeneExpression] = transformGeneExpression(raw.geneInformation);
 
@@ -2280,6 +2361,7 @@ fun getInitialModel() {
           vdRefs ++
           poRefs ++
           epRefs ++
+          scrRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -2366,6 +2448,7 @@ fun getInitialModel() {
        objectVoltageDependence = vds,
        objectPotencyOrder = pos,
        objectConductanceStates = cs,
+       objectScreens = screens,
        chartsShown = false)
     }
 

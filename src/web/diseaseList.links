@@ -71,7 +71,6 @@ fun getDiseaseResults(filterType) {
                   [pp])
          )]
     };
-  iter(fun(x) { debug(x.drName) }, results);
   results
 }
 
