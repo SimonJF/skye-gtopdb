@@ -419,6 +419,16 @@ typename Screen =
    references: [ReferenceID],
    data: [(String, SortableTable(ParsedScreenInteraction, Message))]);
 
+typename Allele = (
+    id: Int,
+    composition: String,
+    accessions: String,
+    speciesID: Int,
+    pubmedIDs: String,
+    phenotypeID: String,
+    phenotype: String
+  );
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -446,7 +456,6 @@ typename ObjectInfo = (
     objectFunctionalAssays: DataTableBox,
     objectPhysiologicalFunctions: DataTableBox,
     objectPhysiologicalConsequences: DataTableBox,
-   # objectPhenotypes: SortableTable(Phenotype, Message),
     objectDNABindings: DataTableBox,
     objectPhysiologicalConsequences: DataTableBox,
     objectExpressionPathophysiology: DataTableBox,
@@ -468,6 +477,7 @@ typename ObjectInfo = (
     objectVoltageDependence: [VoltageDependence],
     objectContributors: ContentBox([Contributor.Contributor]),
     objectScreens: [Screen],
+    # objectAlleles: SortableTable(Allele, Message),
     chartsShown: Bool
 );
 
@@ -693,7 +703,21 @@ fun getInitialModel() {
                        for (aeRef <-- Tables.altered_expression_refs)
                          where (aeRef.altered_expression_id == ae.altered_expression_id)
                          [aeRef.reference_id])],
-             alleles = (), # Getting this is a faff, requiring structural info, etc. Leaving for now.
+             alleles =
+               for (strI <-- Tables.structural_info)
+                 where (strI.object_id == objectId && strI.species_id == 2) # 2: Mouse
+                 for (al <-- Tables.allele)
+                   # The following isn't quite right as accessions is in fact a comma-separated
+                   # list, and unfortunately regexes don't yet work in nested queries (sigh.)
+                   # It's a reasonable approximation though so we should be OK until we get the bugfix.
+                   where (al.accessions == strI.official_gene_id)
+                   for (ot <-- Tables.ontology_term)
+                     where (ot.ontology_id == al.ontology_id)
+                     [(=strI, =al, =ot,
+                       refs =
+                        for (r <-- Tables.structural_info_refs)
+                        where (r.structural_info_id == strI.structural_info_id)
+                        [r.reference_id])],
              variants =
                for (v <-- Tables.variant)
                  where (v.object_id == objectId)
@@ -2214,6 +2238,30 @@ fun getInitialModel() {
                =data);
             (res :: acc, scrRefs ++ refs)
         }, ([], []), grouped)
+      }
+
+      # typename Allele = (
+      #     id: Int,
+      #     composition: String,
+      #     accessions: String,
+      #     pubmedIDs: String,
+      #     phenotypeID: String,
+      #     phenotype: String
+      #   );
+      fun transformAlleles(rawAlleles) {
+
+        var alleles =
+          map(fun(x) {
+            (id = x.al.allele_id,
+             composition = x.al.allelic_composition,
+             accessions = x.al.accessions,
+             pubmedIDs = x.al.pubmed_ids,
+             phenotypeID = x.ot.term_id,
+             phenotype = x.ot.term)
+          }, rawAlleles);
+
+        ()
+
       }
 
       var (screens, scrRefs) = transformScreens(raw.screens);
