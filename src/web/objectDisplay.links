@@ -51,10 +51,10 @@
 # whole organism assay data
 # gene expression / pathophysiology
 # expression datasets
+# screening data
 
 ## Not done
 
-# screening data
 # phenotypes, alleles, disease models
 # clinically-relevant mutations
 
@@ -188,7 +188,6 @@ typename ImmunoProcessAssociation = (
   ipReferences: [ReferenceID]
 );
 
-typename LigandSize = [| Small | Peptide | OtherSize |];
 
 
 typename InteractionInfo = (
@@ -405,10 +404,13 @@ typename GeneExpression =
 
 
 typename ParsedScreenInteraction =
-  (interaction: InteractionUtilities.ScreenInteraction, speciesShort: String);
+  (interaction: InteractionUtilities.ScreenInteraction,
+   speciesShort: String,
+   ligandSize: LigandSize);
 
 typename Screen =
-  (name: String,
+  (id: Int,
+   name: String,
    description: String,
    url: String,
    affinityCutoff: Int,
@@ -930,24 +932,11 @@ fun getInitialModel() {
           # var i = x.interaction;
           # var l = x.ligand;
           # var refs = x.refs;
-          var size = {
-            var ty = i.interactionLigand.type;
-            if (ty == "Peptide" || ty == "Antibody") {
-              Peptide
-            } else if (ty == "Metabolite"
-                || ty == "Synthetic organic" || ty == "Natural product") {
-              Small
-            } else {
-              OtherSize
-            }
-          };
-
           var parsedName = parseOrError(i.interactionLigand.name);
-
           var parsed : InteractionInfo = (
             interaction = i,
             parsedName = parsedName,
-            ligandSize = size,
+            ligandSize = parseLigandSize(i.interactionLigand.type),
             speciesShort = speciesShortName(i.speciesID)
           );
 
@@ -2207,6 +2196,7 @@ fun getInitialModel() {
             var interactions : [ParsedScreenInteraction] =
               map(fun(x) {
                 (interaction = InteractionUtilities.makeScreenInteraction(x),
+                 ligandSize = parseLigandSize(x.ligand.type),
                  speciesShort = speciesShortName(x.si.species_id))
               }, group);
             # Now need to group by action comment
@@ -2216,7 +2206,7 @@ fun getInitialModel() {
                 (name, mkScreenTable(scr.screen_id, name, interactions))
               }, groupedInteractions);
             var res =
-              (name = scr.name, description = scr.description,
+              (id = scr.screen_id, name = scr.name, description = scr.description,
                url = scr.url, affinityCutoff = scr.affinity_cut_off_nm,
                companyLogoFilename = scr.company_logo_filename,
                technologyLogoFilename = scr.technology_logo_filename,
@@ -2735,19 +2725,7 @@ fun view(model) {
       fun renderImgCols(x) {
         var i = x.interaction;
 
-        var sizeCol = {
-          switch(x.ligandSize) {
-            case Small ->
-              boolImage(("/images/benzene.gif", true,
-                    "Small molecule or natural product"))
-            case Peptide ->
-              boolImage(("/images/peptide_cartoon.png", true,
-                    "Peptide or antibody"))
-            case OtherSize ->
-              boolImage(("", false, ""))
-          }
-        };
-
+        var sizeCol = ligandSizeCol(x.ligandSize);
         var approvedCol = boolImage(("/images/approved.png", i.interactionLigand.approved, "Approved ligand"));
         var primaryCol = boolImage(("/images/primary.png", i.primaryTarget, "Primary interaction"));
         var selectiveCol =
@@ -2968,79 +2946,127 @@ fun view(model) {
 
     };
 
- #  var screens = {
- #    fun renderScreen(scr) {
- #      var contents = {
+    var screens = {
+      fun renderScreen(screen) {
+
+        var contents = {
+          if (not(screen.description == "" && screen.url == "" && listEmpty(screen.references) &&
+              screen.companyLogoFilename == "" && screen.technologyLogoFilename == "")) {
+
+            var logosEmpty = not(screen.companyLogoFilename == "" && screen.technologyLogoFilename == "");
+            fun logoIfNonempty(url) {
+              if (url <> "") {
+                img(src("/images/" ^^ url), h0)
+              } else {
+                MvuHTML.empty
+              }
+            }
+
+            var colCount =
+              if (logosEmpty) { 2 } else { 3 };
+            var tdAttrs =
+              if (logosEmpty) {
+                colSpan(3)
+              } else {
+                style("border-style: solid none solid solid;") +@ colSpan(2)
+              };
+            var url =
+              if (screen.url <> "") {
+                p(style("font-size:small;"), a(href(screen.url), textNode(screen.url)))
+              } else {
+                MvuHTML.empty
+              };
+
+            var refs = p(a0, renderCitations(screen.references));
+
+            var screenInfo =
+              td(class("table_instructions") +@ tdAttrs,
+                 p(a0, unescapedTextNode(screen.description)) +*
+                 url +*
+                 refs);
+
+            var logoInfo =
+              if (not(logosEmpty)) {
+                td(class("not(table_instructions") +@
+                    style("text-align:right; border-style: solid solid solid none;"),
+                  logoIfNonempty(screen.companyLogoFilename) +*
+                  logoIfNonempty(screen.technologyLogoFilename))
+              } else {
+                MvuHTML.empty
+              };
+
+            var tables = {
+              fun renderRow(row) {
+                # Ligand, size, approved, selective, endogenous, radioactive,
+                # has PDB, immuno, species, type, action, value, parameter
+                var i = row.interaction;
+                var sizeCol = ligandSizeCol(row.ligandSize);
+                var approvedCol = boolImage(("/images/approved.png", i.interactionLigand.approved, "Approved ligand"));
+                var selectiveCol =
+                  boolCol(false, # I think this is false by default
+                    a(href("/ligandInteractions?ligandId=" ^^
+                        intToString(i.ligandID) ^^ "&speciesId=" ^^ intToString(i.speciesID)), h0) +*
+                    img(src("/images/select.gif") +@ alt("Click here for species-specific selectivity table"), h0));
+                var endogenousCol =
+                  boolImage(("/images/endogenous.gif", i.endogenous,
+                        "Ligand is endogenous in the given species"));
+                var labelled = boolImage(("/images/probe.png", i.interactionLigand.labelled, "Ligand is labelled"));
+                var radioactive = boolImage(("/images/rad.gif", i.interactionLigand.radioactive, "Ligand is radioactive"));
+                var hasPDB =
+                  boolImage(("/images/protein_structure_icon.png", false, "Ligand has a PDB structure"));
+                var immuno =
+                  boolImage(("/images/immuno_ligand.png", i.interactionLigand.in_gtip, "Immunopharmacology Ligand"));
 
 
-      #   <table class="receptor_data_tables fullwidth">
+                var ligandName = a(href("/ligandDisplay?ligandId=" ^^ intToString(i.interactionLigand.ligand_id)),
+                    unescapedTextNode(i.interactionLigand.name));
+                var species = td(a0, textNode(row.speciesShort));
+                var interactionType = td(a0, textNode(i.interactionType));
+                var action = td(a0, textNode(i.interactionAction));
+                var value = td(a0, displayAffinity(i.affinity, false));
+                var parameter = td(a0, textNode(i.affinity.affinityUnits));
 
-      #       <thead>
-      #           <tr name="hotspot" class="hotspot">
-      #               <td class="info category" colspan="3"><c:out value="${screen.name}" escapeXml="false"/> <a style="color:#CCCCCC;" href="JavaScript:callRef('helpPagePopup.jsp#screens', 800, 400)" title="Click here for help"><img id="logo" style="vertical-align:baseline;" src="images/help_blue_small_transparent_bkground.png" alt="Click here for help"/></a></td>
-      #           </tr>
+                tr(class("info"),
+                  ligandName +* sizeCol +* approvedCol +* selectiveCol +* endogenousCol +*
+                    labelled +* radioactive +* hasPDB +* immuno +* species +* interactionType +*
+                    action +* value +* parameter)
+              }
 
-      #       </thead>
-      #       <tbody name="toggle">
-      #           <c:if test="${not empty screen.description || not empty screen.url || not empty screen.refs.refsHTML || not empty screen.companyLogoFilename || not empty screen.technologyLogoFilename}">
-      #               <tr>
-      #                   <td class="table_instructions" <c:choose><c:when test="${not empty screen.companyLogoFilename || not empty screen.technologyLogoFilename}">style="border-style: solid none solid solid;" colspan="2"</c:when><c:otherwise>colspan="3"</c:otherwise></c:choose>>
-      #                       <c:out value="${screen.description}" escapeXml="false"/><c:if test="${not empty screen.url}"><br/><small ><a href="<c:out value="${screen.url}" escapeXml="false"/>" target="_blank"><c:out value="${screen.url}" escapeXml="false"/></a></small></c:if><c:if test="${not empty screen.refs.refsHTML}"><br/>Reference: <c:out value="${screen.refs.refsHTML}" escapeXml="false"/></c:if>
-      #                   </td>
-      #                   <c:if test="${not empty screen.companyLogoFilename || not empty screen.technologyLogoFilename}">
-      #                       <td class="table_instructions" style="text-align:right; border-style: solid solid solid none;">
-      #                           <c:if test="${not empty screen.companyLogoFilename}">
-      #                               <img src="images/${screen.companyLogoFilename}"/><c:if test="${not empty screen.technologyLogoFilename}"><br/></c:if>
-      #                           </c:if>
-      #                           <c:if test="${not empty screen.technologyLogoFilename}">
-      #                               <img src="images/${screen.technologyLogoFilename}"/>
-      #                           </c:if>
-      #                       </td>
-      #                   </c:if>
-      #               </tr>
-      #           </c:if>
-      #           <tr>
-      #               <td class="table_instructions" style="text-align:left; border-style: solid none solid solid;font-weight:bold;">
-      #                   <a  href="JavaScript:callRef('helpPagePopup.jsp#ligandTables', 800, 620)">Key to terms and symbols</a>
-      #               </td>
-      #               <td class="table_instructions" style="text-align:center; border-style: solid none solid none;font-size:105%;font-weight:bold;">
-      #                   <%--<c:if test="${agonistStructures}"><a  href='javascript:newWindow("ObjectInteractionStructuresDisplayForward?objectId=${object.id}&familyId=${object.family.id}&type=Agonists", 960, 800)'> View all chemical structures</a></c:if>--%>
-      #               </td>
-      #               <td class="table_instructions" style="border-style: solid solid solid none;text-align:right;">
-      #                   Click column headers to sort
-      #               </td>
-      #           </tr>
-      #           <c:forEach var="subtype" items="${screen.interactions}">
-      #               <tr class="info heading">
-      #                   <th class="info category embedded_link" colspan="3" style="padding:8px"><i>Target used in screen:</i> <c:if test="${not empty subtype.value[0].assayUrl}"><a href="<c:out value="${subtype.value[0].assayUrl}" escapeXml="false"/>" target="_blank" title="Click here for assay information"></c:if><c:out value="${subtype.key}" escapeXml="false"/><c:if test="${not empty subtype.value[0].assayUrl}"></a></c:if></th>
-      #               </tr>
-      #               <tr>
-      #                   <td class="table_container" <%--<c:if test="${screen.cutoff != '0'}">--%> style="border-style:solid solid none solid;"<%--</c:if>--%><%--<c:if test="${multiSpAgonist == 'true'}"> style="border-style:solid solid none solid;"</c:if>--%> colspan="3">
+              fun renderScreenTable((name, tbl)) {
+                var assayName = {
+                  var interaction = hd(getTableData(tbl));
+                  if (interaction.interaction.assayURL <> "") {
+                    a(href(interaction.interaction.assayURL), unescapedTextNode(name))
+                  } else {
+                    unescapedTextNode(name)
+                  }
+                };
 
-      #                  <%-- <c:forEach var="subtype" items="${screen.interactions}">--%>
+                var heading =
+                  tr(class("info heading"),
+                    th(class("info category embedded_link") +@ colSpan(3) +@ style("padding:8px"),
+                      MvuHTML.i(a0, textNode("Target used in screen: ")) +* assayName));
+                var tbl =
+                  tr(a0,
+                    td(class("table_container") +@ style("border-style:solid solid none solid;") +@ colSpan(3),
+                      DataTable.renderTable(tbl, renderRow)));
+                heading +* tbl
+              }
+              MvuHTML.concatMap(renderScreenTable, screen.data)
+            };
 
-      #                       <%-- now embed sortable table as a data cell--%>
+            tr(a0, screenInfo +* logoInfo) +*
+            tr(a0, tables)
 
-      #                      <%-- <table class = "sortable inner_receptor_data_tables">--%>
-      #                       <table id="${screen.id}_<c:out value="${subtype.key}" escapeXml="false"/>" class = "tablesorter inner_receptor_data_tables">
-      #                           <thead>
-      #                              <%-- <tr class="info heading">
-      #                                   <th class="info category" colspan="10" style="padding:8px"><i>Target used in screen:</i> <c:out value="${subtype.key}" escapeXml="false"/></th>
-      #                               </tr>--%>
-      #                               <tr class="info heading">
+          } else {
+            MvuHTML.empty
+          }
+        };
+        dataBox(screen.name, 3, contents)
+      }
 
-      #                                   <th class="ligand_header header" style="border-style:solid none solid solid;">Ligand</th>
-      #                                   <th class="tablesorter-noSort" style="border-style:solid none solid none;"></th>
-      #                                   <th class="tablesorter-noSort" style="border-style:solid none solid none;"></th>
-      #  };
-
-      #  dataBox(scr.name, 3, contents)
-      #}
-#
-#     MvuHTML.concatMap(renderScreen, object.objectScreens)
-#   };
-
-    var screens = MvuHTML.empty;
+      MvuHTML.concatMap(renderScreen, objectInfo.objectScreens)
+    };
 
     var immunoCommentsBox =
       commentsBox("Immunopharmacology Comments", comments.immunoComments);
@@ -4195,6 +4221,28 @@ fun updt(msg, model) {
               DataTable.updateSortStatus(objectInfo.objectCofactors, colName, dir)))
 
         }
+
+      case SortScreenTable(screenID, tblName, colName, dir) ->
+        fun sortInnerTable(screens) {
+          map(fun((name, tbl)) {
+              if (name == tblName) {
+                (name, DataTable.updateSortStatus(tbl, colName, dir))
+              } else {
+                (name, tbl)
+              }
+          }, screens)
+        }
+
+        var screens =
+          map(fun(x) {
+                if (x.id == screenID) {
+                  (x with data = sortInnerTable(x.data))
+                } else {
+                  x
+                }
+              }, objectInfo.objectScreens);
+        noCmd((objectInfo with objectScreens = screens))
+
       case _ -> noCmd(objectInfo)
     }
   }

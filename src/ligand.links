@@ -6,6 +6,8 @@ open import Tables;
 typename LigandName = Markup;
 typename LigandId = Int;
 
+typename LigandSize = [| Small | Peptide | OtherSize |];
+
 sig queryLigands : ([LigandId]) ~%~> [(LigandId, LigandName)]
 fun queryLigands(ligandIds) {
   if (ligandIds == []) { [] } else {
@@ -19,5 +21,29 @@ fun queryLigands(ligandIds) {
     # Ensure that ligand names are parsed so they can be rendered
     # correctly
     map(fun((id, name)) { (id, parseOrError(name)) }, ligands)
+  }
+}
+
+fun parseLigandSize(ty) {
+  if (ty == "Peptide" || ty == "Antibody") {
+    Peptide
+  } else if (ty == "Metabolite"
+      || ty == "Synthetic organic" || ty == "Natural product") {
+    Small
+  } else {
+    OtherSize
+  }
+}
+
+fun ligandSizeCol(ligandSize) {
+  switch(ligandSize) {
+    case Small ->
+      boolImage(("/images/benzene.gif", true,
+            "Small molecule or natural product"))
+    case Peptide ->
+      boolImage(("/images/peptide_cartoon.png", true,
+            "Peptide or antibody"))
+    case OtherSize ->
+      boolImage(("", false, ""))
   }
 }
