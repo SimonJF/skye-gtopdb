@@ -421,6 +421,32 @@ typename Allele = (
     phenotype: String
   );
 
+typename Mutation = (
+    type: String,
+    aminoAcidChange: String,
+    speciesID: SpeciesID,
+    description: String,
+    nucleotideChange: String,
+    references: [ReferenceID]
+  );
+
+typename Pathophysiology = (
+    diseaseName: String,
+    role: Markup,
+    drugs: Markup,
+    sideEffects: Markup,
+    use: Markup,
+    omim: String,
+    comments: Markup,
+    orphanet: String,
+    references: [ReferenceID],
+    mutations: [Mutation]
+  );
+
+typename MutationsPathophysiology =
+  (pathophysiologies: [Pathophysiology],
+   mutations: [Mutation]);
+
 typename ObjectInfo = (
     objectId: Int,
     objectType: ObjectType,
@@ -470,6 +496,7 @@ typename ObjectInfo = (
     objectContributors: ContentBox([Contributor.Contributor]),
     objectScreens: [Screen],
     objectAlleles: SortableTable(Allele, Message),
+    objectMutationsPathophysiology: MutationsPathophysiology,
     chartsShown: Bool
 );
 
@@ -921,6 +948,10 @@ fun getInitialModel() {
                       for (d <-- Tables.disease)
                       where (d.disease_id == p.disease_id)
                         [(pathophysiology = p, disease = d,
+                          pathophysiologyRefs =
+                            for (pr <-- Tables.pathophysiology_refs)
+                            where (pr.pathophysiology_id == p.pathophysiology_id)
+                            [pr.reference_id],
                           mutations =
                             for (m <-- Tables.mutation)
                             where (p.pathophysiology_id == m.pathophysiology_id)
@@ -2308,6 +2339,59 @@ fun getInitialModel() {
         DataTable.makeTable(cols, alleles, sortMessage)
       }
 
+
+      sig transformMutations: (%, %) ~%~> (MutationsPathophysiology, [ReferenceID], [LigandID])
+      fun transformMutations(mutationsPatho, mutationsAlone) {
+        fun transformMutation(m) {
+          ((type = m.m.type,
+           aminoAcidChange = m.m.amino_acid_change,
+           speciesID = m.m.species_id,
+           description = m.m.description,
+           nucleotideChange = m.m.nucleotide_change,
+           references = m.refs), m.refs)
+        }
+
+        fun transformMutations(ms) {
+          fold_left(fun((acc, refs), x) {
+            var (m, mRefs) = transformMutation(x);
+            (m :: acc, mRefs ++ refs)
+            }, ([], []) , ms)
+        }
+
+        sig transformPatho : (%) ~%~> (Pathophysiology, [ReferenceID], [LigandID])
+        fun transformPatho(p) {
+          var patho = p.pathophysiology;
+          var d = p.disease;
+          var references = p.pathophysiologyRefs;
+          var role = parseOrError(patho.role);
+          var drugs = parseOrError(patho.drugs);
+          var sideEffects = parseOrError(patho.side_effects);
+          var use = parseOrError(patho.use);
+          var comments = parseOrError(patho.comments);
+          var (mutations, mRefs) = transformMutations(p.mutations);
+
+          var res =
+            (diseaseName=d.name, =role, =drugs, =sideEffects, =use,
+             =comments, =mutations, omim=patho.omim, orphanet=patho.orphanet,
+             =references);
+
+          var (refs, ligands) = collectAllIds([role, drugs, sideEffects, use, comments]);
+          (res , references ++ refs, ligands)
+        }
+        var (pathophysiologies, pRefs, pLigands) =
+          fold_left(fun((acc, refs, ligands), x) {
+              var (res, pRefs, pLigands) = transformPatho(x);
+              (res :: acc, pRefs ++ refs, pLigands ++ ligands)
+              }, ([], [], []), mutationsPatho);
+
+        var (mutations, mRefs) = transformMutations(mutationsAlone);
+        ((=pathophysiologies, =mutations), pRefs ++ mRefs, pLigands)
+      }
+
+      var (mutationsPathophysiology, mpRefs, mpLigands) =
+        transformMutations(raw.mutationsWithPathophysiology,
+            raw.mutationsWithoutPathophysiology);
+
       var alleles = transformAlleles(raw.alleles);
       var (screens, scrRefs) = transformScreens(raw.screens);
 
@@ -2452,6 +2536,7 @@ fun getInitialModel() {
           poRefs ++
           epRefs ++
           scrRefs ++
+          mpRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -2478,6 +2563,7 @@ fun getInitialModel() {
           vdLigands ++
           poLigands ++
           epLigands ++
+          mpLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -2540,6 +2626,7 @@ fun getInitialModel() {
        objectConductanceStates = cs,
        objectScreens = screens,
        objectAlleles = alleles,
+       objectMutationsPathophysiology = mutationsPathophysiology,
        chartsShown = false)
     }
 
