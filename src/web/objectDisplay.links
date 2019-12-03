@@ -912,7 +912,31 @@ fun getInitialModel() {
                              refs =
                                for (sr <-- Tables.screen_refs)
                                where (sr.screen_id == scr.screen_id)
-                               [sr.reference_id]))]
+                               [sr.reference_id]))],
+                # Mutations may be associated with a pathophysiology, but also
+                # might not be -- so we need to account for both.
+                mutationsWithPathophysiology =
+                  for (p <-- Tables.pathophysiology)
+                    where (p.object_id == objectId)
+                      for (d <-- Tables.disease)
+                      where (d.disease_id == p.disease_id)
+                        [(pathophysiology = p, disease = d,
+                          mutations =
+                            for (m <-- Tables.mutation)
+                            where (p.pathophysiology_id == m.pathophysiology_id)
+                              [(=m,
+                                refs =
+                                  for (r <-- Tables.mutation_refs)
+                                  where (r.mutation_id == m.mutation_id)
+                                  [r.reference_id])])],
+                mutationsWithoutPathophysiology =
+                  for (m <-- Tables.mutation)
+                    where (m.object_id == objectId && m.pathophysiology_id == (-1))
+                    [(=m,
+                      refs =
+                        for (r <-- Tables.mutation_refs)
+                        where (r.mutation_id == m.mutation_id)
+                          [r.reference_id])]
              )]
     };
 
