@@ -52,10 +52,10 @@
 # gene expression / pathophysiology
 # expression datasets
 # screening data
+# phenotypes, alleles, disease models
 
 ## Not done
 
-# phenotypes, alleles, disease models
 # clinically-relevant mutations
 
 open import Parser;
@@ -116,6 +116,7 @@ typename Table = [|
   # Other Tables
   | SubstratesTable
   | CofactorsTable
+  | AllelesTable
 |];
 
 typename ColumnName = String;
@@ -159,15 +160,6 @@ typename PDBData = (
 
 typename EndogenousLigandSummary =
   (elsName: Markup, elsSpeciesID: SpeciesID, elsLigandID: LigandID);
-
-typename Phenotype = (
-    phenoAllele: Markup,
-    phenoComposition: Markup,
-    phenoAccessions: Markup,
-    phenoSpeciesID: SpeciesID,
-    phenoPubmedID: String,
-    phenoPhenotype: Markup
-);
 
 typename CellTypeAssociation = (
   ctaImmunoCelltype: (immunoCTID: Int, immunoCTName: String),
@@ -421,9 +413,9 @@ typename Screen =
 
 typename Allele = (
     id: Int,
+    symbol: String,
     composition: String,
     accessions: String,
-    speciesID: Int,
     pubmedIDs: String,
     phenotypeID: String,
     phenotype: String
@@ -477,7 +469,7 @@ typename ObjectInfo = (
     objectVoltageDependence: [VoltageDependence],
     objectContributors: ContentBox([Contributor.Contributor]),
     objectScreens: [Screen],
-    # objectAlleles: SortableTable(Allele, Message),
+    objectAlleles: SortableTable(Allele, Message),
     chartsShown: Bool
 );
 
@@ -710,14 +702,10 @@ fun getInitialModel() {
                    # The following isn't quite right as accessions is in fact a comma-separated
                    # list, and unfortunately regexes don't yet work in nested queries (sigh.)
                    # It's a reasonable approximation though so we should be OK until we get the bugfix.
-                   where (al.accessions == strI.official_gene_id)
+                   where (strI.official_gene_id <> "" && al.accessions == strI.official_gene_id)
                    for (ot <-- Tables.ontology_term)
-                     where (ot.ontology_id == al.ontology_id)
-                     [(=strI, =al, =ot,
-                       refs =
-                        for (r <-- Tables.structural_info_refs)
-                        where (r.structural_info_id == strI.structural_info_id)
-                        [r.reference_id])],
+                     where (ot.term_id == al.term_id)
+                     [(=strI, =al, =ot)],
              variants =
                for (v <-- Tables.variant)
                  where (v.object_id == objectId)
@@ -2248,11 +2236,35 @@ fun getInitialModel() {
       #     phenotypeID: String,
       #     phenotype: String
       #   );
-      fun transformAlleles(rawAlleles) {
+      # var cols = [
+      #     ("Ligand", ("", Sortable(fun(x, y) {
+      #         simpleCmp(x.interaction.interactionLigand.name,
+      #             y.interaction.interactionLigand.name) }))),
+      #     ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+      #     ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+      #     ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+      #     ("Sp.", ("keybox_header",
+      #       Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
+      #     ("Action", ("action_header",
+      #       Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
+      #           y.interaction.interactionAction) }))),
+      #     ("Value", ("affinity_header", Sortable(fun(x, y) {
+      #         InteractionUtilities.sortAffinity(x.interaction.affinity,
+      #             y.interaction.affinity)}))),
+      #     ("Parameter", ("units_header", Sortable(fun(x, y) {
+      #         simpleCmp(x.interaction.affinity.affinityUnits,
+      #                   y.interaction.affinity.affinityUnits) }))),
+      #     ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
+      #   ];
+      #   fun sortMessage(colName, sortDir) { SortTable(tableTy, colName, sortDir) }
+      #   DataTable.makeTable(cols, interactions, sortMessage)
 
+      sig transformAlleles : (%) ~%~> SortableTable(Allele, Message)
+      fun transformAlleles(rawAlleles) {
         var alleles =
           map(fun(x) {
             (id = x.al.allele_id,
+             symbol = x.al.allele_symbol,
              composition = x.al.allelic_composition,
              accessions = x.al.accessions,
              pubmedIDs = x.al.pubmed_ids,
@@ -2260,10 +2272,19 @@ fun getInitialModel() {
              phenotype = x.ot.term)
           }, rawAlleles);
 
-        ()
-
+        var cols =
+          [("Allele", ("", Sortable(fun(x, y) { simpleCmp(x.symbol, y.symbol) }))),
+           ("Composition & genetic background", ("", Sortable(fun(x, y) {
+              simpleCmp(x.composition, y.composition) }))),
+           ("Accession", ("", Sortable(fun(x, y) { simpleCmp(x.accessions, y.accessions) }))),
+           ("Phenotype ID", ("", Sortable(fun(x, y) { simpleCmp(x.phenotypeID, y.phenotypeID) }))),
+           ("Phenotype", ("", Sortable(fun(x, y) { simpleCmp(x.phenotype, y.phenotype) }))),
+           ("Reference", ("", Sortable(fun(x, y) { simpleCmp(x.pubmedIDs, y.pubmedIDs) })))];
+        fun sortMessage(colName, sortDir) { SortTable(AllelesTable, colName, sortDir) }
+        DataTable.makeTable(cols, alleles, sortMessage)
       }
 
+      var alleles = transformAlleles(raw.alleles);
       var (screens, scrRefs) = transformScreens(raw.screens);
 
       var ges : [GeneExpression] = transformGeneExpression(raw.geneInformation);
@@ -2494,6 +2515,7 @@ fun getInitialModel() {
        objectPotencyOrder = pos,
        objectConductanceStates = cs,
        objectScreens = screens,
+       objectAlleles = alleles,
        chartsShown = false)
     }
 
@@ -3285,6 +3307,34 @@ fun view(model) {
     var xenobioticsBox =
       renderDataBox(objectInfo.objectXenobioticExpressions);
 
+    var allelesBox = {
+      if (DataTable.tableEmpty(objectInfo.objectAlleles)) {
+        MvuHTML.empty
+      } else {
+        fun renderRow(x) {
+          tr(class("info"),
+            td(a0, textNode(x.symbol)) +*
+            td(a0, textNode(x.composition)) +*
+            td(a0, unescapedTextNode(x.accessions)) +*
+            td(a0, unescapedTextNode(x.phenotypeID)) +*
+            td(a0, unescapedTextNode(x.phenotype)) +*
+            td(a0, textNode("PMID: ") +*
+              a(href("http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=pubmed&dopt=AbstractPlus&list_uids=" ^^ x.pubmedIDs),
+                textNode(x.pubmedIDs))))
+        }
+
+        var tbl =
+          DataTable.renderTable(objectInfo.objectAlleles, renderRow);
+
+        var contents =
+          tr(a0,
+            td(class("table_container") +@ colSpan(2),
+              tbl));
+
+        dataBox("Phenotypes, Alleles, and Disease Models", 1, contents)
+      }
+    };
+
     var expressionPathophysiologyBox =
       renderDataBox(objectInfo.objectExpressionPathophysiology);
 
@@ -3293,7 +3343,6 @@ fun view(model) {
           objectInfo.objectComments.expressionPathophysiologyComments);
 
 
-    var phenotypesBox = MvuHTML.empty;
     var generalCommentsBox =
       commentsBox("General Comments", comments.generalComments);
     var contributorsBox = MvuHTML.empty;
@@ -4140,8 +4189,8 @@ fun view(model) {
             functionalAssaysBox +*
             physiologicalFunctionsBox +*
             physiologicalConsequencesBox +*
-            phenotypesBox +*
             xenobioticsBox +*
+            allelesBox +*
             expressionPathophysiologyBox +*
             expressionPathophysiologyComments +*
             generalCommentsBox)));
@@ -4267,6 +4316,7 @@ fun updt(msg, model) {
           case CofactorsTable ->
             noCmd((objectInfo with objectCofactors =
               DataTable.updateSortStatus(objectInfo.objectCofactors, colName, dir)))
+          case _ -> noCmd(objectInfo)
 
         }
 
