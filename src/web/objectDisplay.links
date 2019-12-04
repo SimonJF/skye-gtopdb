@@ -53,10 +53,10 @@
 # expression datasets
 # screening data
 # phenotypes, alleles, disease models
+# clinically-relevant mutations
 
 ## Not done
-
-# clinically-relevant mutations
+## ALL DONE!
 
 open import Parser;
 open import RenderMarkup;
@@ -117,6 +117,7 @@ typename Table = [|
   | SubstratesTable
   | CofactorsTable
   | AllelesTable
+  | DiseaseTable:Int
 |];
 
 typename ColumnName = String;
@@ -443,7 +444,7 @@ typename Pathophysiology = (
     orphanets: [String],
     references: [ReferenceID],
     synonyms: [String],
-    mutations: [Mutation]
+    mutations: SortableTable(Mutation, Message)
   );
 
 typename MutationsPathophysiology =
@@ -2365,6 +2366,29 @@ fun getInitialModel() {
             }, ([], []) , ms)
         }
 
+
+        fun makeMutationsTable(diseaseID, mutations) {
+          var cols = [
+            ("Type", ("", Sortable(fun(x, y) {
+                simpleCmp(x.type,
+                    y.type) }))),
+            ("Species", ("", Sortable(fun(x, y) {
+                simpleCmp(speciesLongName(x.speciesID),
+                    speciesLongName(y.speciesID)) }))),
+            ("Amino acid change", ("", Sortable(fun(x, y) {
+                simpleCmp(x.aminoAcidChange, y.aminoAcidChange) }))),
+            ("Nucleotide change", ("", Sortable(fun(x, y) {
+                simpleCmp(x.nucleotideChange, y.nucleotideChange) }))),
+            ("Description", ("", Sortable(fun(x, y) {
+                simpleCmp(x.description, y.description) }))),
+            ("References", ("reference_header", Sortable(fun(x, y) { 0 })))
+          ];
+
+          fun sortMessage(colName, sortDir) {
+            SortTable(DiseaseTable(diseaseID), colName, sortDir) }
+          DataTable.makeTable(cols, mutations, sortMessage)
+        }
+
         sig transformPatho : (%) ~%~> (Pathophysiology, [ReferenceID], [LigandID])
         fun transformPatho(p) {
           var patho = p.pathophysiology;
@@ -2377,12 +2401,13 @@ fun getInitialModel() {
           var use = parseOrError(patho.use);
           var comments = parseOrError(patho.comments);
           var (mutations, mRefs) = transformMutations(p.mutations);
+          var mutationsTable = makeMutationsTable(d.disease_id, mutations);
           var omims = splitOnChar(patho.omim, ',');
           var orphanets = splitOnChar(patho.orphanet, ',');
 
           var res =
             (diseaseID = d.disease_id, diseaseName = d.name, =role, =drugs,
-             =sideEffects, =use, =comments, =mutations, =omims, =orphanets,
+             =sideEffects, =use, =comments, mutations = mutationsTable, =omims, =orphanets,
              =references, synonyms=p.synonyms, =diseaseDescription);
 
           var (refs, ligands) =
@@ -3433,61 +3458,7 @@ fun view(model) {
     # Seems like the mutations that are not associated with a pathophysiology entry
     # are not displayed. Curious
     var mutationsPathophysiologyBox = {
-  #             <%--<c:choose> --%>
-  #                 <c:if test="${not empty patho.mutations}">
 
-  #                     <tr>
-  #                         <td class="table_instructions">
-  #                             Click column headers to sort
-  #                         </td>
-  #                     </tr>
-  #                     <tr>
-  #                         <td class="table_container" >
-  #                             <%-- now embed sortable table as a data cell--%>
-
-  #                             <table id="${patho.id}_mutations" class = "tablesorter inner_receptor_data_tables"> <%--class = "sortable inner_receptor_data_tables">--%>
-  #
-  #                                 <thead>
-  #                                     <tr class="info heading">
-  #                                         <th class="header" style="width:150px">Type</th>
-  #                                         <th class="header" style="width:120px">Species</th>
-  #                                         <th class="header" style="width:150px">Amino acid change</th>
-  #                                         <th class="header" style="width:150px">Nucleotide change</th>
-  #                                         <th class="header" style="width:250px">Description</th>
-  #                                         <th class="header" style="width:150px">Reference</th>
-  #                                     </tr>
-  #                                 </thead>
-  #                                 <tbody>
-  #                                     <c:forEach var="mutation" items="${patho.mutations}">
-  #                                         <tr class="info" style="padding:0px;">
-  #                                             <td><c:out value="${mutation.type}"/></td>
-  #                                             <td><c:out value="${mutation.species}"/></td>
-  #                                             <td><c:out value="${mutation.aminoAcidChange}" escapeXml="false"/></td>
-  #                                             <td><c:out value="${mutation.nucleotideChange}" escapeXml="false"/></td>
-  #                                             <td><c:out value="${mutation.description}" escapeXml="false"/></td>
-  #                                             <td><c:out value="${mutation.refs.refsHTML}" escapeXml="false"/></td>
-  #                                         </tr>
-  #                                     </c:forEach>
-  #                                 </tbody>
-
-  #                             </table>
-  #                             <script type="text/javascript">
-  #                                 $(function(){
-  #                                     $("#${patho.id}_mutations").tablesorter();
-  #                                 });
-  #                             </script>
-  #                         </td>
-  #                     </tr>
-  #                 </c:if>
-  #         </table>
-  #     </td>
-  # </tr>
-
-  # fun renderKeyVal((key, val)) {
-  #   tr(a0,
-  #     td(class("key"), textNode(key ^^ ":")) +*
-  #     td(class("value"), val))
-  # }
       fun markupKV((key, val)) {
         if (markupEmpty(val)) {
           MvuHTML.empty
@@ -3580,7 +3551,25 @@ fun view(model) {
         };
 
         var mutations = {
-          MvuHTML.empty
+          fun renderRow(m) {
+            tr(class("info"),
+              td(a0, unescapedTextNode(m.type)) +*
+              td(a0, unescapedTextNode(speciesLongName(m.speciesID))) +*
+              td(a0, unescapedTextNode(m.aminoAcidChange)) +*
+              td(a0, unescapedTextNode(m.nucleotideChange)) +*
+              td(a0, unescapedTextNode(m.description)) +*
+              td(a0, renderCitations(m.references)))
+          }
+
+          if (DataTable.tableEmpty(pp.mutations)) {
+            MvuHTML.empty
+          } else {
+            tr(a0,
+              td(class("table_instructions"), textNode("Click column headers to sort"))) +*
+            tr(a0,
+              td(class("table_container"),
+                DataTable.renderTable(pp.mutations, renderRow)))
+          }
         };
 
         tr(a0,
@@ -4608,8 +4597,25 @@ fun updt(msg, model) {
           case CofactorsTable ->
             noCmd((objectInfo with objectCofactors =
               DataTable.updateSortStatus(objectInfo.objectCofactors, colName, dir)))
-          case _ -> noCmd(objectInfo)
+          case AllelesTable ->
+            noCmd((objectInfo with objectAlleles =
+              DataTable.updateSortStatus(objectInfo.objectAlleles, colName, dir)))
+          case DiseaseTable(diseaseID) ->
+            fun transform(x) {
+              if (x.diseaseID == diseaseID) {
+                (x with mutations =
+                   DataTable.updateSortStatus(x.mutations, colName, dir))
+              } else {
+                x
+              }
+            }
 
+            var mPatho =
+              (objectInfo.objectMutationsPathophysiology with
+               pathophysiologies = map(transform,
+                 objectInfo.objectMutationsPathophysiology.pathophysiologies));
+
+            noCmd((objectInfo with objectMutationsPathophysiology = mPatho))
         }
 
       case SortScreenTable(screenID, tblName, colName, dir) ->
