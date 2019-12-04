@@ -265,3 +265,19 @@ fun getAverage(high, median, low) {
   }
 }
 
+fun splitOnChar(str, chr) {
+  var (chars, words) =
+    fold_left(fun((chars, words), x) {
+        if (x == chr) {
+          ([], implode(reverse(chars)) :: words)
+        } else {
+          (x :: chars, words)
+        }
+      }, ([], []), explode(str));
+  if (listEmpty(chars)) {
+    reverse(words)
+  } else {
+    reverse(implode(reverse(chars)) :: words)
+  }
+}
+

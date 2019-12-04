@@ -431,15 +431,18 @@ typename Mutation = (
   );
 
 typename Pathophysiology = (
+    diseaseID: Int,
     diseaseName: String,
+    diseaseDescription: Markup,
     role: Markup,
     drugs: Markup,
     sideEffects: Markup,
     use: Markup,
-    omim: String,
+    omims: [String],
     comments: Markup,
-    orphanet: String,
+    orphanets: [String],
     references: [ReferenceID],
+    synonyms: [String],
     mutations: [Mutation]
   );
 
@@ -948,6 +951,10 @@ fun getInitialModel() {
                       for (d <-- Tables.disease)
                       where (d.disease_id == p.disease_id)
                         [(pathophysiology = p, disease = d,
+                          synonyms =
+                            for (d2s <-- Tables.disease2synonym)
+                            where (d2s.disease_id == d.disease_id)
+                            [d2s.synonym],
                           pathophysiologyRefs =
                             for (pr <-- Tables.pathophysiology_refs)
                             where (pr.pathophysiology_id == p.pathophysiology_id)
@@ -2362,6 +2369,7 @@ fun getInitialModel() {
         fun transformPatho(p) {
           var patho = p.pathophysiology;
           var d = p.disease;
+          var diseaseDescription = parseOrError(d.description);
           var references = p.pathophysiologyRefs;
           var role = parseOrError(patho.role);
           var drugs = parseOrError(patho.drugs);
@@ -2369,13 +2377,17 @@ fun getInitialModel() {
           var use = parseOrError(patho.use);
           var comments = parseOrError(patho.comments);
           var (mutations, mRefs) = transformMutations(p.mutations);
+          var omims = splitOnChar(patho.omim, ',');
+          var orphanets = splitOnChar(patho.orphanet, ',');
 
           var res =
-            (diseaseName=d.name, =role, =drugs, =sideEffects, =use,
-             =comments, =mutations, omim=patho.omim, orphanet=patho.orphanet,
-             =references);
+            (diseaseID = d.disease_id, diseaseName = d.name, =role, =drugs,
+             =sideEffects, =use, =comments, =mutations, =omims, =orphanets,
+             =references, synonyms=p.synonyms, =diseaseDescription);
 
-          var (refs, ligands) = collectAllIds([role, drugs, sideEffects, use, comments]);
+          var (refs, ligands) =
+            collectAllIds([diseaseDescription, role, drugs,
+                sideEffects, use, comments]);
           (res , references ++ refs, ligands)
         }
         var (pathophysiologies, pRefs, pLigands) =
@@ -3418,6 +3430,174 @@ fun view(model) {
     var xenobioticsBox =
       renderDataBox(objectInfo.objectXenobioticExpressions);
 
+    # Seems like the mutations that are not associated with a pathophysiology entry
+    # are not displayed. Curious
+    var mutationsPathophysiologyBox = {
+  #             <%--<c:choose> --%>
+  #                 <c:if test="${not empty patho.mutations}">
+
+  #                     <tr>
+  #                         <td class="table_instructions">
+  #                             Click column headers to sort
+  #                         </td>
+  #                     </tr>
+  #                     <tr>
+  #                         <td class="table_container" >
+  #                             <%-- now embed sortable table as a data cell--%>
+
+  #                             <table id="${patho.id}_mutations" class = "tablesorter inner_receptor_data_tables"> <%--class = "sortable inner_receptor_data_tables">--%>
+  #
+  #                                 <thead>
+  #                                     <tr class="info heading">
+  #                                         <th class="header" style="width:150px">Type</th>
+  #                                         <th class="header" style="width:120px">Species</th>
+  #                                         <th class="header" style="width:150px">Amino acid change</th>
+  #                                         <th class="header" style="width:150px">Nucleotide change</th>
+  #                                         <th class="header" style="width:250px">Description</th>
+  #                                         <th class="header" style="width:150px">Reference</th>
+  #                                     </tr>
+  #                                 </thead>
+  #                                 <tbody>
+  #                                     <c:forEach var="mutation" items="${patho.mutations}">
+  #                                         <tr class="info" style="padding:0px;">
+  #                                             <td><c:out value="${mutation.type}"/></td>
+  #                                             <td><c:out value="${mutation.species}"/></td>
+  #                                             <td><c:out value="${mutation.aminoAcidChange}" escapeXml="false"/></td>
+  #                                             <td><c:out value="${mutation.nucleotideChange}" escapeXml="false"/></td>
+  #                                             <td><c:out value="${mutation.description}" escapeXml="false"/></td>
+  #                                             <td><c:out value="${mutation.refs.refsHTML}" escapeXml="false"/></td>
+  #                                         </tr>
+  #                                     </c:forEach>
+  #                                 </tbody>
+
+  #                             </table>
+  #                             <script type="text/javascript">
+  #                                 $(function(){
+  #                                     $("#${patho.id}_mutations").tablesorter();
+  #                                 });
+  #                             </script>
+  #                         </td>
+  #                     </tr>
+  #                 </c:if>
+  #         </table>
+  #     </td>
+  # </tr>
+
+  # fun renderKeyVal((key, val)) {
+  #   tr(a0,
+  #     td(class("key"), textNode(key ^^ ":")) +*
+  #     td(class("value"), val))
+  # }
+      fun markupKV((key, val)) {
+        if (markupEmpty(val)) {
+          MvuHTML.empty
+        } else {
+          renderKeyVal((key, renderM(val)))
+        }
+      }
+
+
+      fun renderPatho(pp) {
+        var diseaseInfo = {
+          var diseaseName =
+            renderKeyVal(("Disease",
+              a(href("/diseaseDisplay?diseaseId=" ^^ intToString(pp.diseaseID)),
+                unescapedTextNode(pp.diseaseName))));
+
+          var synonyms = {
+            var renderedSynonyms =
+              MvuHTML.concat(join([textNode(", ")],
+                    map(fun(x) { [textNode(x)] }, pp.synonyms)));
+            renderKeyVal(("Synonyms", renderedSynonyms))
+          };
+
+          var description =
+            markupKV(("Description", pp.diseaseDescription));
+
+          var dbLinks = {
+            # For some reason, there's no proper pathophysiology->db link table
+            # and orphanets and omims are stored directly
+            var orphanetPath =
+              "http://www.orpha.net/consor/cgi-bin/OC_Exp.php?Lng=GB&Expert=";
+            var omimPath = "http://www.omim.org/entry/";
+
+            fun renderDBLink(x, rootURL) {
+              a(href(rootURL ^^ x), textNode(x))
+            }
+
+            var orphanets =
+              if (not(listEmpty(pp.orphanets))) {
+                MvuHTML.concat(join([textNode(", ")], map(fun(x) {
+                  [renderDBLink(x, orphanetPath)]
+                }, pp.orphanets)))
+              } else {
+                MvuHTML.empty
+              };
+
+            var omims =
+              if (not(listEmpty(pp.omims))) {
+                MvuHTML.concat(join([textNode(", ")], map(fun(x) {
+                  [renderDBLink(x, omimPath)]
+                }, pp.omims)))
+              } else {
+                MvuHTML.empty
+              };
+
+            renderKeyVal(("Orphanet", orphanets)) +*
+            renderKeyVal(("OMIM", omims))
+          };
+
+          var diseaseBasicInfo = {
+            tr(a0,
+              td(class("key"), textNode("Disease:")) +*
+              td(class("value"),
+                b(a0, diseaseName) +*
+                table_(class("inner_data_table disease_detail"),
+                  description +*
+                  synonyms +*
+                  dbLinks)))
+          };
+
+          var properties =
+            MvuHTML.concatMap(markupKV,
+                [
+                  ("Role", pp.role),
+                  ("Drugs", pp.drugs),
+                  ("Side effects", pp.sideEffects),
+                  ("Use", pp.use),
+                  ("Comments", pp.comments)
+                ]);
+
+          var refs =
+            renderKeyVal(("References", renderCitations(pp.references)));
+
+          tr(a0,
+            td(class("info") +@ colSpan(4),
+              table_(class("inner_receptor_data_tables"),
+                diseaseBasicInfo +*
+                properties +*
+                refs)))
+        };
+
+        var mutations = {
+          MvuHTML.empty
+        };
+
+        tr(a0,
+          td(class("info"),
+            table_(class("inner_receptor_data_tables"),
+              diseaseInfo +*
+              mutations)))
+      }
+
+      var pathos =
+        MvuHTML.concatMap(renderPatho,
+            objectInfo.objectMutationsPathophysiology.pathophysiologies);
+
+      # TODO: Put in the mutations pathophysiology comments box too
+      dataBox("Clinically-relevant Mutations and Pathophysiology", 1, pathos)
+    };
+
     var allelesBox = {
       if (DataTable.tableEmpty(objectInfo.objectAlleles)) {
         MvuHTML.empty
@@ -4301,6 +4481,7 @@ fun view(model) {
             physiologicalFunctionsBox +*
             physiologicalConsequencesBox +*
             xenobioticsBox +*
+            mutationsPathophysiologyBox +*
             allelesBox +*
             expressionPathophysiologyBox +*
             expressionPathophysiologyComments +*
