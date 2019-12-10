@@ -393,13 +393,22 @@ fun getInitialModel() {
     var basicInfo =
       for (f <-- Tables.family)
         where (f.family_id == familyId)
-        for (g <-- Tables.grac_family_text)
-          where (g.family_id == familyId)
-          [ (f.name, f.type, g.overview, g.comments) ];
+        [(name = f.name, type = f.type,
+            grac_texts =
+              for (g <-- Tables.grac_family_text)
+                where (g.family_id == familyId)
+                [g])];
 
     switch(basicInfo) {
       case [] -> Nothing
-      case (name, type, overview, comments)::_ ->
+      case x ::_ ->
+        var name = x.name;
+        var type = x.type;
+        var (overview, comments) =
+          switch (x.grac_texts) {
+            case [] -> ("", "")
+            case y :: _ -> (y.overview, y.comments)
+          };
         # At this point, we need to populate the rest of the data
         # (further reading, contributors, and interaction data).
         ### Further reading
