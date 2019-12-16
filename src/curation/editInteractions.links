@@ -613,7 +613,7 @@ fun submitReferenceQuery(rq) server {
     not(allEmpty) && authorsPred && titlePred && journalPred && yearPred
   }
 
-  var res = query plain {
+  var res = query flat {
     for (r <-- Tables.reference)
       where (pred(r))
       [r]
@@ -624,7 +624,7 @@ fun submitReferenceQuery(rq) server {
 
 fun submitLigandQuery(lq) server {
   var results =
-    query plain {
+    query flat {
       for (l <-- Tables.ligand)
         where (l.name =~ /^.*{lq}.*/)
         [l]
