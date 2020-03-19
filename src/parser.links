@@ -106,8 +106,8 @@ mutual {
 
     fun markupInner() {
       textStream ++!
-      tag() ++!
-      (char('>') >> return(MarkupText(">")))
+      tag()
+      # (char('>') >> return(MarkupText(">")))
       # (char('<') >> return(MarkupText("<")))
     }
 
