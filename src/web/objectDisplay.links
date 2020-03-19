@@ -3411,13 +3411,14 @@ fun view(model) {
       renderDataBox(objectInfo.objectTissueDistribution);
 
     var expressionDatasetsBox = {
-      var charts =
-        MvuHTML.concat(
-          mapi(fun(x, i) {
-            htmlWidget("div",
-              [("id", "chart" ^^ intToString(i)),
-               ("style", "width: 910px; height: 400px; margin-top:10px;")])
-          }, objectInfo.objectGeneExpression));
+      var charts = MvuHTML.empty;
+       # Disabled until I get widgets into the main branch
+       #MvuHTML.concat(
+       #  mapi(fun(x, i) {
+       #    htmlWidget("div",
+       #      [("id", "chart" ^^ intToString(i)),
+       #       ("style", "width: 910px; height: 400px; margin-top:10px;")])
+       #  }, objectInfo.objectGeneExpression));
 
         var showChartsLink =
        #if (objectInfo.chartsShown) {
