@@ -31,7 +31,9 @@ fun bind(m, f) {
   }
 }
 
+infixr 3 ++!;
 op m >>= f { bind(m, f) }
+infixr 3 ++!;
 op m >> f { bind(m, fun(_) { f }) }
 
 sig sat : ((Char) {}~> Bool) {}~> Parser(Char)
@@ -76,6 +78,7 @@ fun lazyChoice(m, n) {
   }
 }
 
+infixr 4 ++!;
 op m ++! n { lazyChoice(m, n) }
 fun seq(m, n) {
   m >>= fun(x) {
