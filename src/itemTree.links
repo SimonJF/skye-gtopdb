@@ -76,17 +76,21 @@ fun setTreeVisibility(isVisible, tree) {
 
 
 fun getFamilyInfo(familyId) {
-  for (f <-- Tables.family)
-    where (f.family_id == familyId)
-    [mkFamilyNode(f.name, f.family_id)]
+  query {
+    for (f <-- Tables.family)
+      where (f.family_id == familyId)
+      [mkFamilyNode(f.name, f.family_id)]
+  }
 }
 
 fun getGroupChildren(groupId) {
-  for (g <-- Tables.grouping)
-    where (g.group_id == groupId)
-    for (f <-- Tables.family)
-      where (f.family_id == g.family_id)
-      [mkHqr(f.type == "grouping", g.display_order, f.name, f.family_id)]
+  query {
+    for (g <-- Tables.grouping)
+      where (g.group_id == groupId)
+      for (f <-- Tables.family)
+        where (f.family_id == g.family_id)
+        [mkHqr(f.type == "grouping", g.display_order, f.name, f.family_id)]
+  }
 }
 
 sig resolveHierarchy : (HierarchicalQueryResult) ~> ItemTreeNode(FamilyNode)

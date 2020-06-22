@@ -391,13 +391,15 @@ fun getInitialModel() {
   fun getFamilyInfo(familyId) {
     # First, grab the basic information.
     var basicInfo =
-      for (f <-- Tables.family)
-        where (f.family_id == familyId)
-        [(name = f.name, type = f.type,
-            grac_texts =
-              for (g <-- Tables.grac_family_text)
-                where (g.family_id == familyId)
-                [g])];
+      query {
+        for (f <-- Tables.family)
+          where (f.family_id == familyId)
+          [(name = f.name, type = f.type,
+              grac_texts =
+                for (g <-- Tables.grac_family_text)
+                  where (g.family_id == familyId)
+                  [g])]
+      };
 
     switch(basicInfo) {
       case [] -> Nothing
@@ -413,40 +415,48 @@ fun getInitialModel() {
         # (further reading, contributors, and interaction data).
         ### Further reading
         var furtherReading =
-          for (fr <-- Tables.grac_further_reading)
-            where (fr.family_id == familyId)
-            for (ref <-- Tables.reference)
-              where (ref.reference_id == fr.reference_id)
-              [
-                (makeReference(ref.reference_id,
-                   ref.type, ref.title, ref.article_title, ref.year,
-                   ref.volume, ref.issue, ref.pages, ref.publisher,
-                   ref.publisher_address, ref.editors, ref.pubmed_id,
-                   ref.isbn, ref.authors, fr.key_ref))
-              ];
+          query {
+            for (fr <-- Tables.grac_further_reading)
+              where (fr.family_id == familyId)
+              for (ref <-- Tables.reference)
+                where (ref.reference_id == fr.reference_id)
+                [
+                  (makeReference(ref.reference_id,
+                     ref.type, ref.title, ref.article_title, ref.year,
+                     ref.volume, ref.issue, ref.pages, ref.publisher,
+                     ref.publisher_address, ref.editors, ref.pubmed_id,
+                     ref.isbn, ref.authors, fr.key_ref))
+                ]
+          };
         var furtherReading =
           sortBy(fun(ref) { ref.authors }, furtherReading);
 
         ### Contributors
         fun getContributors(t) {
-          for (contrib <-- Tables.contributor_copy)
-            where (contrib.contributor_id == t.contributor_id)
-            orderby (-(t.display_order))
-            [(resultId=contrib.contributor_id,
-              resultName=(contrib.first_names ^^ " " ^^ contrib.surname),
-              resultAddress=contrib.address,
-              resultRole=t.role)]
+          query {
+            for (contrib <-- Tables.contributor_copy)
+              where (contrib.contributor_id == t.contributor_id)
+              orderby (-(t.display_order))
+              [(resultId=contrib.contributor_id,
+                resultName=(contrib.first_names ^^ " " ^^ contrib.surname),
+                resultAddress=contrib.address,
+                resultRole=t.role)]
+          }
         }
 
         var subcommitteeMembers =
-          for (t <-- Tables.subcommittee)
-            where (t.family_id == familyId)
-            getContributors(t);
+          query {
+            for (t <-- Tables.subcommittee)
+              where (t.family_id == familyId)
+              getContributors(t)
+          };
 
         var additionalContributors =
-          for (t <-- Tables.contributor2family)
-            where (t.family_id == familyId)
-            getContributors(t);
+          query {
+            for (t <-- Tables.contributor2family)
+              where (t.family_id == familyId)
+              getContributors(t)
+          };
 
         fun mkContributor(res) {
           (contribId=res.resultId,
