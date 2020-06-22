@@ -126,8 +126,10 @@ module Selecting {
 
     fun retrieveDiseases() {
       var diseases =
-        for (d <-- Tables.disease)
-        [(d.disease_id, d.name)];
+        query {
+          for (d <-- Tables.disease)
+            [(d.disease_id, d.name)]
+        };
       sortBy(fun((name, _)) { name }, diseases)
     }
 
@@ -662,30 +664,34 @@ module Editing {
       };
 
     var databases =
-      for (db <-- Tables.tbl_database)
-      [ db ];
+      query {
+        for (db <-- Tables.tbl_database)
+          [ db ]
+      };
 
     var data =
       if(isJust(diseaseIDOpt)) {
-        for (d <-- Tables.disease)
-          where (d.disease_id == diseaseID)
-          [ (disease = d,
-             synonyms =
-               for (s <-- Tables.disease2synonym)
-               where (s.disease_id == diseaseID)
-               [
-                (dbLinkIDs =
-                  for (synLink <-- Tables.disease_synonym2database_link)
-                  where (synLink.disease2synonym_id == s.disease2synonym_id)
-                  [synLink.disease_database_link_id],
-                 synonym = s)
-               ],
-            dbLinks =
-              for (ddl <-- Tables.disease_database_link)
-              where (ddl.disease_id == diseaseID)
-              [ ddl ]
-            )
-          ]
+        query {
+          for (d <-- Tables.disease)
+            where (d.disease_id == diseaseID)
+            [ (disease = d,
+               synonyms =
+                 for (s <-- Tables.disease2synonym)
+                 where (s.disease_id == diseaseID)
+                 [
+                  (dbLinkIDs =
+                    for (synLink <-- Tables.disease_synonym2database_link)
+                    where (synLink.disease2synonym_id == s.disease2synonym_id)
+                    [synLink.disease_database_link_id],
+                   synonym = s)
+                 ],
+              dbLinks =
+                for (ddl <-- Tables.disease_database_link)
+                where (ddl.disease_id == diseaseID)
+                [ ddl ]
+              )
+            ]
+        }
       } else {
         var emptyDisease =
           (disease_id = (-1), name = "", description = "", type = "");
