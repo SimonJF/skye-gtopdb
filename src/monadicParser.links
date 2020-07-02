@@ -31,9 +31,10 @@ fun bind(m, f) {
   }
 }
 
-infixr 3 ++!;
+infixr 3 >>=;
 op m >>= f { bind(m, f) }
-infixr 3 ++!;
+
+infixr 3 >>;
 op m >> f { bind(m, fun(_) { f }) }
 
 sig sat : ((Char) {}~> Bool) {}~> Parser(Char)
@@ -91,10 +92,11 @@ fun seq(m, n) {
 var letter = lower ++! upper;
 
 fun many(p) {
-  p >>= fun(x) {
+  (p >>= fun(x) {
   many(p) >>= fun(xs) {
   return(x :: xs)
-  }} ++! return([])
+  }})
+  ++! return([])
 }
 
 fun many1(p) {
