@@ -18,12 +18,13 @@ fun showObjectType(it) {
 
 fun classifyObject(objectID) {
   fun inTable(tbl) {
-    query {
       length(
-        for (x <-- tbl)
-        where (x.object_id == objectID)
-          [x]) > 0
-    }
+        query {
+          for (x <-- tbl)
+          where (x.object_id == objectID)
+            [x]
+        }
+      ) > 0
   }
 
   if (inTable(Tables.gpcr)) {
