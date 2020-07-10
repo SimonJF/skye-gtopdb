@@ -559,7 +559,7 @@ fun getInitialModel() {
       }
     }
 
-    var raw = query {
+    var raw = query nested {
       for (o <-- Tables.object)
         where (o.object_id == objectId)
         for (rb <-- Tables.receptor_basic)

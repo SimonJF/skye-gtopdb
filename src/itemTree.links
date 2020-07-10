@@ -76,7 +76,7 @@ fun setTreeVisibility(isVisible, tree) {
 
 
 fun getFamilyInfo(familyId) {
-  query {
+  query nested {
     for (f <-- Tables.family)
       where (f.family_id == familyId)
       [mkFamilyNode(f.name, f.family_id)]
@@ -84,7 +84,7 @@ fun getFamilyInfo(familyId) {
 }
 
 fun getGroupChildren(groupId) {
-  query {
+  query nested {
     for (g <-- Tables.grouping)
       where (g.group_id == groupId)
       for (f <-- Tables.family)

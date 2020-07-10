@@ -7,7 +7,7 @@ typename SpeciesLongName = String;
 typename SpeciesMap = [(SpeciesID, (SpeciesShortName, SpeciesLongName))];
 
 fun getSpeciesMap() {
-  query {
+  query nested {
     for (s <-- Tables.species)
       [(s.species_id, (s.short_name, s.name))]
   }

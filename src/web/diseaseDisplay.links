@@ -129,7 +129,7 @@ sig getModel : (Int) ~%~> Model
 fun getModel(diseaseId) {
 
   fun getPathoTargets() {
-    query {
+    query nested {
       for (pp <-- Tables.pathophysiology)
       where (pp.disease_id == diseaseId)
         for (o <-- Tables.object)
@@ -150,7 +150,7 @@ fun getModel(diseaseId) {
   }
 
   fun getImmunoTargets() {
-    query {
+    query nested {
       for (id2o <-- Tables.immuno_disease2object)
         where (id2o.disease_id == diseaseId)
         for (o <-- Tables.object)
@@ -169,7 +169,7 @@ fun getModel(diseaseId) {
 
   # First, get raw info from the DB
   var rawInfo =
-    query {
+    query nested {
       for (d <-- Tables.disease)
         where (d.disease_id == diseaseId)
           [(id = d.disease_id,
@@ -252,7 +252,7 @@ fun getModel(diseaseId) {
     var (targets, targetRefs, immunoRefs) =
       fold_right(fun(x, (targets, refs, iRefs)) {
         var raw_interactions =
-          query {
+          query nested {
             for (i <-- Tables.interaction)
               where (i.object_id == x.id)
               for (id2l <-- Tables.immuno_disease2ligand)
@@ -316,7 +316,7 @@ fun getModel(diseaseId) {
 
     var (ligands, ligandRefs) = fold_right(fun(l, (ligands, refs)) {
         var id2l_refs =
-          query {
+          query nested {
             for (id2l <-- Tables.immuno_disease2ligand)
               where (id2l.disease_id == diseaseId && id2l.ligand_id == l.lId)
               for (id2l_ref <-- Tables.immuno_disease2ligand_refs)

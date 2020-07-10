@@ -391,7 +391,7 @@ fun getInitialModel() {
   fun getFamilyInfo(familyId) {
     # First, grab the basic information.
     var basicInfo =
-      query {
+      query nested {
         for (f <-- Tables.family)
           where (f.family_id == familyId)
           [(name = f.name, type = f.type,
@@ -415,7 +415,7 @@ fun getInitialModel() {
         # (further reading, contributors, and interaction data).
         ### Further reading
         var furtherReading =
-          query {
+          query nested {
             for (fr <-- Tables.grac_further_reading)
               where (fr.family_id == familyId)
               for (ref <-- Tables.reference)
@@ -433,7 +433,7 @@ fun getInitialModel() {
 
         ### Contributors
         fun getContributors(t) {
-          query {
+          query nested {
             for (contrib <-- Tables.contributor_copy)
               where (contrib.contributor_id == t.contributor_id)
               orderby (-(t.display_order))
@@ -445,14 +445,14 @@ fun getInitialModel() {
         }
 
         var subcommitteeMembers =
-          query {
+          query nested {
             for (t <-- Tables.subcommittee)
               where (t.family_id == familyId)
               getContributors(t)
           };
 
         var additionalContributors =
-          query {
+          query nested {
             for (t <-- Tables.contributor2family)
               where (t.family_id == familyId)
               getContributors(t)
@@ -473,7 +473,7 @@ fun getInitialModel() {
 
         # Object summaries
         var objects =
-         query {
+         query nested {
             for (r2f <-- receptor2family)
               where (r2f.family_id == familyId)
               for (receptor <-- object)

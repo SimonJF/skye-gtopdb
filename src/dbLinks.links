@@ -16,7 +16,7 @@ typename DatabaseLink = (
 fun transformDatabaseLinks(dbls) {
   var dbIDs = map(fun(x) { x.database_id }, dbls);
   var dbPred = contains(dbIDs);
-  var dbMap = query {
+  var dbMap = query nested {
     for (db <-- Tables.tbl_database)
       where (dbPred(db.database_id))
         [(db.database_id, db)]

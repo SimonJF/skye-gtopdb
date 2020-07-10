@@ -493,7 +493,7 @@ fun getInitialModel() {
     }
 
     var results =
-      query {
+      query nested {
         for (l <-- Tables.ligand)
         where (l.ligand_id == ligandId)
           [(ligand = l,

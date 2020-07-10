@@ -19,7 +19,7 @@ fun showObjectType(it) {
 fun classifyObject(objectID) {
   fun inTable(tbl) {
       length(
-        query {
+        query nested {
           for (x <-- tbl)
           where (x.object_id == objectID)
             [x]

@@ -37,7 +37,7 @@ fun getDiseaseResults(filterType) {
     switch(filterType) {
       case All -> true
       case Immuno ->
-        query {
+        query nested {
           length(
               for (d2c <-- Tables.disease2category)
                 for (c <-- Tables.disease_category)
@@ -50,7 +50,7 @@ fun getDiseaseResults(filterType) {
   }
 
   var results =
-    query {
+    query nested {
       for (d <-- Tables.disease)
         where (pred(d.disease_id))
         [(drName=d.name,

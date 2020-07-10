@@ -126,7 +126,7 @@ module Selecting {
 
     fun retrieveDiseases() {
       var diseases =
-        query {
+        query nested {
           for (d <-- Tables.disease)
             [(d.disease_id, d.name)]
         };
@@ -664,14 +664,14 @@ module Editing {
       };
 
     var databases =
-      query {
+      query nested {
         for (db <-- Tables.tbl_database)
           [ db ]
       };
 
     var data =
       if(isJust(diseaseIDOpt)) {
-        query {
+        query nested {
           for (d <-- Tables.disease)
             where (d.disease_id == diseaseID)
             [ (disease = d,

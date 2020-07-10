@@ -268,7 +268,7 @@ fun displayAffinityVoltage(af) {
   }
 }
 fun queryInteractions(pred) {
-    query {
+    query nested {
       for (i <-- Tables.interaction)
         where (pred(i) && not(i.hide) && not(i.only_grac))
           [(interaction = i,

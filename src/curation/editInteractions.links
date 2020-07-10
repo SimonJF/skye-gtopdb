@@ -504,7 +504,7 @@ fun commit(objectID, oldInfo, newInfo) server {
 
 fun getInitialModel(objectID) {
   var object =
-    query {
+    query nested {
       for (o <-- Tables.object)
         where (o.object_id == objectID)
         [(obj = o,
@@ -538,7 +538,7 @@ fun getInitialModel(objectID) {
     case x :: _ ->
       var allMalariaStages =
         sortBy(fun(ms) { ms.malaria_stage_id },
-          query {
+          query nested {
             for (ms <-- Tables.malaria_stage)
               [ms]
           });

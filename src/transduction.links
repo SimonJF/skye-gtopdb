@@ -16,7 +16,7 @@ typename TransductionMechanism = (
 
 sig transductionsForObject : (ObjectID) ~%~> ([TransductionMechanism], [ReferenceID], [LigandID])
 fun transductionsForObject(objectId){
-  var rawResults = query {
+  var rawResults = query nested {
     for (t <-- Tables.transduction)
       where (t.object_id == objectId)
         [(transduction = t,

@@ -63,7 +63,7 @@ typename LigandResult =
    lrSynonyms: [Markup]);
 
 fun isEndogenous(ligand) {
-  query {
+  query nested {
     length(
       for (p <-- Tables.precursor)
         for (p2p <-- Tables.precursor2peptide)
@@ -95,7 +95,7 @@ fun predicate(ligand, filterType) {
 sig getLigands : (Filter) ~> [(Char, [LigandResult])]
 fun getLigands(filterType) {
   var res =
-    query {
+    query nested {
       for (l <-- Tables.ligand)
         where (predicate(l, filterType))
           [

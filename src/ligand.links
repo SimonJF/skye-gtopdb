@@ -13,7 +13,7 @@ fun queryLigands(ligandIds) {
   if (ligandIds == []) { [] } else {
     var containsLigand = contains(ligandIds);
     var ligands =
-      query {
+      query nested {
         for (l <-- Tables.ligand)
           where (containsLigand(l.ligand_id))
           [ (l.ligand_id, l.name) ]

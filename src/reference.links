@@ -100,7 +100,7 @@ fun renderCitationList(ids, refs) {
 fun queryReferences(refIds) {
   if (refIds == []) { [] } else {
   var containsReference = contains(refIds);
-  query {
+  query nested {
   for (ref <-- Tables.reference)
     where (containsReference(ref.reference_id))
       [
