@@ -1,5 +1,0 @@
-{
-  "name": "Ligand List",
-  "linksURL": "http://localhost:8080/ligandList",
-  "javaURL": "http://www.guidetopharmacology.org:9080/GRAC/LigandListForward?database=all"
-}

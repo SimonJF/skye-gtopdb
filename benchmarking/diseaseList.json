@@ -1,5 +1,0 @@
-{
-  "name": "Disease List",
-  "linksURL": "http://localhost:8080/diseaseList",
-  "javaURL": "http://www.guidetopharmacology.org:9080/GRAC/DiseaseListForward"
-}
