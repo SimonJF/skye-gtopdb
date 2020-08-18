@@ -5,7 +5,7 @@ open import Tables;
 typename ItemTreeNode(a) =
   [| ItemNode:a | ItemSubtree:(String, Bool, [ItemTreeNode(a)]) |];
 
-typename Tree(a) = (treeRoots: [ItemTreeNode(a)]);
+typename Tree(a) = (root: ItemTreeNode(a));
 
 typename Message = [| ToggleSubtree:String | SetTreeVisibility:Bool |];
 
@@ -35,7 +35,7 @@ fun toggleSubtree(str, tree) {
 }
 
 fun toggleTree(str, tree) {
-  (treeRoots=map(fun(x) { toggleSubtree(str, x) }, tree.treeRoots))
+  (root = toggleSubtree(str, tree.root))
 }
 
 fun setSubtreeVisibility(isVisible, tree) {
@@ -48,7 +48,7 @@ fun setSubtreeVisibility(isVisible, tree) {
 }
 
 fun setTreeVisibility(isVisible, tree) {
-  (treeRoots=map(fun(x) { setSubtreeVisibility(isVisible, x) }, tree.treeRoots))
+  (root = setSubtreeVisibility(isVisible, tree.root))
 }
 
 ### DB Accessors
@@ -104,11 +104,12 @@ fun resolveHierarchy(hqr) {
   }
 }
 
+# Assumption: groupId is a valid family ID
 fun getToplevelGroup(groupId) {
-  var familyInfo = getFamilyInfo(groupId);
+  var familyInfo = hd(getFamilyInfo(groupId));
   var sortedChildren = sortBy(fun(x) { x.displayOrder }, getGroupChildren(groupId));
-  var roots = map(resolveHierarchy, sortedChildren);
-  (treeRoots = roots)
+  var children = map(resolveHierarchy, sortedChildren);
+  (root = ItemSubtree(familyInfo.name, true, children))
 }
 
 ### Rendering
@@ -134,7 +135,22 @@ fun renderPage(tree, familyName, urlPrefix) {
             ul(a0, renderedChildren))
       }
     }
-    MvuHTML.concat(map(renderTreeNode, tree.treeRoots))
+
+
+    # Render the root
+    fun rootSpan(name) { span(class("tree_root_node"), unescapedTextNode(" " ^^ name)) } 
+
+    switch (tree.root) {
+      case ItemNode(x) ->
+        # Unlikely to happen, but hey
+        li(class("liBullet"), rootSpan(x.name))
+      case ItemSubtree(name, shown, children) ->
+        var renderedChildren =  MvuHTML.concat(map(renderTreeNode, children));
+        var bulletClass = class(if (shown) { "liOpen" } else { "liClosed" });
+        li(bulletClass,
+           span(class("bullet") +@ onClick(fun() { ToggleSubtree(name) }), rootSpan(name)) +*
+           ul(a0, renderedChildren))
+    }
   }
 
 

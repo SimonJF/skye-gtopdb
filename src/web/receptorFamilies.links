@@ -103,6 +103,7 @@ fun getTargetFamily(typeName) {
 }
 
 # SJF: It would be lovely to have a maybe monad? Maybe worth hacking one in?
+sig getInitialModel : () ~%~> Model
 fun getInitialModel() {
   switch(lookup("type", environment())) {
     case Nothing -> Nothing
