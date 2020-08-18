@@ -69,17 +69,17 @@ fun view(model) {
   }
 
 fun getTree(targetFamily) {
-  var groupId =
+  var (groupId, strict_type) =
     switch(targetFamily) {
-      case TFGpcr -> 694
-      case TFIonChannel -> 689
-      case TFNhr -> 695
-      case TFCatalyticReceptor -> 862
-      case TFTransporter -> 691
-      case TFEnzyme -> 690
-      case TFOther -> 864
+      case TFGpcr -> (694, "")
+      case TFIonChannel -> (689, "")
+      case TFNhr -> (695, "")
+      case TFCatalyticReceptor -> (862, "catalytic_receptor")
+      case TFTransporter -> (691, "")
+      case TFEnzyme -> (690, "")
+      case TFOther -> (864, "")
     };
-  getToplevelGroup(groupId)
+  getToplevelGroup(groupId, strict_type)
 }
 
 fun getTargetFamily(typeName) {

@@ -1,5 +1,5 @@
-open import MvuHTML;
-open import MvuAttrs;
+import MvuHTML;
+import MvuAttrs;
 open import Tables;
 
 typename ItemTreeNode(a) =
@@ -17,9 +17,9 @@ fun mkFamilyNode(name, id) {
   (name=name, familyId=id)
 }
 
-typename HierarchicalQueryResult = (isGroup:Bool, displayOrder:Int, name: String, familyId:FamilyID);
-fun mkHqr(isGroup, order, name, id) {
-  (isGroup=isGroup, displayOrder=order, name=name, familyId=id)
+typename HierarchicalQueryResult = (type:String, displayOrder:Int, name: String, familyId:FamilyID);
+fun mkHqr(type, order, name, id) {
+  (=type, displayOrder=order, =name, familyId=id)
 }
 
 fun toggleSubtree(str, tree) {
@@ -89,32 +89,50 @@ fun getGroupChildren(groupId) {
       where (g.group_id == groupId)
       for (f <-- Tables.family)
         where (f.family_id == g.family_id)
-        [mkHqr(f.type == "grouping", g.display_order, f.name, f.family_id)]
+        [mkHqr(f.type, g.display_order, f.name, f.family_id)]
   }
 }
 
-sig resolveHierarchy : (HierarchicalQueryResult) ~> ItemTreeNode(FamilyNode)
-fun resolveHierarchy(hqr) {
-  if (hqr.isGroup) {
+# If strict_type is set, then for a node to be included, it must either:
+#   - have an empty set of subnodes and not be a grouping, or 
+#   - have a nonempty set of subnodes and be a grouping, or
+#   - have a type matching strict_type
+sig resolveHierarchy : (String) ~> (HierarchicalQueryResult) ~> [ItemTreeNode(FamilyNode)]
+fun resolveHierarchy(strict_type)(hqr) {
+  if (hqr.type == "grouping") {
     var sortedChildren = sortBy(fun(x) { x.displayOrder }, getGroupChildren(hqr.familyId));
-    var resolvedHqrs = map(resolveHierarchy, sortedChildren);
-    ItemSubtree(hqr.name, true, resolvedHqrs)
+    var resolvedHqrs = concatMap(resolveHierarchy(strict_type), sortedChildren);
+    if (empty(resolvedHqrs)) {
+      []
+    } else {
+      [ItemSubtree(hqr.name, true, resolvedHqrs)]
+    }
   } else {
-    ItemNode(mkFamilyNode(hqr.name, hqr.familyId))
+    if (strict_type == "") {
+      [ItemNode(mkFamilyNode(hqr.name, hqr.familyId))]
+    } else {
+      if (hqr.type == strict_type) {
+        [ItemNode(mkFamilyNode(hqr.name, hqr.familyId))]
+      } else {
+        []
+      }
+    }
   }
 }
 
 # Assumption: groupId is a valid family ID
-fun getToplevelGroup(groupId) {
+fun getToplevelGroup(groupId, strict_type) {
   var familyInfo = hd(getFamilyInfo(groupId));
   var sortedChildren = sortBy(fun(x) { x.displayOrder }, getGroupChildren(groupId));
-  var children = map(resolveHierarchy, sortedChildren);
+  var children = concatMap(resolveHierarchy(strict_type), sortedChildren);
   (root = ItemSubtree(familyInfo.name, true, children))
 }
 
 ### Rendering
 
 fun renderPage(tree, familyName, urlPrefix) {
+  open MvuHTML;
+  open MvuAttrs;
   var a0 = MvuAttrs.empty;
   var hempty = MvuHTML.empty;
 

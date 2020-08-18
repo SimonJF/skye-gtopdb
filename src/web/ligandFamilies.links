@@ -27,7 +27,7 @@ fun view(model) {
 
 var ligandGroup = 951;
 fun getTree() {
-  getToplevelGroup(ligandGroup)
+  getToplevelGroup(ligandGroup, "")
 }
 
 fun mainPage() {
