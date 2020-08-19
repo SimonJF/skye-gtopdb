@@ -8,12 +8,12 @@ open import Template;
 typename Filter = [| All | Immuno |];
 
 var filterNames = [
-  ("all", (All, "All Diseases", "All diseases described in GtoPdb.")),
-  ("immuno", (Immuno, "Immuno Disease", "Immunologically relevant diseases described in GtoPdb."))
+  ("All", (All, "All Diseases", "All diseases described in GtoPdb.")),
+  ("Immuno", (Immuno, "Immuno Disease", "Immunologically relevant diseases described in GtoPdb."))
 ];
 
 var allDiseases = {
-  var (filter, _, desc) = fromJust(lookup("all", filterNames));
+  var (filter, _, desc) = fromJust(lookup("All", filterNames));
   (filter, desc)
 };
 

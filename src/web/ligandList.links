@@ -3,8 +3,6 @@ open import MvuAttrs;
 open import Mvu;
 open import Tables;
 open import Template;
-open import Parser;
-open import RenderMarkup;
 open import Utility;
 
 # Data model
@@ -53,14 +51,14 @@ fun tyStringToFilterData(tyString) {
 
 typename LigandResult =
   (lrId: Int,
-   lrName: Markup,
+   lrName: String,
    lrApproved:Bool,
    lrRadioactive: Bool,
    lrHasPDB: Bool,
    lrLabelled: Bool,
    lrImmuno: Bool,
    lrMalaria: Bool,
-   lrSynonyms: [Markup]);
+   lrSynonyms: [String]);
 
 fun isEndogenous(ligand) {
   query nested {
@@ -130,21 +128,18 @@ fun getLigands(filterType) {
   var withCmp =
     sortBy(fun((cmpName, _)) { cmpName }, withCmp);
 
-  # Now, perform the necessary parsing and such
-  # NOTE: Currently, due to the inefficiency of the parser and the large result sets,
-  # it's not feasible to parse these names properly.
   var withCmp =
     map(fun((cmp, l)) {
       (cmp,
         (lrId = l.id,
-          lrName = MarkupText(l.name),# parseOrError(l.name),
+          lrName = l.name,
           lrApproved = l.approved,
           lrRadioactive = l.radioactive,
           lrLabelled = l.labelled,
           lrImmuno = l.immuno,
           lrMalaria = l.malaria,
           lrHasPDB = l.hasPDB,
-          lrSynonyms = map(fun(x) { MarkupText(x) }, l.synonyms))) # map(parseOrError, l.synonyms))
+          lrSynonyms = l.synonyms))
       }, withCmp);
 
   # Finally, alphabetise
@@ -164,7 +159,7 @@ fun view(model) {
       };
 
       li(liAttrs,
-        a(href("/ligandList?type=" ^^ requestName), textNode(renderName))
+        a(href("/ligandList?type=" ^^ requestName), unescapedTextNode(renderName))
       )
     }
     var menuItems = MvuHTML.concat(map(makeMenuItem, filterNames));
@@ -174,7 +169,7 @@ fun view(model) {
   var aToZ = {
     fun link(char) {
       var char = implode([char]);
-      a(style("font-weight:bold;font-size:110%") +@ href("#" ^^ char), textNode(char ^^ " "))
+      a(style("font-weight:bold;font-size:110%") +@ href("#" ^^ char), unescapedTextNode(char ^^ " "))
     }
     p(style("text-align:center;"), MvuHTML.concat(map(link, alphabet)))
   };
@@ -194,7 +189,7 @@ fun view(model) {
         td(class("info") +@
            style("border-style: solid dotted solid solid; font-size:97%; text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
            valign("baseline"),
-           a(href("/ligandDisplay?ligandId=" ^^ intToString(lr.lrId)), renderSimple(lr.lrName)));
+           a(href("/ligandDisplay?ligandId=" ^^ intToString(lr.lrId)), unescapedTextNode(lr.lrName)));
 
       var images =
         MvuHTML.concat(map(boolImage,
@@ -212,7 +207,7 @@ fun view(model) {
         td(class("info") +@
            style(" font-size:97%;  text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
            valign("baseline"),
-          MvuHTML.concat(join([textNode(", ")], map(fun(x) { [renderSimple(x)] }, lr.lrSynonyms))));
+          MvuHTML.concat(join([textNode(", ")], map(fun(x) { [unescapedTextNode(x)] }, lr.lrSynonyms))));
       tr(MvuAttrs.empty, name +* images +* id +* synonyms)
     }
 
