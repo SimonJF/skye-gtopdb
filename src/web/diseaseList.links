@@ -9,7 +9,7 @@ typename Filter = [| All | Immuno |];
 
 var filterNames = [
   ("all", (All, "All Diseases", "All diseases described in GtoPdb.")),
-  ("immuno", (Immuno, "Immuno. Disease", "Immunologically relevant diseases described in GtoPdb."))
+  ("immuno", (Immuno, "Immuno Disease", "Immunologically relevant diseases described in GtoPdb."))
 ];
 
 var allDiseases = {
@@ -29,7 +29,8 @@ typename DiseaseResult =
   (drName: String,
    drId: Int,
    drSynonyms: [String],
-   drTargetCount: Int,
+   drTargets: [Int],
+   drImmunoTargets: [Int],
    drLigandCount: Int);
 
 fun getDiseaseResults(filterType) {
@@ -64,14 +65,27 @@ fun getDiseaseResults(filterType) {
               for (d2l <-- Tables.immuno_disease2ligand)
                 where (d2l.disease_id == d.disease_id)
                 [d2l]),
-          drTargetCount=
-            length(
+          # Unforunately, pathophysiology and immunopathophysiology
+          # rows may overlap. In order to get an accurate total,
+          # we'd want to count length of the set union of the two
+          # queries. Alas, this isn't possible to do in Links at present,
+          # so we need to do the queries and do this calculation in memory.
+          # Thankfully, the counts are generally very low, but this is still a real shame.
+          drTargets =
               for (pp <-- Tables.pathophysiology)
                 where (pp.disease_id == d.disease_id)
-                  [pp])
+                  [pp.object_id],
+          drImmunoTargets =
+              for (d2o <-- Tables.immuno_disease2object)
+                where (d2o.disease_id == d.disease_id)
+                [d2o.object_id]
          )]
     };
-  results
+
+  fun sortSynonym(x) {
+    implode(map(toLower, explode(x)))
+  }
+  map(fun(x) { (x with drSynonyms = sortBy(sortSynonym, x.drSynonyms)) }, results)
 }
 
 # Model
@@ -118,10 +132,12 @@ fun view(model) {
         td(class("info") +@
            style("border-style: solid dotted solid solid; font-size:97%; text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
            valign("baseline"),
-           a(href("/diseaseDisplay?diseaseId=" ^^ intToString(dr.drId)), textNode(dr.drName)));
+           a(href("/diseaseDisplay?diseaseId=" ^^ intToString(dr.drId)), unescapedTextNode(dr.drName)));
 
-      var targets =
-        td(class("info"), textNode(intToString(dr.drTargetCount)));
+      var targets = {
+        var targetCount = length(uniquify(dr.drTargets ++ dr.drImmunoTargets));
+        td(class("info"), textNode(intToString(targetCount)))
+      };
       var ligands =
         td(class("info"), textNode(intToString(dr.drLigandCount)));
 
@@ -129,7 +145,7 @@ fun view(model) {
         td(class("info") +@
            style(" font-size:97%;  text-wrap:normal; overflow-wrap:break-word; word-break: break-all;") +@
            valign("baseline"),
-          MvuHTML.concat(join([textNode(", ")], map(fun(x) { [textNode(x)] }, dr.drSynonyms))));
+          MvuHTML.concat(join([textNode(" | ")], map(fun(x) { [unescapedTextNode(x)] }, dr.drSynonyms))));
       tr(MvuAttrs.empty, name +* synonyms +* targets +* ligands)
     }
 
