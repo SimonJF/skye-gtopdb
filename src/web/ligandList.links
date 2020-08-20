@@ -8,6 +8,7 @@ open import Utility;
 # Data model
 typename Filter = [|
     Approved
+  | WHO
   | SyntheticOrganic
   | Metabolite
   | NaturalProduct
@@ -22,16 +23,17 @@ typename Filter = [|
 
 var filterNames = [
     ("Approved", (Approved, "Approved", "All ligands in the database which are currently, or have been in the past, approved for human clinical use by a regulatory agency.")),
-    ("SyntheticOrganic", (SyntheticOrganic, "Synthetic organic", "Low molecular weight, non-polymeric compounds produced via either total synthesis or semi-synthetic processes.")),
+    ("WHO-essential", (WHO, "WHO", "World Health Organization (WHO) Essential Medicines")),
+    ("SyntheticOrganic", (SyntheticOrganic, "Syn. organic", "Low molecular weight, non-polymeric compounds produced via either total synthesis or semi-synthetic processes.")),
     ("Metabolite", (Metabolite, "Metabolite", "Low molecular weight, non-peptidic, biogenic compounds produced by life processes (normally endogenous and of animal origin, including hormones and neurotransmitters) and their close analogues.")),
-    ("NaturalProduct", (NaturalProduct, "Natural product", "Non-peptidic, biogenic compounds derived from living organisms and their close synthetic derivatives.")),
-    ("EndogenousPeptide", (EndogenousPeptide, "Endogenous peptide", "Peptides encoded in the human, rat and mouse genomes.")),
+    ("NaturalProduct", (NaturalProduct, "Nat. product", "Non-peptidic, biogenic compounds derived from living organisms and their close synthetic derivatives.")),
+    ("EndogenousPeptide", (EndogenousPeptide, "Endo. peptide", "Peptides encoded in the human, rat and mouse genomes.")),
     ("OtherPeptide", (OtherPeptide, "Other peptide", "Synthetic, semi-synthetic and natural peptides encoded in genomes other than human, rat and mouse (including oligopeptides and cyclic peptides).")),
     ("Inorganic", (Inorganic, "Inorganic", "Ions and other inorganic compounds.")),
     ("Antibody", (Antibody, "Antibody", "Includes therapeutic monoclonal antibodies.")),
     ("Labelled", (Labelled, "Labelled", "Ligands labelled with unstable isotopes, fluorescent tags or small chemical entities.")),
     ("Immuno", (Immuno, "Immuno", "Ligands specifically tagged as being of relevance to immunopharmacology &amp; the Guide to IMMUNOPHARMACOLOGY.")),
-    ("AntiMal", (AntiMalarial, "Antimalarial ligands", "Antimalarial ligands"))
+    ("AntiMal", (AntiMalarial, "AntiMal", "Antimalarial ligands"))
 ];
 
 
@@ -75,6 +77,7 @@ fun isEndogenous(ligand) {
 fun predicate(ligand, filterType) {
   switch (filterType) {
     case Approved -> ligand.approved
+    case WHO -> ligand.who_essential
     case SyntheticOrganic -> ligand.type == "Synthetic organic"
     case Metabolite -> ligand.type == "Metabolite"
     case NaturalProduct -> ligand.type == "Natural product"
@@ -104,6 +107,7 @@ fun getLigands(filterType) {
              labelled = l.labelled,
              immuno = l.in_gtip,
              malaria = l.in_gtmp,
+             who_essential = l.who_essential,
              hasPDB =
                length(
                  for (p <-- pdb_structure)

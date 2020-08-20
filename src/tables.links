@@ -196,7 +196,7 @@ var lgic = table "lgic" with (object_id: Int, ligand: String, selectivity_commen
 
 
 typename RawLigand = (ligand_id: Int, name: String, pubchem_sid: Int, radioactive: Bool, old_ligand_id: Int, type: String, approved: Bool, approved_source: String, iupac_name: String, comments: String, withdrawn_drug: Bool, verified: Bool, abbreviation: String, clinical_use: String, mechanism_of_action: String, absorption_distribution: String, metabolism: String, elimination: String, popn_pharmacokinetics: String, organ_function_impairment: String, emc_url: String, drugs_url: String, ema_url:
-    String, bioactivity_comments: String, labelled: Bool, in_gtip: Bool, immuno_comments: String, in_gtmp: Bool, gtmp_comments: String);
+    String, bioactivity_comments: String, labelled: Bool, in_gtip: Bool, immuno_comments: String, in_gtmp: Bool, gtmp_comments: String, who_essential: Bool);
 
 var ligand = table "ligand" with RawLigand from db;
 
