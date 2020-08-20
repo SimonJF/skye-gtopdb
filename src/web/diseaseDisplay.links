@@ -405,8 +405,7 @@ fun view(model) {
               length(DataTable.getTableData(t.targetInteractions)) > 0 },
             model.diTargets));
       var immunoLigandCount =
-        length(filter(fun(l) { l.ligandImmuno },
-              DataTable.getTableData(model.diLigands)));
+        length(DataTable.getTableData(model.diLigands));
       var synonyms = MvuHTML.concat(join([textNode(" | ")],
             map(fun(x) { [RenderMarkup.renderSimple(x)] }, model.diSynonyms)));
 
