@@ -62,18 +62,37 @@ typename LigandResult =
    lrMalaria: Bool,
    lrSynonyms: [String]);
 
+# fun isEndogenous(ligand) {
+#   query nested {
+#     length(
+#       for (p <-- Tables.precursor)
+#         for (p2p <-- Tables.precursor2peptide)
+#           for (l2s <-- Tables.ligand2subunit)
+#             where (p2p.ligand_id == ligand.ligand_id &&
+#                 (p2p.precursor_id == p.precursor_id || p2p.ligand_id == l2s.subunit_id))
+#                 [p]) > 0
+#   }
+# }
+
 fun isEndogenous(ligand) {
   query nested {
     length(
-      for (p <-- Tables.precursor)
-        for (p2p <-- Tables.precursor2peptide)
+      for (p2p <-- Tables.precursor2peptide)
+        where (p2p.ligand_id == ligand.ligand_id)
+        for (p <-- Tables.precursor)
+          where (p2p.precursor_id == p.precursor_id && p.species_id >= 1 && p.species_id <= 3)
+            [p]) > 0
+    ||
+    length(
+      for (p2p <-- Tables.precursor2peptide)
+        for (p <-- Tables.precursor)
+          where (p2p.precursor_id == p.precursor_id && p.species_id >= 1 && p.species_id <= 3)
           for (l2s <-- Tables.ligand2subunit)
-            where (p2p.ligand_id == ligand.ligand_id &&
-                (p2p.precursor_id == p.precursor_id || p2p.ligand_id == l2s.subunit_id))
-                [p]) > 0
+            where (l2s.subunit_id == p2p.ligand_id && l2s.ligand_id == ligand.ligand_id)
+            [l2s]) > 0
   }
 }
-
+ 
 fun predicate(ligand, filterType) {
   switch (filterType) {
     case Approved -> ligand.approved
@@ -108,14 +127,18 @@ fun getLigands(filterType) {
              immuno = l.in_gtip,
              malaria = l.in_gtmp,
              who_essential = l.who_essential,
+             # Not so fond of the magic constant here, but this is
+             # the incantation used by the GtoPdb source. ID = 24 is
+             # the PDB database link ID.
              hasPDB =
                length(
-                 for (p <-- pdb_structure)
-                  where (p.ligand_id == l.ligand_id)
-                  [ p ]) > 0,
+                 for (dbl <-- ligand_database_link)
+                  where (dbl.database_id == 24 && dbl.ligand_id == l.ligand_id)
+                  [ dbl ]) > 0,
+             abbreviation = l.abbreviation,
              synonyms =
               for (l2s <-- Tables.ligand2synonym)
-                where (l2s.ligand_id == l.ligand_id && l2s.display)
+                where (l2s.ligand_id == l.ligand_id && l2s.display && l2s.synonym <> l.name)
                   [l2s.synonym]
             )
           ]
@@ -134,6 +157,12 @@ fun getLigands(filterType) {
 
   var withCmp =
     map(fun((cmp, l)) {
+      var synonyms =
+        if (l.abbreviation <> "") {
+          l.abbreviation :: l.synonyms
+        } else {
+          l.synonyms
+        };
       (cmp,
         (lrId = l.id,
           lrName = l.name,
@@ -143,7 +172,7 @@ fun getLigands(filterType) {
           lrImmuno = l.immuno,
           lrMalaria = l.malaria,
           lrHasPDB = l.hasPDB,
-          lrSynonyms = l.synonyms))
+          lrSynonyms = synonyms))
       }, withCmp);
 
   # Finally, alphabetise
