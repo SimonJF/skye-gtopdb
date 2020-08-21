@@ -118,7 +118,7 @@ fun queryReferences(refIds) {
 # Core rendering function for references.
 fun renderReference(prefixNode, reference) {
   var a0 = MvuAttrs.empty;
-  fun tn(x) { textNode(x) }
+  fun tn(x) { unescapedTextNode(x) }
   var issueNode =
     if(reference.issue == "") {
       MvuHTML.empty

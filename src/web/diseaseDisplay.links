@@ -357,6 +357,7 @@ fun getModel(diseaseId) {
        dbLinkText = link.dbPrefix ^^ link.dbPlaceholder,
        dbLinkURL = replacePlaceholder(link.dbUrl, link.dbPlaceholder))
     }, rawResult.dbLinks);
+    print(show(dbLinks));
 
     (diID = rawResult.id,
      diName = name,
@@ -395,7 +396,7 @@ fun view(model) {
     fun colspan(x) { MvuAttrs.attr("colSpan", x) }
     fun rowspan(x) { MvuAttrs.attr("rowSpan", x) }
     fun src(x) { MvuAttrs.attr("src", x) }
-    fun valign(x) { MvuAttrs.attr("valign", x) }
+    fun valign(x) { MvuAttrs.attr("vAlign", x) }
     fun role(x) { MvuAttrs.attr("role", x) }
     var renderedName = RenderMarkup.renderSimple(model.diName);
     var diseaseInfoBox = {
@@ -441,7 +442,7 @@ fun view(model) {
             MvuHTML.concat(map(fun(link) {
               p(a0,
                   textNode(link.dbName ^^ ": ") +*
-                  a(href(link.dbLinkText), textNode(link.dbLinkText)))
+                  a(href(link.dbLinkURL), textNode(link.dbLinkText)))
             }, model.diDatabaseLinks));
           infoBox("diseaseLinks", "Database Links", dbLinks)
         }
@@ -467,8 +468,9 @@ fun view(model) {
                 textNode(" immuno-relevant targets")) +*
               td(rowspan("2") +@ valign("middle"),
                 img(src("/images/immuno_ligand.png"), MvuHTML.empty))) +*
+            tr(a0,
               td(width("180"), b(a0, textNode(intToString(immunoLigandCount))) +*
-                textNode(" immuno-relevant ligands")))) +*
+                textNode(" immuno-relevant ligands"))))) +*
         div(class("data_tables_container"),
             synonymsBox +*
             descriptionBox +*
@@ -489,9 +491,13 @@ fun view(model) {
       }
 
       var referencesRow =
-        tr(a0,
-            td(class("info"), textNode("References: ")) +*
-            td(class("info"), renderCitationList(target.targetReferences, model.diReferences)));
+        if (listEmpty(target.targetReferences)) {
+          MvuHTML.empty
+        } else {
+          tr(a0,
+              td(class("info"), textNode("References: ")) +*
+              td(class("info"), renderCitationList(target.targetReferences, model.diReferences)))
+        };
 
       var mutationsRow =
         if (target.targetMutationCount > 0) {

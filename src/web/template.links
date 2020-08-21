@@ -65,7 +65,7 @@ fun template(title) {
             </div>
         </div>
         <div class="container_16">
-            <div class="grid_16 alpha">
+            <div class="grid_16">
                 <div class="contentboxfull">
                     <h3>Unofficial Links implementation</h3>
                     <p>The definitive guide can be found at <a href="http://www.guidetopharmacology.org">

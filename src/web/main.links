@@ -28,6 +28,7 @@ fun main() {
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);
   addStaticRoute("/images", "images", [("css", "image/png")]);
+  print("Loaded.");
   servePages()
 }
 
