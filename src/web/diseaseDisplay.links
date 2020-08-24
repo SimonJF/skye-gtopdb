@@ -73,6 +73,7 @@ typename DiseaseInfo =
    diDescription: Markup,
    diDatabaseLinks: [DatabaseLink],
    diTargets: [Target],
+   diImmunoTargetCount: Int,
    diLigands: SortableTable(Ligand, Message),
    diShowReferences: Bool,
    diReferences: [(ReferenceId, (ReferenceNumber, Reference.Reference))]
@@ -371,6 +372,7 @@ fun getModel(diseaseId) {
      diDescription = description,
      diDatabaseLinks = dbLinks,
      diTargets = targets,
+     diImmunoTargetCount = length(rawResult.immuno_targets),
      diLigands = ligandsTable,
      diShowReferences = false,
      diReferences = mkReferenceData(queryReferences(referenceIds)))
@@ -407,10 +409,7 @@ fun view(model) {
     var renderedName = RenderMarkup.renderSimple(model.diName);
     var diseaseInfoBox = {
       var targetCount = length(model.diTargets);
-      var immunoTargetCount =
-        length(filter(fun(t) {
-              length(DataTable.getTableData(t.targetInteractions)) > 0 },
-            model.diTargets));
+      var immunoTargetCount = model.diImmunoTargetCount;
       var immunoLigandCount =
         length(DataTable.getTableData(model.diLigands));
       var synonyms = MvuHTML.concat(join([textNode(" | ")],
@@ -555,7 +554,7 @@ fun view(model) {
         MvuHTML.concat(map(mkTextRow, [
           ("Role", target.targetRole),
           ("Comments", target.targetComments),
-          ("Drug comments", target.targetDrugComments),
+          ("Drugs", target.targetDrugComments),
           ("Side effects", target.targetSideEffects),
           ("Therapeutic use", target.targetTherapeuticUse)
         ]));
