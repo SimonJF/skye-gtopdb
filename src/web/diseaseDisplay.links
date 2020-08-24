@@ -137,11 +137,14 @@ fun getModel(diseaseId) {
         [(id=o.object_id, name=o.name, comments=pp.comments,
           role=pp.role, drugComments=pp.drugs, sideEffects=pp.side_effects,
           therapeuticUse=pp.use,
-          mutationCount =
-            length(
+          mutations =
               for (m <-- Tables.mutation)
                 where (m.pathophysiology_id == pp.pathophysiology_id)
-                [m]),
+                [(mutation = m,
+                  refs =
+                    for (mref <-- Tables.mutation_refs)
+                    where (mref.mutation_id == m.mutation_id)
+                    [mref.reference_id])],
           references =
             for (pp_ref <-- Tables.pathophysiology_refs)
               where (pp_ref.pathophysiology_id == pp.pathophysiology_id)
@@ -158,7 +161,7 @@ fun getModel(diseaseId) {
           [(id=o.object_id, name=o.name,
             comments=id2o.comment,
             role="", drugComments="", sideEffects="", therapeuticUse="",
-            mutationCount = 0,
+            mutations = [],
             references =
               for (id2o_ref <-- Tables.immuno_disease2object_refs)
                 where (id2o_ref.immuno_disease2object_id == id2o.immuno_disease2object_id)
@@ -213,6 +216,7 @@ fun getModel(diseaseId) {
     # We may get multiple results for targets, given that they may be in both
     # immuno and pathophysiology tables, or one. If they are in both, we need
     # to merge the results.
+    # AFTER TESTING: Turns out we don't -- just need the patho comments.
     var allTargets = rawResult.patho_targets ++ rawResult.immuno_targets;
     var groupedTargets = map(second, groupBy(fun(x) { x.id }, allTargets));
     # Now we've grouped, we need to merge
@@ -242,7 +246,7 @@ fun getModel(diseaseId) {
                 role=concatComments(x.role, y.role),
                 drugComments=concatComments(x.drugComments, y.drugComments),
                 sideEffects=concatComments(x.sideEffects, y.sideEffects),
-                mutationCount = max2(x.mutationCount, y.mutationCount),
+                mutations = x.mutations ++ y.mutations,
                 therapeuticUse=concatComments(x.therapeuticUse, y.therapeuticUse),
                 references = x.references ++ y.references)
             }, x, xs)
@@ -304,13 +308,16 @@ fun getModel(diseaseId) {
            targetDrugComments = parseOrError(x.drugComments),
            targetSideEffects = parseOrError(x.sideEffects),
            targetTherapeuticUse = parseOrError(x.therapeuticUse),
-           targetMutationCount = x.mutationCount,
+           targetMutationCount = length(x.mutations),
            targetReferences = x.references,
            targetInteractions = interactionsTable
           );
+        var mutationRefs =
+          fold_left(fun(acc, x) { acc ++ x.refs }, [], x.mutations);
+
         var (refIds, _) = RenderMarkup.collectIds(res.targetComments);
         var refIds = refIds ++ x.references;
-        (res :: targets, refIds ++ refs, immunoRefs ++ iRefs)
+        (res :: targets, refIds ++ refs ++ mutationRefs, immunoRefs ++ iRefs)
     }, ([], [], []), targets);
     var targets = sortBy(fun(t) { t.targetId }, targets);
 
@@ -357,7 +364,6 @@ fun getModel(diseaseId) {
        dbLinkText = link.dbPrefix ^^ link.dbPlaceholder,
        dbLinkURL = replacePlaceholder(link.dbUrl, link.dbPlaceholder))
     }, rawResult.dbLinks);
-    print(show(dbLinks));
 
     (diID = rawResult.id,
      diName = name,
@@ -439,11 +445,11 @@ fun view(model) {
           MvuHTML.empty
         } else {
           var dbLinks =
-            MvuHTML.concat(map(fun(link) {
-              p(a0,
-                  textNode(link.dbName ^^ ": ") +*
-                  a(href(link.dbLinkURL), textNode(link.dbLinkText)))
-            }, model.diDatabaseLinks));
+          MvuHTML.concat(join([br(a0,MvuHTML.empty)],
+            map(fun(link) {
+              [ textNode(link.dbName ^^ ": ") +*
+                a(href(link.dbLinkURL), textNode(link.dbLinkText))]
+            }, model.diDatabaseLinks)));
           infoBox("diseaseLinks", "Database Links", dbLinks)
         }
       };

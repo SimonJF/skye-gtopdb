@@ -141,7 +141,7 @@ fun renderReference(prefixNode, reference) {
       MvuHTML.empty
     } else {
       tn("[PMID:") +*
-      a(href(pubMedHref), tn(intToString(reference.pubmedId))) +*
+      a(href(pubMedHref), textNode(intToString(reference.pubmedId))) +*
       tn("]")
     };
 
@@ -180,10 +180,10 @@ fun renderReferencesBox(showRefs, refs, toggleMsg) {
   var inner = displayReferences(refs);
   var showHideLink =
     if(showRefs) {
-      a(id("hide_overview") +@ onClick(toggleMsg),
+      a(id("hide_refs") +@ onClick(toggleMsg),
         small(a0, textNode("Hide")))
     } else {
-      a(id("show_overview") +@ onClick(toggleMsg),
+      a(id("show_refs") +@ onClick(toggleMsg),
         small(a0, textNode("Show")))
     };
 
