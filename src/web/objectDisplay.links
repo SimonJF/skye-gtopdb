@@ -500,7 +500,8 @@ typename ObjectInfo = (
     objectScreens: [Screen],
     objectAlleles: SortableTable(Allele, Message),
     objectMutationsPathophysiology: MutationsPathophysiology,
-    chartsShown: Bool
+    chartsShown: Bool,
+    isImmunoObject: Bool
 );
 
 ## FFI Stuff
@@ -572,6 +573,7 @@ fun getInitialModel() {
              immuno_comments = o.gtip_comment,
              malaria_comments = o.gtmp_comment,
              quaternary_structure_comments = o.quaternary_structure_comments,
+             in_gtip = o.in_gtip,
              associatedProteins =
                for (ap <-- Tables.associated_protein)
                  where (ap.object_id == objectId)
@@ -2669,7 +2671,9 @@ fun getInitialModel() {
        objectScreens = screens,
        objectAlleles = alleles,
        objectMutationsPathophysiology = mutationsPathophysiology,
-       chartsShown = false)
+       chartsShown = false,
+       isImmunoObject = raw.in_gtip
+       )
     }
 
     switch(raw) {
@@ -2796,7 +2800,7 @@ fun view(model) {
         thead(a0,
           tr(name("hotspot") +@ class("hotspot"),
             td(class("info category") +@ cs,
-              textNode(header)))) +*
+              unescapedTextNode(header)))) +*
         tbody(name("toggle"), contents))
     }
 
@@ -2994,9 +2998,7 @@ fun view(model) {
       }
 
       fun renderReceptorTable((tbl, label, commentsHeader, comments)) {
-        if (DataTable.getTableData(tbl) == []) {
-          MvuHTML.empty
-        } else {
+        if (DataTable.getTableData(tbl) <> []) {
           fun renderRow(x) {
             var x : InteractionInfo = x;
             var i = x.interaction;
@@ -3029,14 +3031,15 @@ fun view(model) {
             tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
             DataTable.renderTable(tbl, renderRow))) +*
             tableCommentsBox(commentsHeader, comments))
+        } else if (not(markupEmpty(comments))) {
+          commentsBox(commentsHeader, comments)
+        } else {
+          MvuHTML.empty
         }
       }
 
       fun renderICTable((tbl, label, commentsHeader, comments)) {
-        if (DataTable.getTableData(tbl) == []) {
-          MvuHTML.empty
-        } else {
-
+        if (DataTable.getTableData(tbl) <> []) {
           fun renderRow(x) {
             var x : InteractionInfo = x;
             var i = x.interaction;
@@ -3077,6 +3080,10 @@ fun view(model) {
             tr(a0, td(class("table_container") +@ style("border-style:solid solid none solid;"),
             DataTable.renderTable(tbl, renderRow))) +*
             tableCommentsBox(commentsHeader, comments))
+        } else if (not(markupEmpty(comments))) {
+          commentsBox(commentsHeader, comments)
+        } else {
+          MvuHTML.empty
         }
       }
 
@@ -3312,7 +3319,7 @@ fun view(model) {
     var immunoCommentsBox =
       commentsBox("Immunopharmacology Comments", comments.immunoComments);
     var malariaCommentsBox =
-      commentsBox("Malaria Comments", comments.malariaComments);
+      commentsBox("Malaria Pharmacology Comments", comments.malariaComments);
 
     var transductionMechanismsBoxes = {
       var tms = objectInfo.objectTransductionMechanisms;
@@ -3444,6 +3451,9 @@ fun view(model) {
 
     var tissueDistributionBox =
       renderDataBox(objectInfo.objectTissueDistribution);
+    var tissueDistributionComments =
+        commentsBox("Tissue Distribution Comments",
+            objectInfo.objectComments.tissueDistributionComments);
 
     var expressionDatasetsBox = {
       var charts = MvuHTML.empty;
@@ -3629,7 +3639,7 @@ fun view(model) {
       if (listEmpty(objectInfo.objectMutationsPathophysiology.pathophysiologies)) {
         MvuHTML.empty
       } else {
-        dataBox("Clinically-relevant Mutations and Pathophysiology", 1, pathos)
+        dataBox("Clinically-Relevant Mutations and Pathophysiology", 1, pathos)
       }
     };
 
@@ -3769,21 +3779,26 @@ fun view(model) {
       }
       var renderedRows = MvuHTML.concatMap(renderRow, gi.giEntries);
 
-      if (listEmpty(gi.giEntries)) {
-        MvuHTML.empty
-      } else {
-        a(name("StructuralInfo"), h0) +*
-        table_(class("receptor_data_tables fullwidth"),
-          thead(a0,
-            tr(name("hotspot") +@ class("hotspot"),
-              td(class("info category") +@ colSpan(7),
-                textNode("Gene and Protein Information")))) +*
-          tbody(name("toggle"),
-            tr(a0,
-              td(class("info") +@ colSpan(7), renderM(gi.giComments))) +*
-            tr(a0, renderedHeadings) +*
-            renderedRows))
-      }
+      var renderedEntries =
+        if (listEmpty(gi.giEntries)) {
+          MvuHTML.empty
+        } else {
+          a(name("StructuralInfo"), h0) +*
+          table_(class("receptor_data_tables fullwidth"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("info category") +@ colSpan(7),
+                  textNode("Gene and Protein Information")))) +*
+            tbody(name("toggle"),
+              tr(a0,
+                td(class("info") +@ colSpan(7), renderM(gi.giComments))) +*
+              tr(a0, renderedHeadings) +*
+              renderedRows))
+        };
+      var renderedComments =
+        commentsBox("Gene and Protein Information Comments", gi.giComments);
+
+      renderedEntries +* renderedComments
     };
 
     var cellTypeAssociationsBox = {
@@ -3814,7 +3829,7 @@ fun view(model) {
       var renderedCTAs =
         MvuHTML.concatMap(renderCTA, objectInfo.objectCellTypeAssociations);
 
-      if (not(listEmpty(objectInfo.objectCellTypeAssociations))) {
+      if (not(listEmpty(objectInfo.objectCellTypeAssociations)) && objectInfo.isImmunoObject) {
         a(name("Celltypes"), h0) +*
         table_(class("receptor_data_tables fullwidth"),
           tr(name("hotspot") +@ class("hotspot"),
@@ -3892,7 +3907,7 @@ fun view(model) {
       }
 
       var procs = objectInfo.objectImmunoProcessAssociations;
-      if (procs == []) {
+      if (procs == [] || not(objectInfo.isImmunoObject)) {
         MvuHTML.empty
       } else {
         var renderedProcs = MvuHTML.concatMap(renderProcess, procs);
@@ -4521,6 +4536,7 @@ fun view(model) {
             dnaBindingsBox +*
             dnaComments +*
             tissueDistributionBox +*
+            tissueDistributionComments +*
             expressionDatasetsBox +*
             functionalAssaysBox +*
             physiologicalFunctionsBox +*
