@@ -131,7 +131,7 @@ typename Message = [|
   | SortScreenTable:(ScreenID, ScreenTableName, ColumnName, SortDirection)
 |];
 
-typename Family = (familyId: Int, familyName: Markup);
+typename Family = (familyId: Int, familyName: String);
 typename AnnotationStatus = Int; # TODO: More meaningful datatype here
 typename LigandID = Int;
 typename SpeciesID = Int;
@@ -457,7 +457,7 @@ typename ObjectInfo = (
     objectSystematicName: Maybe(Markup),
     objectAbbreviation: Maybe(Markup),
     objectSynonyms: [Markup],
-    objectFamily: Family,
+    objectFamily: [Family],
     objectAnnotationStatus: AnnotationStatus,
     objectGeneProteinInfo:
       (giComments: Markup, giEntries: [GeneProteinInfo]),
@@ -1457,10 +1457,7 @@ fun getInitialModel() {
       }
 
       fun transformFamily(fs) {
-        switch(fs) {
-          case [] -> (familyId = (-1), familyName = MarkupEmpty)
-          case f :: _ -> (familyId = f.id, familyName = parseOrError(f.name))
-        }
+        map(fun(f) { (familyId = f.id, familyName = f.name) }, fs)
       }
 
       fun transformGeneProteinInfo(gpcrComments, gis) {
@@ -2761,26 +2758,35 @@ fun view(model) {
     var abbrev =
       renderIfJust("Abbreviation", objectInfo.objectAbbreviation);
 
+    var families = {
+        var familyLinks =
+          map(fun(x) {
+            [a(href("/familyDisplay?familyId=" ^^ intToString(x.familyId)),
+              unescapedTextNode(x.familyName))]
+            }, objectInfo.objectFamily);
+        MvuHTML.concat(join([textNode(", ")], familyLinks))
+    };
+
+
+
     var infoBox = {
-    div(class("grid_16 alpha"),
-      a(name("top"), MvuHTML.empty) +*
-      h4(a0, renderM(objectInfo.objectName)) +*
-      div(class("contentboxfullhelp"),
-        div(class("textmiddle"),
-          p(a0, b(a0, textNode("Target id: ")) +*
-            textNode(intToString(objectInfo.objectId))) +*
-          p(a0,
-            b(a0, textNode("Nomenclature: ")) +*
-            renderM(objectInfo.objectName)) +*
-          sysNomenclature +*
-          abbrev +*
-          p(a0,
-            b(a0, textNode("Family: ")) +*
-            a(href("/familyDisplay?familyId=" ^^ intToString(objectInfo.objectFamily.familyId)),
-              renderM(objectInfo.objectFamily.familyName))) +*
-          p(a0,
-            b(a0, textNode("Annotation status: ")) +*
-            renderAnnotationStatus(objectInfo.objectAnnotationStatus)))))
+      div(class("grid_16 alpha"),
+        a(name("top"), MvuHTML.empty) +*
+        h4(a0, renderM(objectInfo.objectName)) +*
+        div(class("contentboxfullhelp"),
+          div(class("textmiddle"),
+            p(a0, b(a0, textNode("Target id: ")) +*
+              textNode(intToString(objectInfo.objectId))) +*
+            p(a0,
+              b(a0, textNode("Nomenclature: ")) +*
+              renderM(objectInfo.objectName)) +*
+            sysNomenclature +*
+            abbrev +*
+            p(a0,
+              b(a0, textNode("Family: ")) +* families) +*
+            p(a0,
+              b(a0, textNode("Annotation status: ")) +*
+              renderAnnotationStatus(objectInfo.objectAnnotationStatus)))))
     };
 
 
