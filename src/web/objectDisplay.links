@@ -473,6 +473,7 @@ typename ObjectInfo = (
     objectTissueDistribution: DataTableBox,
     objectCellTypeAssociations: [CellTypeAssociation],
     objectImmunoProcessAssociations: [ImmunoProcessAssociation],
+    objectImmunoDiseaseAssociations: DataTableBox,
     objectGeneExpression: [GeneExpression],
     objectFunctionalAssays: DataTableBox,
     objectPhysiologicalFunctions: DataTableBox,
@@ -573,6 +574,7 @@ fun getInitialModel() {
              immuno_comments = o.gtip_comment,
              malaria_comments = o.gtmp_comment,
              quaternary_structure_comments = o.quaternary_structure_comments,
+             structural_info_comments = o.structural_info_comments,
              in_gtip = o.in_gtip,
              associatedProteins =
                for (ap <-- Tables.associated_protein)
@@ -695,6 +697,30 @@ fun getInitialModel() {
                         for (r <-- Tables.process_assoc_refs)
                         where (r.process_assoc_id == pa.process_assoc_id)
                         [r.reference_id])],
+             immunoDiseaseAssociations =
+               for (id2o <-- Tables.immuno_disease2object)
+                 where (id2o.object_id == objectId)
+                 for (di <-- Tables.disease)
+                   where (id2o.disease_id == di.disease_id)
+                   [
+                    (=id2o,
+                     synonyms =
+                       for (d2s <-- Tables.disease2synonym)
+                       where (d2s.disease_id == di.disease_id)
+                       [d2s.synonym],
+                     refs =
+                       for (idr <-- Tables.immuno_disease2object_refs)
+                       where (idr.immuno_disease2object_id == id2o.immuno_disease2object_id)
+                       [idr.reference_id],
+                     disease = di,
+                     disease_xrefs =
+                       for (dxr <-- Tables.disease_database_link)
+                         where (dxr.disease_id == di.disease_id)
+                         for (db <-- Tables.tbl_database)
+                         where (db.database_id == dxr.database_id)
+                           [(=db, =dxr)] 
+                    )
+                   ],
              interactions = InteractionUtilities.interactionsForObject(objectId),
              tissueDistribution =
                for (td <-- Tables.tissue_distribution)
@@ -1462,7 +1488,7 @@ fun getInitialModel() {
         map(fun(f) { (familyId = f.id, familyName = f.name) }, fs)
       }
 
-      fun transformGeneProteinInfo(gpcrComments, gis) {
+      fun transformGeneProteinInfo(giComments, gis) {
         var (gisRev, giRefs) =
           fold_left(fun((gis_rev, refs), gi) {
             var references = gi.refs;
@@ -1480,7 +1506,7 @@ fun getInitialModel() {
             (res :: gis_rev, references ++ refs)
           }, ([], []), gis);
 
-        ((giComments = gpcrComments, giEntries = reverse(gisRev)),
+        ((giComments = giComments, giEntries = reverse(gisRev)),
            giRefs)
       }
 
@@ -1637,6 +1663,34 @@ fun getInitialModel() {
                ("Tissue", parseOrError(xe.tissue)),
                ("Technique", parseOrError(xe.technique))], references)
           }, xes)
+      }
+
+      fun transformImmunoDiseaseAssociations(idas) {
+        transformDataTableBox("Immuno Disease Associations",
+          fun(ida) {
+            fun concatMarkup(strs) {
+              fold_right(fun(x, acc) { MarkupAppend(x, acc)},
+                  MarkupEmpty, join([MarkupText(", ")], map(fun(x) { [MarkupText(x)] }, strs)))
+            }
+
+            var references = ida.refs;
+            var id2o = ida.id2o;
+            var d = ida.disease;
+            var synonyms = concatMarkup(ida.synonyms);
+
+            # TODO: Add in href
+            var xrefs =
+              map(fun(x) {
+                  x.db.name ^^ ": " ^^ x.dxr.placeholder
+              }, ida.disease_xrefs);
+            var xrefs = concatMarkup(xrefs);
+
+            mkDataTableEntry(MarkupEmpty,
+              [("Disease Name", parseOrError(d.name)),
+               ("Disease Synonyms", synonyms),
+               ("Comment", parseOrError(id2o.comment)),
+               ("Disease X-refs", xrefs)], references)
+          }, idas)
       }
 
       fun transformDBLinks(dbls) {
@@ -2504,7 +2558,8 @@ fun getInitialModel() {
         case _ -> MarkupEmpty
       };
       var (geneProteinInfo, gpiRefs) =
-        transformGeneProteinInfo(gpcrComments, raw.geneInformation);
+        transformGeneProteinInfo(parseOrError(raw.structural_info_comments),
+            raw.geneInformation);
 
       var (cellTypeAssociations, ctaRefs, ctaLigands) =
         transformCellTypeAssociations(raw.cellTypeAssociations);
@@ -2526,6 +2581,9 @@ fun getInitialModel() {
 
       var (xenobiotics, xeRefs, xeLigands) =
         transformXenobioticExpressions(receptorComments.xenobioticExpressionComments, raw.xenobiotics);
+
+      var (idas, idaRefs, idaLigands) =
+        transformImmunoDiseaseAssociations(raw.immunoDiseaseAssociations);
 
       var selectivityComments =
         switch(objectType) {
@@ -2581,6 +2639,7 @@ fun getInitialModel() {
           epRefs ++
           scrRefs ++
           mpRefs ++
+          idaRefs ++
           commentRefs);
 
       var ligandIDs =
@@ -2608,6 +2667,7 @@ fun getInitialModel() {
           poLigands ++
           epLigands ++
           mpLigands ++
+          idaLigands ++
           commentLigands);
 
       var ligandNames = Ligand.queryLigands(ligandIDs);
@@ -2651,6 +2711,7 @@ fun getInitialModel() {
        objectTissueDistribution = tissueDistribution,
        objectCellTypeAssociations = cellTypeAssociations,
        objectImmunoProcessAssociations = immunoProcessAssociations,
+       objectImmunoDiseaseAssociations = idas,
        objectGeneExpression = ges,
        objectAssociatedProteins = associatedProteins,
        objectSpeciesMap = speciesMap,
@@ -3506,6 +3567,8 @@ fun view(model) {
       renderDataBox(objectInfo.objectXenobioticExpressions);
     var variantsBox =
       renderDataBox(objectInfo.objectVariants);
+    var immunoDiseaseAssociationsBox =
+      renderDataBox(objectInfo.objectImmunoDiseaseAssociations);
 
     # Seems like the mutations that are not associated with a pathophysiology entry
     # are not displayed. Curious
@@ -4528,6 +4591,7 @@ fun view(model) {
             malariaCommentsBox +*
             cellTypeAssociationsBox +*
             immunoProcessAssociationsBox +*
+            immunoDiseaseAssociationsBox +*
             transductionMechanismsBoxes +*
             variantsBox +*
             coregulatorsBox +*
