@@ -1021,13 +1021,7 @@ fun getInitialModel() {
                           where (p2p.ligand_id == lig.ligand_id)
                             for (prec <-- Tables.precursor)
                             where (prec.precursor_id == p2p.precursor_id)
-                              [prec.species_id]) ],
-                reactions =
-                  for (o2r <-- Tables.object2reaction)
-                  where (o2r.object_id == objectId)
-                    for (r <-- Tables.reaction)
-                    where (r.reaction_id == o2r.reaction_id)
-                      [r]
+                              [prec.species_id]) ]
              )]
     };
 
@@ -3010,8 +3004,11 @@ fun view(model) {
       }
     };
 
-    var dbLinksBox =
-      renderDatabaseLinks(objectInfo.objectDatabaseLinks, objectInfo.objectSpeciesMap);
+    var dbLinksBox = {
+      var ecs = map(fun(x) { x.ecNumber }, objectInfo.objectEnzymeReactions);
+      renderDatabaseLinks(objectInfo.objectDatabaseLinks,
+          ecs, objectInfo.objectSpeciesMap)
+    };
 
     var endogenousLigandsBox = {
       fun renderSummary(els) {

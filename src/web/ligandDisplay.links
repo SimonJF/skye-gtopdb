@@ -955,7 +955,7 @@ fun view(model) {
       };
 
       var dbLinksBox =
-        renderDatabaseLinks(ligandInfo.ligandDBLinks, model.modelSpeciesMap);
+        renderDatabaseLinks(ligandInfo.ligandDBLinks, [], model.modelSpeciesMap);
 
       classificationTable +*
       iupacBox +*
