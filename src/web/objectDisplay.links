@@ -159,7 +159,7 @@ typename PDBData = (
 );
 
 typename EndogenousLigandSummary =
-  (elsName: Markup, elsSpeciesID: SpeciesID, elsLigandID: LigandID);
+  (elsName: String, elsSpeciesID: SpeciesID, elsLigandID: LigandID);
 
 typename CellTypeAssociation = (
   ctaImmunoCelltype: (immunoCTID: Int, immunoCTName: String),
@@ -1003,7 +1003,19 @@ fun getInitialModel() {
                       refs =
                         for (r <-- Tables.mutation_refs)
                         where (r.mutation_id == m.mutation_id)
-                          [r.reference_id])]
+                          [r.reference_id])],
+                listLigands =
+                  for (ll <-- Tables.list_ligand)
+                  where (ll.object_id == objectId)
+                    for (lig <-- Tables.ligand)
+                    where (lig.ligand_id == ll.ligand_id)
+                      [(l = lig,
+                        sid =
+                          for (p2p <-- Tables.precursor2peptide)
+                          where (p2p.ligand_id == lig.ligand_id)
+                            for (prec <-- Tables.precursor)
+                            where (prec.precursor_id == p2p.precursor_id)
+                              [prec.species_id]) ]
              )]
     };
 
@@ -1021,13 +1033,12 @@ fun getInitialModel() {
       #  channelBlockers: [Interaction],
       #  gatingInhibitors: [Interaction],
       #  subunitSpecific: [Interaction],
-      #  endogenous: [EndogenousLigandSummary],
       #  references: [ReferenceID])
       fun transformInteractions(rawInteractions) {
         var emptyResult =
           (agonists = [], antagonists = [], allostericModulators = [],
            activators = [], inhibitors = [], channelBlockers = [],
-           gatingInhibitors = [], subunitSpecific = [], endogenous = [],
+           gatingInhibitors = [], subunitSpecific = [],
            antibodies = [], wholeOrganismAssays = [], other = [],
            references = []);
 
@@ -1043,7 +1054,6 @@ fun getInitialModel() {
             speciesShort = speciesShortName(i.speciesID)
           );
 
-          # TODO: Maybe make this less stringly-typed?
           var acc =
             if (i.interactionType == "Agonist") {
               (acc with agonists = ( parsed :: acc.agonists ))
@@ -1068,16 +1078,6 @@ fun getInitialModel() {
             } else {
               (acc with other = ( parsed :: acc.other ))
             };
-
-          var acc =
-            if (i.endogenous) {
-              var els =
-                (elsName = parsedName,
-                 elsSpeciesID = i.speciesID,
-                 elsLigandID = i.ligandID);
-              (acc with endogenous = els :: acc.endogenous)
-            } else { acc };
-
           (acc with references = (i.references ++ acc.references))
         }, emptyResult, rawInteractions)
       }
@@ -2486,6 +2486,19 @@ fun getInitialModel() {
         ((=pathophysiologies, =mutations), pRefs ++ mRefs, pLigands)
       }
 
+      fun transformListLigands(ls) {
+          map(fun(x) {
+            var speciesID =
+              switch (x.sid) {
+                case [] -> (-1)
+                case y :: _ -> y
+              };
+            (elsName = x.l.name,
+             elsSpeciesID = speciesID,
+             elsLigandID = x.l.ligand_id)
+            }, ls)
+      }
+
       var (mutationsPathophysiology, mpRefs, mpLigands) =
         transformMutations(raw.mutationsWithPathophysiology,
             raw.mutationsWithoutPathophysiology);
@@ -2530,7 +2543,9 @@ fun getInitialModel() {
       var interactions =
         transformInteractions(
             map(InteractionUtilities.makeInteraction, raw.interactions));
-      var endogenousLigands = interactions.endogenous;
+
+      var endogenousLigands : [EndogenousLigandSummary] =
+        transformListLigands(raw.listLigands);
 
       var sortedInteractions = mkTables(interactions);
       var interactionRefs = interactions.references;
@@ -2961,15 +2976,35 @@ fun view(model) {
 
     var dbLinksBox =
       renderDatabaseLinks(objectInfo.objectDatabaseLinks, objectInfo.objectSpeciesMap);
+
     var endogenousLigandsBox = {
       fun renderSummary(els) {
         tr(class("info"),
             td(a0,
               a(href("/ligandDisplay?ligandId=" ^^ intToString(els.elsLigandID)),
-                renderM(els.elsName))))
+                unescapedTextNode(els.elsName))))
       }
 
-      if (not(listEmpty(objectInfo.objectEndogenousLigands))) {
+      var listComments = objectInfo.objectComments.listComments;
+
+      var ligandName =
+        switch (objectInfo.objectType) {
+          case GPCR(x) -> x.ligand
+          case LGIC(x) -> x.ligand
+          case NHR(x) -> x.ligand
+          case _ -> ""
+        };
+
+      var ligandRow =
+        if (ligandName == "") {
+          MvuHTML.empty
+        } else {
+          tr(class("info"),
+            td(a0, unescapedTextNode(ligandName)))
+        };
+
+      if (not(listEmpty(objectInfo.objectEndogenousLigands)) ||
+          not(markupEmpty(listComments)) || ligandName <> "") {
         var renderedSummaries =
           MvuHTML.concatMap(renderSummary, objectInfo.objectEndogenousLigands);
 
@@ -2980,10 +3015,11 @@ fun view(model) {
               td(class("info category"), textNode("Natural/Endogenous Ligands")))) +*
           tbody(a0,
             renderedSummaries +*
+            ligandRow +*
             tr(class("info"),
               td(a0,
                 b(a0, textNode("Comments: ")) +*
-                renderM(objectInfo.objectComments.listComments)))))
+                renderM(listComments)))))
       } else {
         MvuHTML.empty
       }
