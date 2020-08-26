@@ -959,6 +959,12 @@ fun getInitialModel() {
                         for (r <-- Tables.expression_pathophysiology_refs)
                         where (r.expression_pathophysiology_id == ep.expression_pathophysiology_id)
                         [r.reference_id])],
+                # There are only, like, 4 screens. It makes life easier
+                # to grab these all into memory, because we need to merge
+                # screens 3 and 4.
+                allScreens =
+                  for (scr <-- Tables.screen)
+                    [scr],
                 screens =
                   for (si <-- Tables.screen_interaction)
                     where (si.object_id == objectId)
@@ -1015,7 +1021,13 @@ fun getInitialModel() {
                           where (p2p.ligand_id == lig.ligand_id)
                             for (prec <-- Tables.precursor)
                             where (prec.precursor_id == p2p.precursor_id)
-                              [prec.species_id]) ]
+                              [prec.species_id]) ],
+                reactions =
+                  for (o2r <-- Tables.object2reaction)
+                  where (o2r.object_id == objectId)
+                    for (r <-- Tables.reaction)
+                    where (r.reaction_id == o2r.reaction_id)
+                      [r]
              )]
     };
 
@@ -2295,7 +2307,7 @@ fun getInitialModel() {
         }, ([], [], []), pos)
       }
 
-      fun transformScreens(screens) {
+      fun transformScreens(screens, allScreens) {
         fun mkScreenTable(screenID, targetName, interactions) {
           var cols = [
             ("Ligand", ("", Sortable(fun(x, y) {
@@ -2324,32 +2336,56 @@ fun getInitialModel() {
         }
 
         # First, we want to group by the individual screen interactions by screen ID
+        # Note: Screens 3 and 4 must always be merged. It makes sense to firstly
+        # map over and change anything with screen 4 to 3, then we can group, then
+        # we can add in the details for screen 4.
+        var screens = map(fun(x) {
+            if (x.si.screen_id == 4) {
+              var si = (x.si with screen_id = 3);
+              (x with =si)
+            } else { x }
+          }, screens);
         var grouped = groupBy(fun(x) { x.si.screen_id }, screens);
         # Transform each group into a screen
-        fold_left(fun((acc, refs), (_, group)) {
-            var scr = hd(group).screen.scr;
-            var scrRefs = hd(group).screen.refs;
-            var interactions : [ParsedScreenInteraction] =
-              map(fun(x) {
-                (interaction = InteractionUtilities.makeScreenInteraction(x),
-                 ligandSize = parseLigandSize(x.ligand.type),
-                 speciesShort = speciesShortName(x.si.species_id))
-              }, group);
-            # Now need to group by action comment
-            var groupedInteractions =
-              groupBy(fun(x) { x.interaction.interactionActionComment }, interactions);
-            var data = map(fun((name, interactions)) {
-                (name, mkScreenTable(scr.screen_id, name, interactions))
-              }, groupedInteractions);
-            var res =
-              (id = scr.screen_id, name = scr.name, description = scr.description,
-               url = scr.url, affinityCutoff = scr.affinity_cut_off_nm,
-               companyLogoFilename = scr.company_logo_filename,
-               technologyLogoFilename = scr.technology_logo_filename,
-               references = refs,
-               =data);
-            (res :: acc, scrRefs ++ refs)
-        }, ([], []), grouped)
+        var (screens, refs) =
+          fold_left(fun((acc, refs), (_, group)) {
+              var scr = hd(group).screen.scr;
+              var scrRefs = hd(group).screen.refs;
+              var interactions : [ParsedScreenInteraction] =
+                map(fun(x) {
+                  (interaction = InteractionUtilities.makeScreenInteraction(x),
+                   ligandSize = parseLigandSize(x.ligand.type),
+                   speciesShort = speciesShortName(x.si.species_id))
+                }, group);
+              # Now need to group by action comment
+              var groupedInteractions =
+                groupBy(fun(x) { x.interaction.interactionActionComment }, interactions);
+              var data = map(fun((name, interactions)) {
+                  (name, mkScreenTable(scr.screen_id, name, interactions))
+                }, groupedInteractions);
+              var res =
+                (id = scr.screen_id, name = scr.name, description = scr.description,
+                 url = scr.url, affinityCutoff = scr.affinity_cut_off_nm,
+                 companyLogoFilename = scr.company_logo_filename,
+                 technologyLogoFilename = scr.technology_logo_filename,
+                 references = refs,
+                 =data);
+              (res :: acc, scrRefs ++ refs)
+          }, ([], []), grouped);
+
+        # Finally, we need to merge screens 3 and 4.
+        var screens = map(fun(x) {
+            if (x.id == 3) {
+              var screen3 = hd(filter(fun(x) { x.screen_id == 3 }, allScreens));
+              var screen4 = hd(filter(fun(x) { x.screen_id == 4 }, allScreens));
+              (x with
+                 name = screen3.name ^^ "/" ^^ screen4.name,
+                 description = screen3.description ^^ " " ^^ screen4.description)
+            } else {
+              x
+            }
+        }, screens);
+        (screens, refs)
       }
 
       # typename Allele = (
@@ -2504,7 +2540,7 @@ fun getInitialModel() {
             raw.mutationsWithoutPathophysiology);
 
       var alleles = transformAlleles(raw.alleles);
-      var (screens, scrRefs) = transformScreens(raw.screens);
+      var (screens, scrRefs) = transformScreens(raw.screens, raw.allScreens);
 
       var ges : [GeneExpression] = transformGeneExpression(raw.geneInformation);
 
@@ -3597,6 +3633,8 @@ fun view(model) {
       renderDataBox(objectInfo.objectFunctionalAssays);
     var physiologicalFunctionsBox =
       renderDataBox(objectInfo.objectPhysiologicalFunctions);
+    var physiologicalFunctionsCommentsBox =
+      commentsBox("Physiological Functions Comments", comments.functionsComments);
     var physiologicalConsequencesBox =
       renderDataBox(objectInfo.objectPhysiologicalConsequences);
     var xenobioticsBox =
@@ -3735,11 +3773,23 @@ fun view(model) {
             objectInfo.objectMutationsPathophysiology.pathophysiologies);
 
       # TODO: Put in the mutations pathophysiology comments box too
-      if (listEmpty(objectInfo.objectMutationsPathophysiology.pathophysiologies)) {
-        MvuHTML.empty
-      } else {
-        dataBox("Clinically-Relevant Mutations and Pathophysiology", 1, pathos)
-      }
+      var data =
+        if (listEmpty(objectInfo.objectMutationsPathophysiology.pathophysiologies)) {
+          MvuHTML.empty
+        } else {
+          dataBox("Clinically-Relevant Mutations and Pathophysiology", 1, pathos)
+        };
+
+      var mutComments = objectInfo.objectComments.mutationsPathophysiologyComments;
+      var comments =
+        if (markupEmpty(mutComments)) {
+          MvuHTML.empty
+        } else {
+          commentsBox("Clinically-Relevant Mutations and Pathophysiology Comments",
+              mutComments)
+        };
+
+      data +* comments
     };
 
     var allelesBox = {
@@ -3766,7 +3816,15 @@ fun view(model) {
             td(class("table_container") +@ colSpan(2),
               tbl));
 
-        dataBox("Phenotypes, Alleles, and Disease Models", 1, contents)
+        table_(class("receptor_data_tables fullwidth"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("info category") +@ style("text-align:left;border-right:none;"),
+                  textNode("Phenotypes, Alleles and Disease Models")) +*
+                td(class("info category") +@ style("text-align:right;order-left:none;"),
+                  textNode("Mouse data from ") +*
+                  a(href("http://www.informatics.jax.org/phenotypes.shtml"), textNode("MGI"))))) +*
+            tbody(a0, contents))
       }
     };
 
@@ -4640,6 +4698,7 @@ fun view(model) {
             expressionDatasetsBox +*
             functionalAssaysBox +*
             physiologicalFunctionsBox +*
+            physiologicalFunctionsCommentsBox +*
             physiologicalConsequencesBox +*
             xenobioticsBox +*
             mutationsPathophysiologyBox +*
