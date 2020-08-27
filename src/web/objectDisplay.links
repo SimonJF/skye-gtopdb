@@ -3028,6 +3028,15 @@ fun view(model) {
           case _ -> ""
         };
 
+      # The ligand list data isn't retrieved for enzymes or transporters.
+      # It makes sense for us to just not show it in these cases.
+      var show =
+        switch (objectInfo.objectType) {
+          case Enzyme(_) -> false
+          case Transporter(_) -> false
+          case _ -> true
+        };
+
       var ligandRow =
         if (ligandName == "") {
           MvuHTML.empty
@@ -3036,7 +3045,7 @@ fun view(model) {
             td(a0, unescapedTextNode(ligandName)))
         };
 
-      if (not(listEmpty(objectInfo.objectEndogenousLigands)) ||
+      if (show && not(listEmpty(objectInfo.objectEndogenousLigands)) ||
           not(markupEmpty(listComments)) || ligandName <> "") {
         var renderedSummaries =
           MvuHTML.concatMap(renderSummary, objectInfo.objectEndogenousLigands);
