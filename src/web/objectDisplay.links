@@ -164,7 +164,7 @@ typename EndogenousLigandSummary =
 typename CellTypeAssociation = (
   ctaImmunoCelltype: (immunoCTID: Int, immunoCTName: String),
   ctaComments: Markup,
-  ctaCellOntologyType: (cellOntologyName: String, cellOntologyID: String),
+  ctaCellOntologyTypes: [(cellOntologyName: String, cellOntologyID: String)],
   ctaReferences: [ReferenceID]
 );
 
@@ -658,20 +658,20 @@ fun getInitialModel() {
              cellTypeAssociations =
                for (cta <-- Tables.celltype_assoc)
                where (cta.object_id == objectId)
-                 for (ctac <-- Tables.celltype_assoc_colist)
-                 where (ctac.celltype_assoc_id == cta.celltype_assoc_id)
-                   for (ct <-- Tables.co_celltype)
-                   where (ct.cellonto_id == ctac.cellonto_id)
-                     for (immuno <-- Tables.immuno_celltype)
-                     where (immuno.immuno_celltype_id == cta.immuno_celltype_id)
-                     [( ctaComment = cta.comment,
-                        cellType = ct,
-                        immuno = immuno,
-                        refs =
-                          for (car <-- Tables.celltype_assoc_refs)
-                          where (car.celltype_assoc_id == cta.celltype_assoc_id)
-                          [car.reference_id]
-                      )],
+                 for (immuno <-- Tables.immuno_celltype)
+                 where (immuno.immuno_celltype_id == cta.immuno_celltype_id)
+                 [( ctaComment = cta.comment,
+                    cellTypes =
+                      for (ctac <-- Tables.celltype_assoc_colist)
+                      where (ctac.celltype_assoc_id == cta.celltype_assoc_id)
+                        for (ct <-- Tables.co_celltype)
+                        where (ct.cellonto_id == ctac.cellonto_id)
+                        [ct],
+                    immuno = immuno,
+                    refs =
+                      for (car <-- Tables.celltype_assoc_refs)
+                      where (car.celltype_assoc_id == cta.celltype_assoc_id)
+                      [car.reference_id])],
              immunoProcessAssociations =
                for (pa <-- Tables.process_assoc)
                where (pa.object_id == objectId)
@@ -977,12 +977,7 @@ fun getInitialModel() {
                     where (l.ligand_id == si.ligand_id)
                       for (scr <-- Tables.screen)
                       where (si.screen_id == scr.screen_id)
-                        [(=si, ligand = l, screen =
-                            (=scr,
-                             refs =
-                               for (sr <-- Tables.screen_refs)
-                               where (sr.screen_id == scr.screen_id)
-                               [sr.reference_id]))],
+                        [(=si, ligand = l)],
                 # Mutations may be associated with a pathophysiology, but also
                 # might not be -- so we need to account for both.
                 mutationsWithPathophysiology =
@@ -1763,9 +1758,11 @@ fun getInitialModel() {
         var (ctasRev, ctaRefs, ctaLigands) =
           fold_left(fun((ctasRev, ctaRefs, ctaLigands), x) {
             var comment = parseOrError(x.ctaComment);
-            var cellType =
-              (cellOntologyID = x.cellType.cellonto_id,
-               cellOntologyName = x.cellType.name);
+            var cellTypes =
+              map(fun(ct) {
+                (cellOntologyID = ct.cellonto_id,
+                 cellOntologyName = ct.name)
+                }, x.cellTypes);
             var immuno =
               (immunoCTID = x.immuno.immuno_celltype_id, immunoCTName = x.immuno.term);
             var (commentRefs, commentLigands) = collectIds(comment);
@@ -1773,7 +1770,7 @@ fun getInitialModel() {
             var res =
               (ctaImmunoCelltype = immuno,
                ctaComments = comment,
-               ctaCellOntologyType = cellType,
+               ctaCellOntologyTypes = cellTypes,
                ctaReferences = x.refs);
             (res :: ctasRev, allRefs ++ ctaRefs, commentLigands ++ ctaLigands)
           }, ([], [], []), ctas);
@@ -2334,22 +2331,17 @@ fun getInitialModel() {
           DataTable.makeTable(cols, interactions, sortMessage)
         }
 
-        # First, we want to group by the individual screen interactions by screen ID
-        # Note: Screens 3 and 4 must always be merged. It makes sense to firstly
-        # map over and change anything with screen 4 to 3, then we can group, then
-        # we can add in the details for screen 4.
-        var screens = map(fun(x) {
-            if (x.si.screen_id == 3) {
-              var si = (x.si with screen_id = 4);
-              (x with =si)
-            } else { x }
-          }, screens);
+        fun findScreen(id) {
+          hd(filter(fun(x) { x.scr.screen_id == id }, allScreens))
+        }
+
         var grouped = groupBy(fun(x) { x.si.screen_id }, screens);
         # Transform each group into a screen
         var (screens, refs) =
-          fold_left(fun((acc, refs), (_, group)) {
-              var scr = hd(group).screen.scr;
-              var scrRefs = hd(group).screen.refs;
+          fold_left(fun((acc, refs), (screen_id, group)) {
+              var screen = findScreen(screen_id);
+              var scr = screen.scr;
+              var scrRefs = screen.refs;
               var interactions : [ParsedScreenInteraction] =
                 map(fun(x) {
                   (interaction = InteractionUtilities.makeScreenInteraction(x),
@@ -2375,18 +2367,22 @@ fun getInitialModel() {
         # Finally, we need to merge screens 3 and 4.
         var screen3 = hd(filter(fun(x) { x.scr.screen_id == 3 }, allScreens));
         var screen4 = hd(filter(fun(x) { x.scr.screen_id == 4 }, allScreens));
-        var screens = map(fun(x) {
-            if (x.id == 4) {
+        var screens =
+          switch (partition(fun(x) { x.id == 3 || x.id == 4 }, screens)) {
+            case ([], screens) -> screens
+            case ([x], rest) ->
               (x with
                  name = screen3.scr.name ^^ "/" ^^ screen4.scr.name,
                  description = screen3.scr.description ^^ " " ^^ screen4.scr.description,
-                 references = screen3.refs ++ screen4.refs)
-            } else {
-              x
-            }
-        }, screens);
+                 references = screen3.refs ++ screen4.refs) :: rest
+            case ([x, y], rest) ->
+              (x with
+                 name = screen3.scr.name ^^ "/" ^^ screen4.scr.name,
+                 description = screen3.scr.description ^^ " " ^^ screen4.scr.description,
+                 data = x.data ++ y.data,
+                 references = screen3.refs ++ screen4.refs) :: rest
+          };
 
-        # Bit of a hack, tbh
         # If we have have anything with screen 4, add refs for screen 3 and 4
         var refs =
           if (not(listEmpty(filter(fun(x) { x.id == 3 || x.id == 4 }, screens)))) {
@@ -3982,23 +3978,43 @@ fun view(model) {
     var cellTypeAssociationsBox = {
       fun renderCTA(cta) {
         var ct = cta.ctaImmunoCelltype;
-        var cto = cta.ctaCellOntologyType;
+        var ctos = cta.ctaCellOntologyTypes;
         var cellTypeContent =
           a(href("/objectCelltypeAssocList?immCellType=" ^^
                 intToString(ct.immunoCTID)), textNode(ct.immunoCTName));
+
         var cellOntologyContent =
-          textNode(cto.cellOntologyName ^^ " (" ^^ cto.cellOntologyID ^^ ")");
-        var referencesRow =
-          if (cta.ctaReferences == []) { MvuHTML.empty } else {
-            renderKeyVal(("References",
-                Reference.renderCitationList(cta.ctaReferences,
-                  objectInfo.objectReferences)))
+          if (listEmpty(ctos)) {
+            []
+          } else {
+            [("Cell ontology terms", 
+              MvuHTML.concat(join([textNode(", ")],
+                map(fun(cto) {
+                  [textNode(cto.cellOntologyName ^^ " (" ^^ cto.cellOntologyID ^^ ")")]
+                  }, ctos))))]
           };
+
+        var referencesRow =
+          if (cta.ctaReferences == []) { [] } else {
+            [("References",
+                Reference.renderCitationList(cta.ctaReferences,
+                  objectInfo.objectReferences))]
+          };
+
+        var commentsRow =
+          if (markupEmpty(cta.ctaComments)) {
+            []
+          } else {
+            [("Comments", renderM(cta.ctaComments))]
+          };
+
         var rows =
-          [("Immuno Cell Type", cellTypeContent),
-           ("Cell Ontology Term", cellOntologyContent),
-           ("Comment", renderM(cta.ctaComments))];
-        var renderedRows = MvuHTML.concat(map(renderKeyVal, rows) ++ [referencesRow]);
+          listConcat(
+          [[("Immuno Cell Type", cellTypeContent)],
+            cellOntologyContent,
+            commentsRow,
+            referencesRow]);
+        var renderedRows = MvuHTML.concat(map(renderKeyVal, rows));
         tr(a0,
           td(class("info"),
             table_(class("inner_receptor_data_tables"), renderedRows)))

@@ -2,7 +2,7 @@
 fun listEmpty(xs) { empty(xs) }
 fun listSpan(f, xs) { span(f, xs) }
 fun listConcatMap(f, xs) { concatMap(f, xs) }
-var listConcat = concat;
+fun listConcat(xs) { concat(xs) }
 var listElem = elem;
 var listContains = listElem;
 ## Useful in defining list predicates in LINQ.
