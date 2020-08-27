@@ -964,7 +964,12 @@ fun getInitialModel() {
                 # screens 3 and 4.
                 allScreens =
                   for (scr <-- Tables.screen)
-                    [scr],
+                    [(=scr,
+                      refs =
+                        for (r <-- screen_refs)
+                        where (r.screen_id == scr.screen_id)
+                        [r.reference_id])
+                    ],
                 screens =
                   for (si <-- Tables.screen_interaction)
                     where (si.object_id == objectId)
@@ -2334,8 +2339,8 @@ fun getInitialModel() {
         # map over and change anything with screen 4 to 3, then we can group, then
         # we can add in the details for screen 4.
         var screens = map(fun(x) {
-            if (x.si.screen_id == 4) {
-              var si = (x.si with screen_id = 3);
+            if (x.si.screen_id == 3) {
+              var si = (x.si with screen_id = 4);
               (x with =si)
             } else { x }
           }, screens);
@@ -2368,17 +2373,27 @@ fun getInitialModel() {
           }, ([], []), grouped);
 
         # Finally, we need to merge screens 3 and 4.
+        var screen3 = hd(filter(fun(x) { x.scr.screen_id == 3 }, allScreens));
+        var screen4 = hd(filter(fun(x) { x.scr.screen_id == 4 }, allScreens));
         var screens = map(fun(x) {
-            if (x.id == 3) {
-              var screen3 = hd(filter(fun(x) { x.screen_id == 3 }, allScreens));
-              var screen4 = hd(filter(fun(x) { x.screen_id == 4 }, allScreens));
+            if (x.id == 4) {
               (x with
-                 name = screen3.name ^^ "/" ^^ screen4.name,
-                 description = screen3.description ^^ " " ^^ screen4.description)
+                 name = screen3.scr.name ^^ "/" ^^ screen4.scr.name,
+                 description = screen3.scr.description ^^ " " ^^ screen4.scr.description,
+                 references = screen3.refs ++ screen4.refs)
             } else {
               x
             }
         }, screens);
+
+        # Bit of a hack, tbh
+        # If we have have anything with screen 4, add refs for screen 3 and 4
+        var refs =
+          if (not(listEmpty(filter(fun(x) { x.id == 3 || x.id == 4 }, screens)))) {
+              refs ++ screen3.refs ++ screen4.refs
+          } else {
+            refs
+          };
         (screens, refs)
       }
 
