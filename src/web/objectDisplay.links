@@ -761,9 +761,11 @@ fun getInitialModel() {
                    # The following isn't quite right as accessions is in fact a comma-separated
                    # list, and unfortunately regexes don't yet work in nested queries (sigh.)
                    # It's a reasonable approximation though so we should be OK until we get the bugfix.
-                   where (strI.official_gene_id <> "" && al.accessions == strI.official_gene_id)
+                   # where (strI.official_gene_id <> "" && al.accessions == strI.official_gene_id)
+                   # With a patched compiler, use the following:
+                   where (strI.official_gene_id <> "" && al.accessions =~ /{strI.official_gene_id}/)
                    for (ot <-- Tables.ontology_term)
-                     where (ot.term_id == al.term_id)
+                     where (ot.ontology_id == al.ontology_id && ot.term_id == al.term_id)
                      [(=strI, =al, =ot)],
              variants =
                for (v <-- Tables.variant)
@@ -2426,6 +2428,18 @@ fun getInitialModel() {
 
       sig transformAlleles : (%) ~%~> SortableTable(Allele, Message)
       fun transformAlleles(rawAlleles) {
+        # First up, the regex we used in the query is an overapproximation: we may
+        # match sub-parts of another gene ID (really a separate table would avoid this,
+        # but thankfully this is the only place in the gtopdb codebase that this happens).
+
+        # What we need to do is filter, ensuring that the official gene ID is indeed
+        # in the list obtained by splitting the accessions string by ','.
+        var rawAlleles =
+          filter(fun(x) {
+              print("rawAlleles: " ^^ show(splitOnChar(x.al.accessions, ',')));
+              listElem(x.strI.official_gene_id, splitOnChar(x.al.accessions, ','))
+          }, rawAlleles);
+
         var alleles =
           map(fun(x) {
             (id = x.al.allele_id,
@@ -3648,6 +3662,8 @@ fun view(model) {
 
     var functionalAssaysBox =
       renderDataBox(objectInfo.objectFunctionalAssays);
+    var functionalAssayCommentsBox =
+      commentsBox("Functional Assay Comments", comments.functionalAssayComments);
     var physiologicalFunctionsBox =
       renderDataBox(objectInfo.objectPhysiologicalFunctions);
     var physiologicalFunctionsCommentsBox =
@@ -3810,7 +3826,41 @@ fun view(model) {
     };
 
     var allelesBox = {
-      if (DataTable.tableEmpty(objectInfo.objectAlleles)) {
+      
+      # EnzymeSubunit
+      # EnzymeHeteromer
+      # NHR
+      # TransporterSubunit
+      # CRSubunit
+      # GPCRSubunit
+      # VGICSubunit
+      
+      # NOT GPCR HETEROMER
+      # NOT VGIC MULTIMER
+      # NOT LGIC SUBUNIT
+      # NOT LGIC MULTIMER
+      # NOT OTHER IC SUBUNIT
+      # NOT OTHER IC MULTIMER
+      # NOT OTHER PROTEIN SUBUNIT
+      # NOT OTHER PROTEIN HETEROMER
+
+
+      # As a first approximation, show for enzymes, NHR, transporters, CRs, GPCRs, and VGICs.
+      # We may need extra checking to ascertain about VGIC multimers and GPCR heteromers.
+      var shouldShow =
+        switch (objectInfo.objectType) {
+          case Enzyme(_) -> true
+          case NHR(_) -> true
+          case Transporter(_) -> true
+          case CatalyticReceptor(_) -> true
+          case VGIC(_) -> true
+          case GPCR(_) -> true
+          case _ -> false
+        };
+
+      debug("show: " ^^ show(shouldShow));
+      debug("allele count: " ^^ show(length(getTableData(objectInfo.objectAlleles))));
+      if (not(shouldShow) || DataTable.tableEmpty(objectInfo.objectAlleles)) {
         MvuHTML.empty
       } else {
         fun renderRow(x) {
@@ -4734,6 +4784,7 @@ fun view(model) {
             tissueDistributionComments +*
             expressionDatasetsBox +*
             functionalAssaysBox +*
+            functionalAssayCommentsBox +*
             physiologicalFunctionsBox +*
             physiologicalFunctionsCommentsBox +*
             physiologicalConsequencesBox +*
