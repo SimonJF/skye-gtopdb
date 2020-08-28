@@ -40,7 +40,9 @@ typename LigandClusters =
   (clusters: [ClusteredLigand],
    analogue_clusters: [ClusteredLigand],
    peptide_ligand_clusters: [ClusteredLigand],
-   peptide_ligand_sequence_clusters: [ClusteredLigand]);
+   peptide_ligand_sequence_clusters: [ClusteredLigand],
+   peptide_related_ligands: [ClusteredLigand]
+  );
 
 typename LigandPhysicalProperties = (
   lpHydrogenBondAcceptors: Int,
@@ -370,6 +372,28 @@ fun getInitialModel() {
           }
         }
 
+        var peptideRelated = {
+          var sameName =
+            map(fun(x) { (id = x.id, name = x.name, targets = []) },
+                rawInfo.related_ligands);
+          # For each precursor, get all ligand IDs s.t. the ligand ID is different, and the gene name is the same as that contained in the peptide
+
+          # In other words, collect all the gene names and we can go from there
+          var geneNames =
+            map(fun(p) { p.precursor.gene_name }, rawInfo.precursors);
+          var pred = contains(geneNames);
+          var geneSimilar =
+            query nested {
+              for (p2p <-- Tables.precursor2peptide)
+                where (p2p.ligand_id <> ligandId)
+                for (p <-- Tables.precursor)
+                  where (pred(p.gene_name))
+                    [ (id = p2p.ligand_id, name = rawInfo.ligand.name, targets = []) ]
+            };
+
+          uniquify(sameName ++ geneSimilar)
+        };
+
         (clusters = getClusteredLigands(Tables.ligand_cluster_new, rawInfo.clusters),
          analogue_clusters =
            getClusteredLigands(Tables.analogue_cluster, rawInfo.analogue_clusters),
@@ -378,7 +402,8 @@ fun getInitialModel() {
              rawInfo.peptide_ligand_clusters),
          peptide_ligand_sequence_clusters =
            getClusteredLigands(Tables.peptide_ligand_sequence_cluster,
-             rawInfo.peptide_ligand_sequence_clusters))
+             rawInfo.peptide_ligand_sequence_clusters),
+         peptide_related_ligands = peptideRelated )
       }
 
       var clusteredLigands = transformClusters();
@@ -659,6 +684,11 @@ fun getInitialModel() {
               for (pcls <-- Tables.peptide_ligand_sequence_cluster)
                 where (pcls.ligand_id == ligandId)
                   [pcls.cluster],
+            # Used for Peptide similar ligands
+            related_ligands =
+              for (l2 <-- Tables.ligand)
+                where (l2.name == l.name && l2.ligand_id <> ligandId)
+                  [(id = l2.ligand_id, name = l2.name)],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -993,24 +1023,28 @@ fun view(model) {
         commentBox("Comments", ligandInfo.ligandComments.generalComments);
 
       var precursorTableBox = {
-        var renderedTable =
-          renderTable(ligandInfo.ligandPrecursorTable,
-            fun(precursor) {
-              var renderedSynonyms = MvuHTML.concat(join([textNode(", ")],
-                  map(fun(s) { [textNode(s)] }, precursor.precursorSynonyms)));
-              tr(class("info"),
-                td(a0, textNode(precursor.precursorGeneName)) +*
-                td(a0, textNode(precursor.precursorGeneLongName)) +*
-                td(a0, textNode(precursor.precursorSpecies)) +*
-                td(a0, textNode(precursor.precursorProteinName)) +*
-                td(a0, renderedSynonyms))
-            });
-        table_(class("receptor_data_tables") +@ width("100%"),
-          tbody(a0,
-            tr(a0,
-              td(class("category"), textNode("Gene/Precursor"))) +*
-            tr(a0,
-              td(class("table_container"), renderedTable))))
+        if (listEmpty(getTableData(ligandInfo.ligandPrecursorTable))) {
+          MvuHTML.empty
+        } else {
+          var renderedTable =
+            renderTable(ligandInfo.ligandPrecursorTable,
+              fun(precursor) {
+                var renderedSynonyms = MvuHTML.concat(join([textNode(", ")],
+                    map(fun(s) { [textNode(s)] }, precursor.precursorSynonyms)));
+                tr(class("info"),
+                  td(a0, textNode(precursor.precursorGeneName)) +*
+                  td(a0, textNode(precursor.precursorGeneLongName)) +*
+                  td(a0, textNode(precursor.precursorSpecies)) +*
+                  td(a0, textNode(precursor.precursorProteinName)) +*
+                  td(a0, renderedSynonyms))
+              });
+          table_(class("receptor_data_tables") +@ width("100%"),
+            tbody(a0,
+              tr(a0,
+                td(class("category"), textNode("Gene/Precursor"))) +*
+              tr(a0,
+                td(class("table_container"), renderedTable))))
+        }
       };
 
       var dbLinksBox =
@@ -1517,8 +1551,7 @@ fun view(model) {
     var similarLigandsPage = {
       if (ligandInfo.ligandType == "Peptide" || ligandInfo.ligandType == "Antibody") {
         var lcs = ligandInfo.ligandClusters;
-        # TODO: Need to work out the DB logic for this.
-        similarLigandsTable("Related Sequences", []) +*
+        similarLigandsTable("Related Sequences", lcs.peptide_related_ligands) +*
         similarLigandsTable("Other Similar Sequences",
             lcs.peptide_ligand_sequence_clusters) +*
         similarLigandsTable("Structurally Similar Ligands",
