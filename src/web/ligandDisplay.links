@@ -34,6 +34,14 @@ typename Synonym = (synonymName: Markup, synonymRefs: [ReferenceID]);
 
 typename LigandFamily = (familyName: String, familyId: Int);
 
+typename ClusteredLigand = (id: Int, name: String);
+
+typename LigandClusters =
+  (clusters: [ClusteredLigand],
+   analogue_clusters: [ClusteredLigand],
+   peptide_ligand_clusters: [ClusteredLigand],
+   peptide_ligand_sequence_clusters: [ClusteredLigand]);
+
 typename LigandPhysicalProperties = (
   lpHydrogenBondAcceptors: Int,
   lpHydrogenBondDonors: Int,
@@ -174,7 +182,8 @@ typename LigandInfo = (
   ligandProdrugs: [(id: Int, name: String)],
   ligandActiveForms: [(id: Int, name: String)],
   ligandEndogenousTargets: [(id: Int, name: String)],
-  ligandLigandRefs: [(Int, LigandName)]
+  ligandLigandRefs: [(Int, LigandName)],
+  ligandClusters: LigandClusters
 );
 
 typename Model = Maybe((
@@ -341,6 +350,32 @@ fun getInitialModel() {
         }, ([], [], []), ids)
       }
 
+      fun transformClusters() {
+        # Since we don't have subqueries, we need to do things in two steps
+        fun getClusteredLigands(cluster_tbl, clusters) {
+          var pred = contains(clusters);
+          query nested {
+            for (c <-- cluster_tbl)
+              where (pred(c.cluster))
+              for (l <-- Tables.ligand)
+                where (l.ligand_id == c.ligand_id)
+                [(id = l.ligand_id, name = l.name)]
+          }
+        }
+
+        (clusters = getClusteredLigands(Tables.ligand_cluster, rawInfo.clusters),
+         analogue_clusters =
+           getClusteredLigands(Tables.analogue_cluster, rawInfo.analogue_clusters),
+         peptide_ligand_clusters =
+           getClusteredLigands(Tables.peptide_ligand_cluster,
+             rawInfo.peptide_ligand_clusters),
+         peptide_ligand_sequence_clusters =
+           getClusteredLigands(Tables.peptide_ligand_sequence_cluster,
+             rawInfo.peptide_ligand_sequence_clusters))
+      }
+
+      var clusteredLigands = transformClusters();
+
       var (immunoDiseases, immunoDiseaseRefs, immunoDiseaseLigands) =
         transformImmunoDiseases(rawInfo.immunoDiseases);
 
@@ -489,7 +524,8 @@ fun getInitialModel() {
        ligandEndogenousTargets = rawInfo.endogenousTargets,
        ligandProdrugs = rawInfo.prodrugs,
        ligandActiveForms = rawInfo.activeForms,
-       ligandLigandRefs = ligandRefs)
+       ligandLigandRefs = ligandRefs,
+       ligandClusters = clusteredLigands)
     }
 
     var results =
@@ -600,6 +636,22 @@ fun getInitialModel() {
                       for (r <-- Tables.cofactor_refs)
                       where (r.cofactor_id == c.cofactor_id)
                       [r.reference_id])],
+            clusters =
+              for (cl <-- Tables.ligand_cluster)
+                where (cl.ligand_id == ligandId)
+                  [cl.cluster],
+            analogue_clusters =
+              for (acl <-- Tables.analogue_cluster)
+                where (acl.ligand_id == ligandId)
+                  [acl.cluster],
+            peptide_ligand_clusters =
+              for (pcl <-- Tables.peptide_ligand_cluster)
+                where (pcl.ligand_id == ligandId)
+                  [pcl.cluster],
+            peptide_ligand_sequence_clusters =
+              for (pcls <-- Tables.peptide_ligand_sequence_cluster)
+                where (pcls.ligand_id == ligandId)
+                  [pcls.cluster],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
