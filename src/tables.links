@@ -214,6 +214,9 @@ var ligand2synonym_refs = table "ligand2synonym_refs" with (ligand2synonym_id: I
 
 var ligand_cluster = table "ligand_cluster" with (ligand_id: Int, cluster: String, distance: Float, cluster_centre: Int) from db;
 
+var ligand_cluster_new = table "ligand_cluster_new" with (ligand_id: Int, cluster: String, distance: Float, cluster_centre: Int) from db;
+
+
 # var database_link = table "database_link" with (database_link_id: Int, object_id: Int, species_id: Int, database_id: Int, placeholder: String) from db;
 
 var ligand_database_link = table "ligand_database_link" with (ligand_database_link_id: Int, ligand_id: Int, database_id: Int, placeholder: String, source: String, commercial: Bool, species_id: Int) from db;

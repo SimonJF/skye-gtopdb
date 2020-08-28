@@ -15,7 +15,7 @@ import MvuAttrs;
 
 typename Tab =
   [| Summary | BiologicalActivity | ClinicalData | References
-   | Structure | SimilarLigands | Malaria | Immuno |];
+   | Structure | SimilarLigands | Analogues | Malaria | Immuno |];
 
 
 typename Message =
@@ -34,7 +34,7 @@ typename Synonym = (synonymName: Markup, synonymRefs: [ReferenceID]);
 
 typename LigandFamily = (familyName: String, familyId: Int);
 
-typename ClusteredLigand = (id: Int, name: String);
+typename ClusteredLigand = (id: Int, name: String, targets: [(id: Int, name: String)]);
 
 typename LigandClusters =
   (clusters: [ClusteredLigand],
@@ -358,12 +358,19 @@ fun getInitialModel() {
             for (c <-- cluster_tbl)
               where (pred(c.cluster))
               for (l <-- Tables.ligand)
-                where (l.ligand_id == c.ligand_id)
-                [(id = l.ligand_id, name = l.name)]
+                where (l.ligand_id == c.ligand_id && l.ligand_id <> ligandId)
+                [(id = l.ligand_id, name = l.name,
+                  targets =
+                    for (i <-- Tables.interaction)
+                    where (i.ligand_id == l.ligand_id)
+                      for (o <-- Tables.object)
+                      where (o.object_id == i.object_id)
+                      [(id = o.object_id, name = o.name)]
+                    )]
           }
         }
 
-        (clusters = getClusteredLigands(Tables.ligand_cluster, rawInfo.clusters),
+        (clusters = getClusteredLigands(Tables.ligand_cluster_new, rawInfo.clusters),
          analogue_clusters =
            getClusteredLigands(Tables.analogue_cluster, rawInfo.analogue_clusters),
          peptide_ligand_clusters =
@@ -637,7 +644,7 @@ fun getInitialModel() {
                       where (r.cofactor_id == c.cofactor_id)
                       [r.reference_id])],
             clusters =
-              for (cl <-- Tables.ligand_cluster)
+              for (cl <-- Tables.ligand_cluster_new)
                 where (cl.ligand_id == ligandId)
                   [cl.cluster],
             analogue_clusters =
@@ -1398,8 +1405,75 @@ fun view(model) {
       structureBox
     };
 
+    fun similarLigandsGrid(header, ligands) {
+      fun renderLigand(l) {
+        var targets = {
+          if (listEmpty(l.targets)) {
+            MvuHTML.empty
+          } else {
+            var renderedLinks =
+              MvuHTML.concat(join([textNode("; ")],
+                    map(fun(x) { [
+                      a(href("/objectDisplay?objectId=" ^^ intToString(x.id)),
+                          unescapedTextNode(x.name))
+                    ] }, l.targets)));
+            tr(a0,
+              td(style("text-align:left vertical-align:top; font-size:85%;"),
+                h6(class("target_summary_header"), textNode("Targets")))) +*
+            tr(a0,
+              td(style("text-align:left; vertical-align:top; font-size:85%;"),
+                renderedLinks))
+          }
+        };
+
+        td(style("height:100%; text-align:center;") +@ colSpan(1),
+            table_(width("375px") +@ height("100%"),
+              tbody(a0,
+                # Name
+                tr(a0,
+                  td(style("text-align:center; vertical-align:top; font-size:95%;"),
+                    a(href("/ligandDisplay?ligandId=" ^^ intToString(l.id)),
+                      unescapedTextNode(l.name)))) +*
+                # Image
+                tr(a0,
+                  td(style("text-align:center; vertical-align:top;"),
+                    a(style("color:white;") +@ href("/ligandDisplay?ligandId=" ^^ intToString(l.id)),
+                      img(src("https://www.guidetopharmacology.org/CHEMSTRUCT/iuphar/" ^^ strId ^^ ".gif") +@
+                        height("250px") +@ width("250px"), h0)))) +*
+                # Targets (header, if targets present)
+                # List of targets
+                targets)))
+
+      }
+
+      fun renderLigands(ls) {
+        switch(ls) {
+          case [] -> MvuHTML.empty
+          case [x] -> tr(class("info"), renderLigand(x))
+          case x :: y :: xs ->
+            tr(class("info"),
+                renderLigand(x) +* renderLigand(y)) +* renderLigands(xs)
+        }
+      }
+      var renderedRows = renderLigands(ligands);
+      # TODO: Probably want to have the various targets displaying here, too.
+      table_(class("receptor_data_tables") +@ style("width:100%"),
+          tbody(a0,
+            tr(a0,
+              td(class("category") +@
+                style("text-align:left;border-style:solid none solid solid;") +@
+                colSpan(2), textNode(header))) +*
+            renderedRows))
+
+    }
+
     var similarLigandsPage = {
-      MvuHTML.empty
+      similarLigandsGrid("Similar Ligands", ligandInfo.ligandClusters.clusters)
+    };
+
+    var analoguesPage = {
+      similarLigandsGrid("Other Isotopes/Labelled or Unlabelled Forms",
+          ligandInfo.ligandClusters.analogue_clusters)
     };
 
     var immunoPage = {
@@ -1502,7 +1576,12 @@ fun view(model) {
       var showClinicalData = true;
       var showReferences = not(listEmpty(ligandInfo.ligandReferences));
       var showStructure = true;
-      var showSimilarLigands = true;
+      var ls = ligandInfo.ligandClusters;
+      var showSimilarLigands =
+        not(listEmpty(ls.clusters) &&
+            listEmpty(ls.peptide_ligand_clusters) &&
+            listEmpty(ls.peptide_ligand_sequence_clusters));
+      var showAnalogues = not(listEmpty(ls.analogue_clusters));
       var showImmuno = ligandInfo.ligandImmuno;
       var showMalaria = ligandInfo.ligandMalaria;
       var tabs = [
@@ -1512,6 +1591,7 @@ fun view(model) {
         ("References", References, showReferences),
         ("Structure", Structure, showStructure),
         ("Similar ligands", SimilarLigands, showSimilarLigands),
+        ("(Un)labelled forms", Analogues, showAnalogues),
         ("Immunopharmacology", Immuno, showImmuno),
         ("Malaria", Malaria, showMalaria)
       ];
@@ -1541,6 +1621,7 @@ fun view(model) {
           case References -> referencesPage
           case Structure -> structurePage
           case SimilarLigands -> similarLigandsPage
+          case Analogues -> analoguesPage
           case Immuno -> immunoPage
           case Malaria -> malariaPage
         };
