@@ -1467,8 +1467,65 @@ fun view(model) {
 
     }
 
+    # Tables, used instead of the grid layout when displaying data for peptides
+    fun similarLigandsTable(header, ligands) {
+      if (listEmpty(ligands)) {
+        MvuHTML.empty
+      } else {
+        fun renderRow(x) {
+          var targetLinks =
+            MvuHTML.concat(join([textNode("; ")], map(fun(y) {
+                    [a(href("/ligandDisplay?ligandId=" ^^ intToString(y.id)), unescapedTextNode(y.name))]
+                  }, uniquify(x.targets))));
+
+          var targets =
+            if (listEmpty(x.targets)) {
+              MvuHTML.empty
+            } else {
+              span(class("embedded_link") +@ style("font-size: 85%;"),
+                h6(class("target_summary_header"), textNode("Targets")) +*
+                targetLinks)
+            };
+
+          tr(class("info"),
+            td(class("embedded_link") +@
+                style("text-align:left; vertical-align: top; border-style:solid none solid solid;"),
+                a(href("/ligandDisplay?ligandId=" ^^ intToString(x.id)),
+                  unescapedTextNode(x.name)) +*
+                br(a0, h0) +*
+                br(a0, h0) +*
+                targets) +*
+            td(style("text-align:right; vertical-align: top; border-style: solid solid solid none;"),
+              a(style("color:white;") +@ href("/ligandDisplay?ligandId=" ^^ intToString(x.id)),
+                img(src("https://www.guidetopharmacology.org/CHEMSTRUCT/iuphar/" ^^ strId ^^ ".gif"), h0))))
+        }
+
+        var renderedRows = MvuHTML.concatMap(renderRow, ligands);
+
+        table_(class("receptor_data_tables") +@ style("width:100%"),
+            tbody(a0,
+              tr(a0,
+                td(class("category") +@
+                  style("text-align:left;border-style:solid none solid solid;") +@
+                  colSpan(2),
+                  textNode(header))) +*
+              renderedRows))
+      }
+    }
+
+
     var similarLigandsPage = {
-      similarLigandsGrid("Similar Ligands", ligandInfo.ligandClusters.clusters)
+      if (ligandInfo.ligandType == "Peptide" || ligandInfo.ligandType == "Antibody") {
+        var lcs = ligandInfo.ligandClusters;
+        # TODO: Need to work out the DB logic for this.
+        similarLigandsTable("Related Sequences", []) +*
+        similarLigandsTable("Other Similar Sequences",
+            lcs.peptide_ligand_sequence_clusters) +*
+        similarLigandsTable("Structurally Similar Ligands",
+            uniquify(lcs.clusters ++ lcs.peptide_ligand_clusters))
+      } else {
+        similarLigandsGrid("Similar Ligands", ligandInfo.ligandClusters.clusters)
+      }
     };
 
     var analoguesPage = {
