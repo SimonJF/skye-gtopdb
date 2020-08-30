@@ -1663,7 +1663,19 @@ fun view(model) {
 
     var tabBox = {
       var showBioActivity = true;
-      var showClinicalData = true;
+      var showClinicalData = {
+        var comments = ligandInfo.ligandComments;
+        var urls = ligandInfo.ligandURLs;
+        not(
+            markupEmpty(comments.absorptionDistributionComments) &&
+            markupEmpty(comments.metabolismComments) &&
+            markupEmpty(comments.eliminationComments) &&
+            markupEmpty(comments.popnPharmacokineticsComments) &&
+            markupEmpty(comments.organFunctionImpairmentComments) &&
+            markupEmpty(comments.clinicalUseComments) &&
+            markupEmpty(comments.mechanismOfActionComments) &&
+            urls.drugsURL == "" && urls.emaURL == "" && urls.emcURL == "")
+      };
       var showReferences = not(listEmpty(ligandInfo.ligandReferences));
       var showStructure = true;
       var ls = ligandInfo.ligandClusters;
