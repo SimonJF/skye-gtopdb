@@ -851,6 +851,10 @@ fun view(model) {
     var h0 = MvuHTML.empty;
     var a0 = MvuAttrs.empty;
 
+    fun renderCitations(refs) {
+      renderCitationList(refs, ligandInfo.ligandReferences)
+    }
+
     fun renderM(m) {
       renderMarkup(m, ligandInfo.ligandReferences,
           ligandInfo.ligandLigandRefs)
@@ -1745,7 +1749,7 @@ fun view(model) {
 
     var malariaPage = {
       var malariaComments = ligandInfo.ligandComments.malariaComments;
-      if (markupEmpty(malariaComments)) {
+      if (markupEmpty(malariaComments) && listEmpty(ligandInfo.ligandTCPs)) {
         table_(class("receptor_data_tables") +@ style("width:100%"),
           tr(a0,
             td(a0,
@@ -1754,11 +1758,45 @@ fun view(model) {
               textNode(" pharmacology and is awaiting detailed") +*
               textNode(" curation for the Guide to MALARIA PHARMACOLOGY"))))
       } else {
-        table_(id("malaria") +@ class("receptor_data_tables") +@ style("width:100%"),
-          tr(a0,
-            td(class("category_gtmp"), textNode("Guide to Malaria Pharmacology Comments"))) +*
-          tr(class("info"),
-            td(a0, renderM(malariaComments))))
+        var malaria_comments =
+          table_(id("malaria") +@ class("receptor_data_tables") +@ style("width:100%"),
+            tr(a0,
+              td(class("category_gtmp"), textNode("Guide to Malaria Pharmacology Comments"))) +*
+            tr(class("info"),
+              td(a0, renderM(malariaComments))));
+
+        var tcps = {
+          fun renderRow(tcp) {
+            tr(class("info"),
+              td(a0, renderM(tcp.tcpProfile)) +*
+              td(a0, renderM(tcp.tcpIntendedUse)) +*
+              td(a0, renderM(tcp.tcpTargetStage)) +*
+              td(a0, renderM(tcp.tcpComment)) +*
+              td(a0, renderCitations(tcp.tcpReferences)))
+          }
+
+          if (listEmpty(ligandInfo.ligandTCPs)) {
+            MvuHTML.empty
+          } else {
+            var header = {
+              tr(a0,
+                  td(class("heading"), textNode("Profile")) +*
+                  td(class("heading") +@ style("width:100px;"), textNode("Intended Use")) +*
+                  td(class("heading") +@ style("width:100px;"), textNode("Profile")) +*
+                  td(class("heading") +@ style("width:400px;"), textNode("Comment")) +*
+                  td(class("heading") +@ style("width:100px;"), textNode("References")))
+            };
+            var renderedRows = MvuHTML.concatMap(renderRow, ligandInfo.ligandTCPs);
+            table_(class("receptor_data_tables") +@ style("width:100%;"),
+                tbody(a0,
+                  tr(a0,
+                    td(class("category_gtmp") +@ colSpan(5),
+                      textNode("Target Candidate Profiles"))) +*
+                  header +* renderedRows))
+          }
+        };
+
+        malaria_comments +* tcps
       }
     };
 
