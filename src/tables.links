@@ -212,6 +212,12 @@ var ligand2synonym = table "ligand2synonym" with (ligand_id: Int, synonym: Strin
 
 var ligand2synonym_refs = table "ligand2synonym_refs" with (ligand2synonym_id: Int, reference_id: Int) from db;
 
+var ligand2tcp =
+  table "ligand2tcp" with (ligand2tcp_id: Int, ligand_id: Int, tcp_id: Int, comment: String) from db;
+
+var ligand2tcp_refs =
+  table "ligand2tcp_refs" with (ligand2tcp_id: Int, reference_id: Int) from db;
+
 var ligand_cluster = table "ligand_cluster" with (ligand_id: Int, cluster: String, distance: Float, cluster_centre: Int) from db;
 
 var ligand_cluster_new = table "ligand_cluster_new" with (ligand_id: Int, cluster: String, distance: Float, cluster_centre: Int) from db;
@@ -359,6 +365,10 @@ var substrate_refs = table "substrate_refs" with (substrate_id: Int, reference_i
 var synonym = table "synonym" with (synonym_id: Int, object_id: Int, synonym: String, display: Bool, from_grac: Bool, display_order: Int) from db;
 
 var synonym_refs = table "synonym_refs" with (synonym_id: Int, reference_id: Int) from db;
+
+var target_candidate_profile =
+  table "target_candidate_profile" with
+  (tcp_id: Int, profile: String, intended_use: String, target_stage: String) from db;
 
 var target_gene = table "target_gene" with (target_gene_id: Int, object_id: Int, species_id: Int, description: String, official_gene_id: String, effect: String, technique: String, comments: String) from db;
 

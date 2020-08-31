@@ -156,6 +156,15 @@ typename ImmunoDiseaseInfo = (
   immunoDiseaseReferences: [ReferenceID]
 );
 
+typename MalariaTargetProfile = (
+  tcpID: Int,
+  tcpProfile: Markup,
+  tcpIntendedUse: Markup,
+  tcpTargetStage: Markup,
+  tcpComment: Markup,
+  tcpReferences: [ReferenceID]
+);
+
 typename LigandInfo = (
   ligandID: Int,
   ligandType: String,
@@ -185,7 +194,8 @@ typename LigandInfo = (
   ligandActiveForms: [(id: Int, name: String)],
   ligandEndogenousTargets: [(id: Int, name: String)],
   ligandLigandRefs: [(Int, LigandName)],
-  ligandClusters: LigandClusters
+  ligandClusters: LigandClusters,
+  ligandTCPs: [MalariaTargetProfile]
 );
 
 typename Model = Maybe((
@@ -376,19 +386,29 @@ fun getInitialModel() {
           var sameName =
             map(fun(x) { (id = x.id, name = x.name, targets = []) },
                 rawInfo.related_ligands);
+
           # For each precursor, get all ligand IDs s.t. the ligand ID is different, and the gene name is the same as that contained in the peptide
 
           # In other words, collect all the gene names and we can go from there
           var geneNames =
-            map(fun(p) { p.precursor.gene_name }, rawInfo.precursors);
+            listConcatMap(fun(p) {
+                var gene = p.precursor.gene_name;
+                if (gene <> "") {
+                  [gene]
+                } else {
+                  []
+                }
+              }, rawInfo.precursors);
           var pred = contains(geneNames);
           var geneSimilar =
             query nested {
               for (p2p <-- Tables.precursor2peptide)
                 where (p2p.ligand_id <> ligandId)
                 for (p <-- Tables.precursor)
-                  where (pred(p.gene_name))
-                    [ (id = p2p.ligand_id, name = rawInfo.ligand.name, targets = []) ]
+                  where (p2p.precursor_id == p.precursor_id && p.gene_name <> "" && pred(p.gene_name))
+                  for (l <-- Tables.ligand)
+                    where (l.ligand_id == p2p.ligand_id)
+                    [ (id = p2p.ligand_id, name = l.name, targets = []) ]
             };
 
           uniquify(sameName ++ geneSimilar)
@@ -512,6 +532,37 @@ fun getInitialModel() {
 
       var interactionRefs = concatMap(fun(x) { x.interaction.references }, interactions);
 
+      # typename MalariaTargetProfile = (
+      #   tcpID: Int,
+      #   tcpProfile: Markup,
+      #   tcpIntendedUse: Markup,
+      #   tcpTargetStage: Markup,
+      #   tcpComment: Markup,
+      #   tcpReferences: [ReferenceID]
+      # )
+      sig transformTCPs : (%) ~%~> ([MalariaTargetProfile], [Int], [Int])
+      fun transformTCPs(tcps) {
+        fold_right(fun(x, (tcps, tcpRefs, tcpLigands)) {
+            var tcpProfile = parseOrError(x.tcp.profile);
+            var tcpIntendedUse = parseOrError(x.tcp.intended_use);
+            var tcpTargetStage = parseOrError(x.tcp.target_stage);
+            var tcpComment = parseOrError(x.l2tcp.comment);
+            var tcpReferences = x.refs;
+            var (refs, ligs) = RenderMarkup.collectAllIds([
+                tcpProfile, tcpIntendedUse, tcpTargetStage, tcpComment
+            ]);
+            var tcp = (tcpID = x.tcp.tcp_id,
+             =tcpProfile,
+             =tcpIntendedUse,
+             =tcpTargetStage,
+             =tcpComment,
+             =tcpReferences);
+            (tcp :: tcps, tcpRefs ++ refs ++ tcpReferences, tcpLigands ++ ligs)
+        }, ([], [], []), tcps)
+      }
+
+      var (tcps, tcpRefs, tcpLigands) = transformTCPs(rawInfo.target_profiles);
+
       # Finally, resolve ligand and comment references
       var rawRefs =
         uniquify(
@@ -519,10 +570,11 @@ fun getInitialModel() {
             peptideRefs ++
             interactionRefs ++
             immunoDiseaseRefs ++
+            tcpRefs ++
             cofactorRefs);
 
       var rawLigands =
-        uniquify(commentLigands ++ peptideLigands ++ immunoDiseaseLigands);
+        uniquify(commentLigands ++ peptideLigands ++ immunoDiseaseLigands ++ tcpLigands);
 
       var refs = mkReferenceData(queryReferences(rawRefs));
       var ligandRefs = queryLigands(rawLigands);
@@ -557,7 +609,8 @@ fun getInitialModel() {
        ligandProdrugs = rawInfo.prodrugs,
        ligandActiveForms = rawInfo.activeForms,
        ligandLigandRefs = ligandRefs,
-       ligandClusters = clusteredLigands)
+       ligandClusters = clusteredLigands,
+       ligandTCPs = tcps)
     }
 
     var results =
@@ -696,7 +749,17 @@ fun getInitialModel() {
                   refs =
                     for (sref <-- Tables.ligand2synonym_refs)
                       where (sref.ligand2synonym_id == l2s.ligand2synonym_id)
-                      [sref.reference_id])]
+                      [sref.reference_id])],
+            target_profiles =
+              for (l2tcp <-- Tables.ligand2tcp)
+                where (l2tcp.ligand_id == ligandId)
+                for (tcp <-- Tables.target_candidate_profile)
+                  where (l2tcp.tcp_id == tcp.tcp_id)
+                  [(=l2tcp, =tcp,
+                    refs =
+                      for (r <-- Tables.ligand2tcp_refs)
+                      where (r.ligand2tcp_id == l2tcp.ligand2tcp_id)
+                      [r.reference_id])]
           )]
       };
 
@@ -1521,6 +1584,44 @@ fun view(model) {
                 targetLinks)
             };
 
+          tr(class("info"), 
+            td(a0,
+              a(href("/ligandDisplay?ligandId=" ^^ intToString(x.id)), unescapedTextNode(x.name))) +*
+            td(style("font-size:85%"), targets))
+        }
+
+        var renderedRows = MvuHTML.concatMap(renderRow, ligands);
+
+        table_(class("receptor_data_tables") +@ style("width:100%"),
+            tbody(a0,
+              tr(a0,
+                td(class("category") +@
+                  style("text-align:left;border-style:solid none solid solid;") +@
+                  colSpan(2),
+                  textNode(header))) +*
+              renderedRows))
+      }
+    }
+
+    fun similarLigandsClusteredTable(header, ligands) {
+      if (listEmpty(ligands)) {
+        MvuHTML.empty
+      } else {
+        fun renderRow(x) {
+          var targetLinks =
+            MvuHTML.concat(join([textNode("; ")], map(fun(y) {
+                    [a(href("/ligandDisplay?ligandId=" ^^ intToString(y.id)), unescapedTextNode(y.name))]
+                  }, uniquify(x.targets))));
+
+          var targets =
+            if (listEmpty(x.targets)) {
+              MvuHTML.empty
+            } else {
+              span(class("embedded_link") +@ style("font-size: 85%;"),
+                h6(class("target_summary_header"), textNode("Targets")) +*
+                targetLinks)
+            };
+
           tr(class("info"),
             td(class("embedded_link") +@
                 style("text-align:left; vertical-align: top; border-style:solid none solid solid;"),
@@ -1554,7 +1655,7 @@ fun view(model) {
         similarLigandsTable("Related Sequences", lcs.peptide_related_ligands) +*
         similarLigandsTable("Other Similar Sequences",
             lcs.peptide_ligand_sequence_clusters) +*
-        similarLigandsTable("Structurally Similar Ligands",
+        similarLigandsClusteredTable("Structurally Similar Ligands",
             uniquify(lcs.clusters ++ lcs.peptide_ligand_clusters))
       } else {
         similarLigandsGrid("Similar Ligands", ligandInfo.ligandClusters.clusters)
