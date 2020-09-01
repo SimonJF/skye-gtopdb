@@ -6,7 +6,7 @@ open import Tables;
 open import Object;
 
 typename InteractionTargetType = [|
-  TargetLigand | Object:ObjectType
+  TargetLigand | WholeOrganismAssay | Object:ObjectType
 |];
 
 typename Target = [| TTargetLigand:RawLigand | TObject:RawObject | TNone |];
@@ -14,6 +14,7 @@ typename Target = [| TTargetLigand:RawLigand | TObject:RawObject | TNone |];
 fun showInteractionTargetType(it) {
   switch(it) {
     case TargetLigand -> "Target Ligand"
+    case WholeOrganismAssay -> "Whole Organism Assay"
     case Object(ot) -> showObjectType(ot)
   }
 }

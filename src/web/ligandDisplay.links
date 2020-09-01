@@ -103,6 +103,7 @@ typename BioactivityTables = (
   enzymeSubstrates: SortableTable(EnzymeSubstrate, Message),
   cofactorEnzymes: SortableTable(CofactorEnzyme, Message),
   transporterSubstrates: SortableTable(TransporterSubstrate, Message),
+  wholeOrganismAssays: SortableTable(InteractionInfo, Message),
   # Sorted interactions with different targets
   gpcrInteractions: SortableTable(InteractionInfo, Message),
   icInteractions: SortableTable(InteractionInfo, Message),
@@ -364,13 +365,16 @@ fun getInitialModel() {
 
       fun transformClusters() {
         # Since we don't have subqueries, we need to do things in two steps
-        fun getClusteredLigands(cluster_tbl, clusters) {
-          var pred = contains(clusters);
+        fun getClusteredLigands(cluster_tbl, clusters, current_ids) {
+          var clusterPred = contains(clusters);
+          var idsPred = contains(current_ids);
           query nested {
             for (c <-- cluster_tbl)
-              where (pred(c.cluster))
+              where (clusterPred(c.cluster))
               for (l <-- Tables.ligand)
-                where (l.ligand_id == c.ligand_id && l.ligand_id <> ligandId)
+                where (l.ligand_id == c.ligand_id &&
+                       l.ligand_id <> ligandId &&
+                       not(idsPred(l.ligand_id)))
                 [(id = l.ligand_id, name = l.name,
                   targets =
                     for (i <-- Tables.interaction)
@@ -383,13 +387,13 @@ fun getInitialModel() {
         }
 
         var peptideRelated = {
-          var sameName =
-            map(fun(x) { (id = x.id, name = x.name, targets = []) },
-                rawInfo.related_ligands);
+          var sameName = rawInfo.related_ligands;
 
           # For each precursor, get all ligand IDs s.t. the ligand ID is different, and the gene name is the same as that contained in the peptide
 
           # In other words, collect all the gene names and we can go from there
+          # This isn't quite right, since equality is too strong: we require
+          # case-sensitive equality (i.e., ilike). It's a reasonable approximation though.
           var geneNames =
             listConcatMap(fun(p) {
                 var gene = p.precursor.gene_name;
@@ -400,6 +404,7 @@ fun getInitialModel() {
                 }
               }, rawInfo.precursors);
           var pred = contains(geneNames);
+          var idsPred = contains(map(fun(x) { x.id }, sameName));
           var geneSimilar =
             query nested {
               for (p2p <-- Tables.precursor2peptide)
@@ -407,22 +412,50 @@ fun getInitialModel() {
                 for (p <-- Tables.precursor)
                   where (p2p.precursor_id == p.precursor_id && p.gene_name <> "" && pred(p.gene_name))
                   for (l <-- Tables.ligand)
-                    where (l.ligand_id == p2p.ligand_id)
-                    [ (id = p2p.ligand_id, name = l.name, targets = []) ]
+                    where (l.ligand_id == p2p.ligand_id && not(idsPred(l.ligand_id)))
+                    [ (id = p2p.ligand_id, name = l.name,
+                        targets =
+                          for (i <-- Tables.interaction)
+                          where (i.ligand_id == l.ligand_id)
+                            for (o <-- Tables.object)
+                            where (o.object_id == i.object_id)
+                              [(id = o.object_id, name = o.name)])  ]
             };
 
-          uniquify(sameName ++ geneSimilar)
+          sameName ++ geneSimilar
         };
 
-        (clusters = getClusteredLigands(Tables.ligand_cluster_new, rawInfo.clusters),
-         analogue_clusters =
-           getClusteredLigands(Tables.analogue_cluster, rawInfo.analogue_clusters),
-         peptide_ligand_clusters =
-           getClusteredLigands(Tables.peptide_ligand_cluster,
-             rawInfo.peptide_ligand_clusters),
-         peptide_ligand_sequence_clusters =
-           getClusteredLigands(Tables.peptide_ligand_sequence_cluster,
-             rawInfo.peptide_ligand_sequence_clusters),
+        # Analogue clusters are handled separately.
+        var analogue_clusters =
+          getClusteredLigands(Tables.analogue_cluster, rawInfo.analogue_clusters, []);
+
+        var related_ids = map(fun(x) { x.id }, peptideRelated);
+
+        # Three categories: Related sequences, Other similar sequences, structurally similar.
+        # Related: related
+        # Other similar: peptide ligand sequence clusters
+        # Structurally similar: clusters ++ peptide ligand clusters.
+
+        # First: getRelatedLigands() -- which we've done already. No impact on others.
+        # Second: getSeqClusterForPeptideLigand() -- peptide_ligand_sequence_cluster.
+        # Do not add if in related ligands.
+        var peptide_ligand_sequence_clusters =
+          getClusteredLigands(Tables.peptide_ligand_sequence_cluster,
+              rawInfo.peptide_ligand_sequence_clusters, related_ids);
+
+        # Third: getClusterForPeptideLigand. peptide_ligand_cluster.
+        # Also add anything that's in getClusterForNonPeptideLigand.
+        var peptide_ligand_clusters =
+          getClusteredLigands(Tables.peptide_ligand_cluster,
+              rawInfo.peptide_ligand_clusters, []);
+
+        var clusters =
+          getClusteredLigands(Tables.ligand_cluster_new, rawInfo.clusters, []);
+
+        (=clusters,
+         =analogue_clusters,
+         =peptide_ligand_clusters,
+         =peptide_ligand_sequence_clusters,
          peptide_related_ligands = peptideRelated )
       }
 
@@ -465,14 +498,11 @@ fun getInitialModel() {
             transformedCofactors, fun(col, dir) { SortCofactorTable(col, dir) })
         };
 
-        var grouped = groupBy(fun(i) { i.interaction.interactionTargetType }, interactions);
-        fun makeTable(type) {
-          var data =
-            switch(lookup(type, grouped)) {
-              case Just(xs) -> xs
-              case Nothing -> []
-            };
+        # Whole organism assays get a separate table.
+        var (wholeOrganismAssays, interactions) =
+          partition(fun(i) { i.interaction.wholeOrganismAssay }, interactions);
 
+        fun makeTable(type, data) {
           DataTable.makeTable(
             [("Target", ("receptor_header", Sortable(fun(x, y) {
                   simpleCmp(getTargetName(x.interaction.interactionTarget),
@@ -503,21 +533,34 @@ fun getInitialModel() {
                 })))], data, fun(col, dir) { SortInteractionTable(type, col, dir) })
         }
 
-        (enzymeSubstrates = emptyTable(),
+        var grouped = groupBy(fun(i) { i.interaction.interactionTargetType }, interactions);
+
+        fun makeTableFromType(type) {
+          var data =
+            switch(lookup(type, grouped)) {
+              case Just(xs) -> xs
+              case Nothing -> []
+            };
+          makeTable(type, data)
+        }
+
+        (enzymeSubstrates = emptyTable(), # TODO
          cofactorEnzymes = cofactorTable,
-         transporterSubstrates = emptyTable(),
-         gpcrInteractions = makeTable(Object(GPCR)),
-         icInteractions = makeTable(Object(IC)),
-         nhrInteractions = makeTable(Object(NHR)),
-         enzymeInteractions = makeTable(Object(Enzyme)),
-         catalyticReceptorInteractions = makeTable(Object(CatalyticReceptor)),
-         transporterInteractions = makeTable(Object(Transporter)),
-         targetLigandInteractions = makeTable(TargetLigand),
-         otherInteractions = makeTable(Object(Other)))
+         transporterSubstrates = emptyTable(), # TODO
+         wholeOrganismAssays = makeTable(WholeOrganismAssay, wholeOrganismAssays),
+         gpcrInteractions = makeTableFromType(Object(GPCR)),
+         icInteractions = makeTableFromType(Object(IC)),
+         nhrInteractions = makeTableFromType(Object(NHR)),
+         enzymeInteractions = makeTableFromType(Object(Enzyme)),
+         catalyticReceptorInteractions = makeTableFromType(Object(CatalyticReceptor)),
+         transporterInteractions = makeTableFromType(Object(Transporter)),
+         targetLigandInteractions = makeTableFromType(TargetLigand),
+         otherInteractions = makeTableFromType(Object(Other))
+        )
       };
 
       var precursors = transformPrecursors(rawInfo.precursors);
-      var precursorTable = makeTable(
+      var precursorTable = DataTable.makeTable(
           [
            ("Gene Symbol", ("", Sortable(fun(x, y) {
                 simpleCmp(x.precursorGeneName, y.precursorGeneName) }))),
@@ -584,7 +627,6 @@ fun getInitialModel() {
        ligandName = parseOrError(rawInfo.ligand.name),
        ligandPeptideInfo = peptideInfo,
        ligandPrecursorTable = precursorTable,
-       #ligandInteractions = interactions,
        ligandBioactivityTables = bioactivityTables,
        ligandFamilies = transformFamilies(rawInfo.families),
        ligandPhysicalProperties =
@@ -741,7 +783,13 @@ fun getInitialModel() {
             related_ligands =
               for (l2 <-- Tables.ligand)
                 where (l2.name == l.name && l2.ligand_id <> ligandId)
-                  [(id = l2.ligand_id, name = l2.name)],
+                  [(id = l2.ligand_id, name = l2.name,
+                    targets =
+                      for (i <-- Tables.interaction)
+                      where (i.ligand_id == l2.ligand_id)
+                        for (o <-- Tables.object)
+                        where (o.object_id == i.object_id)
+                        [ (id = o.object_id, name = o.name) ])],
             synonyms =
               for (l2s <-- Tables.ligand2synonym)
                 where (l2s.ligand_id == ligandId)
@@ -821,6 +869,9 @@ fun updt(msg, model) {
             case TargetLigand ->
               (tables with targetLigandInteractions =
                 updateSortStatus(tables.targetLigandInteractions, colName, dir))
+            case WholeOrganismAssay ->
+              (tables with wholeOrganismAssays =
+                updateSortStatus(tables.wholeOrganismAssays, colName, dir))
           };
         (model with modelLigand =
           (model.modelLigand with ligandBioactivityTables = newTables))
@@ -1154,7 +1205,7 @@ fun view(model) {
           table_(class("receptor_data_tables") +@ style("width:100%"),
             thead(a0,
               tr(name("hotspot") +@ class("hotspot"),
-                td(class("category") +@ colSpan(2), textNode("Natural / Endogenous Targets")))) +*
+                td(class("category") +@ colSpan(2), textNode("Natural/Endogenous Targets")))) +*
             tbody(name("toggle"),
               tr(a0,
                 td(class("table_container"),
@@ -1168,8 +1219,34 @@ fun view(model) {
       };
 
       var enzymeSubstrates = {
-        MvuHTML.empty
+        var tbl = ligandInfo.ligandBioactivityTables.enzymeSubstrates;
+        if (listEmpty(getTableData(tbl))) {
+          MvuHTML.empty
+        } else {
+
+          fun renderRow(e) {
+            tr(class("info"),
+              td(a0,
+                a(href("/objectDisplay?objectId=" ^^ intToString(e.enzymeID)),
+                  unescapedTextNode(e.enzyme))) +*
+              td(a0, unescapedTextNode(e.ecNumber)) +*
+              td(a0, unescapedTextNode(e.reaction)) +*
+              td(a0,
+                renderCitationList(e.references, ligandInfo.ligandReferences)))
+          }
+
+          table_(class("receptor_data_tables") +@ style("width:100"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("category") +@ colSpan(2),
+                  textNode("Enzymes Catalysing Reactions with this Compound as a Substrate or Product")))) +*
+            tbody(name("toggle"),
+              tr(a0,
+                td(class("table_container"),
+                  renderTable(tbl, renderRow)))))
+        }
       };
+
       var cofactorEnzymes = {
         var tbl = ligandInfo.ligandBioactivityTables.cofactorEnzymes;
         if (listEmpty(getTableData(tbl))) {
@@ -1262,7 +1339,8 @@ fun view(model) {
         renderIfNonempty("Selectivity at catalytic receptors", tables.catalyticReceptorInteractions) +*
         renderIfNonempty("Selectivity at transporters", tables.transporterInteractions) +*
         renderIfNonempty("Selectivity at ligand targets", tables.targetLigandInteractions) +*
-        renderIfNonempty("Selectivity at other protein targets", tables.otherInteractions)
+        renderIfNonempty("Selectivity at other protein targets", tables.otherInteractions) +*
+        renderIfNonempty("Whole organism assay data", tables.wholeOrganismAssays)
       };
 
       var rankPotencies = {
@@ -1346,7 +1424,7 @@ fun view(model) {
       };
 
       commentBox("Summary of Clinical Use", comments.clinicalUseComments) +*
-      commentBox("Mechanism of Action and Pharmacodynamic Effects", comments.mechanismOfActionComments) +*
+      commentBox("Mechanism Of Action and Pharmacodynamic Effects", comments.mechanismOfActionComments) +*
       commentsTable +*
       externalURLs
     };
