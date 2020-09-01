@@ -112,6 +112,7 @@ typename BioactivityTables = (
   catalyticReceptorInteractions: SortableTable(InteractionInfo, Message),
   transporterInteractions: SortableTable(InteractionInfo, Message),
   targetLigandInteractions: SortableTable(InteractionInfo, Message),
+  interactionsTargeting: SortableTable(InteractionInfo, Message),
   otherInteractions: SortableTable(InteractionInfo, Message)
 );
 
@@ -475,8 +476,13 @@ fun getInitialModel() {
       # Transform raw interactions into more structured form
       var interactions : [Interaction] =
         map(makeInteraction, rawInfo.interactions);
+      # Targeting interactions, too.
+      var interactionsTargeting =
+        map(makeInteraction, rawInfo.interactions_targeting);
+
+
       # Augment with the data we need to parse
-      var interactions : [InteractionInfo] =
+      fun augmentInteractions(is) {
         map(fun(i) {
             (interaction = i,
              renderedName = parseOrError(getTargetName(i.interactionTarget)),
@@ -484,7 +490,12 @@ fun getInitialModel() {
              renderedAssayDescription = parseOrError(i.assayDescription),
              speciesShort = speciesShortName(i.speciesID))
           },
-          interactions);
+          is)
+      }
+
+      var interactions : [InteractionInfo] = augmentInteractions(interactions);
+      var interactionsTargeting : [InteractionInfo] =
+        augmentInteractions(interactionsTargeting);
 
       var bioactivityTables = {
         fun emptyTable() {
@@ -555,6 +566,7 @@ fun getInitialModel() {
          catalyticReceptorInteractions = makeTableFromType(Object(CatalyticReceptor)),
          transporterInteractions = makeTableFromType(Object(Transporter)),
          targetLigandInteractions = makeTableFromType(TargetLigand),
+         interactionsTargeting = makeTable(TargetingLigand, interactionsTargeting),
          otherInteractions = makeTableFromType(Object(Other))
         )
       };
@@ -573,7 +585,8 @@ fun getInitialModel() {
            ("Synonyms", ("header", Sortable(fun(x, y) { 0 })))
           ], precursors, fun(name, dir) { SortPrecursorTable(name, dir) });
 
-      var interactionRefs = concatMap(fun(x) { x.interaction.references }, interactions);
+      var interactionRefs = concatMap(fun(x) { x.interaction.references },
+          interactions ++ interactionsTargeting);
 
       # typename MalariaTargetProfile = (
       #   tcpID: Int,
@@ -807,7 +820,9 @@ fun getInitialModel() {
                     refs =
                       for (r <-- Tables.ligand2tcp_refs)
                       where (r.ligand2tcp_id == l2tcp.ligand2tcp_id)
-                      [r.reference_id])]
+                      [r.reference_id])],
+            interactions_targeting =
+              InteractionUtilities.interactionsTargeting(ligandId)
           )]
       };
 
@@ -869,6 +884,9 @@ fun updt(msg, model) {
             case TargetLigand ->
               (tables with targetLigandInteractions =
                 updateSortStatus(tables.targetLigandInteractions, colName, dir))
+            case TargetingLigand ->
+              (tables with interactionsTargeting =
+                updateSortStatus(tables.interactionsTargeting, colName, dir))
             case WholeOrganismAssay ->
               (tables with wholeOrganismAssays =
                 updateSortStatus(tables.wholeOrganismAssays, colName, dir))
@@ -1340,7 +1358,9 @@ fun view(model) {
         renderIfNonempty("Selectivity at transporters", tables.transporterInteractions) +*
         renderIfNonempty("Selectivity at ligand targets", tables.targetLigandInteractions) +*
         renderIfNonempty("Selectivity at other protein targets", tables.otherInteractions) +*
-        renderIfNonempty("Whole organism assay data", tables.wholeOrganismAssays)
+        renderIfNonempty("Whole organism assay data", tables.wholeOrganismAssays) +*
+        renderIfNonempty("Other ligands which bind to or alter the activity of this ligand", tables.interactionsTargeting)
+
       };
 
       var rankPotencies = {

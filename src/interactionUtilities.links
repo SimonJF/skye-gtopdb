@@ -6,7 +6,7 @@ open import Tables;
 open import Object;
 
 typename InteractionTargetType = [|
-  TargetLigand | WholeOrganismAssay | Object:ObjectType
+  TargetLigand | TargetingLigand | WholeOrganismAssay | Object:ObjectType
 |];
 
 typename Target = [| TTargetLigand:RawLigand | TObject:RawObject | TNone |];
@@ -14,6 +14,7 @@ typename Target = [| TTargetLigand:RawLigand | TObject:RawObject | TNone |];
 fun showInteractionTargetType(it) {
   switch(it) {
     case TargetLigand -> "Target Ligand"
+    case TargetingLigand -> "Targeting Ligand"
     case WholeOrganismAssay -> "Whole Organism Assay"
     case Object(ot) -> showObjectType(ot)
   }
@@ -298,6 +299,10 @@ fun interactionsForLigand(ligandId) {
 
 fun interactionsForObject(objectId) {
   queryInteractions(fun(i) { i.object_id == objectId })
+}
+
+fun interactionsTargeting(ligandId) {
+  queryInteractions(fun(i) { i.target_ligand_id == ligandId } )
 }
 
 fun getTargetName(target) {
