@@ -169,6 +169,7 @@ typename MalariaTargetProfile = (
 
 typename LigandInfo = (
   ligandID: Int,
+  rawLigand: Tables.RawLigand, # TODO: A lot of the properties below are duplicated -- just use this instead.
   ligandType: String,
   ligandPeptideInfo: Maybe(PeptideInfo),
   ligandPrecursorTable: SortableTable(PrecursorInfo, Message),
@@ -633,9 +634,11 @@ fun getInitialModel() {
         uniquify(commentLigands ++ peptideLigands ++ immunoDiseaseLigands ++ tcpLigands);
 
       var refs = mkReferenceData(queryReferences(rawRefs));
+      # iter(fun((_, (_, x))) { print("PMID: " ^^ intToString(x.pubmedId)) }, refs);
       var ligandRefs = queryLigands(rawLigands);
 
       (ligandID = ligandId,
+       rawLigand = rawInfo.ligand,
        ligandType = rawInfo.ligand.type,
        ligandName = parseOrError(rawInfo.ligand.name),
        ligandPeptideInfo = peptideInfo,
@@ -1200,12 +1203,12 @@ fun view(model) {
       # TO DO:
       # 1. ~~~Bioactivity comments~~~ DONE!
       # 2. ~~~Endogenous targets~~~ DONE!
-      # 3. Enzyme substrates
+      # 3. ~~~Enzyme substrates~~~ DONE!
       # 4. ~~~Cofactor enzymes~~~ DONE!
       # 5. Transporters
       # 6. ~~~Interactions~~~ DONE!
       # 7. Rank potencies
-      # 8. Targeting ligands
+      # 8. ~~~Targeting ligands~~~ DONE!
 
       var endogenousTargetsBox = {
         if (listEmpty(ligandInfo.ligandEndogenousTargets)) {
@@ -1366,19 +1369,13 @@ fun view(model) {
       var rankPotencies = {
         MvuHTML.empty
       };
-
-      var targetingLigands = {
-        MvuHTML.empty
-      };
-
       commentBox("Bioactivity Comments", ligandInfo.ligandComments.bioactivityComments) +*
       endogenousTargetsBox +*
       enzymeSubstrates +*
       cofactorEnzymes +*
       transporters +*
       interactions +*
-      rankPotencies +*
-      targetingLigands
+      rankPotencies
     };
 
     var clinicalDataPage = {
@@ -1469,13 +1466,15 @@ fun view(model) {
           ^^ intToString(ref.pubmedId) ^^ "', 800, 500)";
 
         var pubMedNode =
-          if (ref.pubMedId == (-1)) {
+        {
+          if (ref.pubmedId == (-1)) {
             MvuHTML.empty
           } else {
             textNode("[PMID:") +*
             a(href(pubMedHref), textNode(intToString(ref.pubmedId))) +*
             textNode("]")
-          };
+          }
+        };
 
         tr(class("info"),
           td(a0,
@@ -1528,7 +1527,7 @@ fun view(model) {
       }
       var subunitsBox = renderSubunitBox("Subunits", ligandInfo.ligandSubunits);
       var heteromersBox =
-        renderSubunitBox("Heteromers", ligandInfo.ligandHeteromers);
+        renderSubunitBox("Is a component of", ligandInfo.ligandHeteromers);
 
       var structureBox = {
         switch (ligandInfo.ligandStructure) {
@@ -1914,7 +1913,32 @@ fun view(model) {
             urls.drugsURL == "" && urls.emaURL == "" && urls.emcURL == "")
       };
       var showReferences = not(listEmpty(ligandInfo.ligandReferences));
-      var showStructure = true;
+      var showStructure = {
+
+        var subunitsEmpty = listEmpty(ligandInfo.ligandSubunits);
+        var heteromersEmpty = listEmpty(ligandInfo.ligandHeteromers);
+        var structureEmpty = not(isJust(ligandInfo.ligandStructure));
+        var peptideStructureEmpty = {
+          switch (ligandInfo.ligandPeptideInfo) {
+            case Just(pi) -> pi.peptideOneLetterSeq == "" && pi.peptideThreeLetterSeq == ""
+            case Nothing -> true
+          }
+        };
+        var peptideStructureCommentsEmpty = {
+          switch (ligandInfo.ligandPeptideInfo) {
+            case Just(pi) ->
+              markupEmpty(pi.peptidePostTranslationalModifications) &&
+              markupEmpty(pi.peptideChemicalModifications)
+            case Nothing -> true
+          }
+        };
+
+        not(subunitsEmpty &&
+          heteromersEmpty &&
+          structureEmpty &&
+          peptideStructureEmpty &&
+          peptideStructureCommentsEmpty)
+      };
       var ls = ligandInfo.ligandClusters;
       var showSimilarLigands =
         not(listEmpty(ls.clusters) &&
