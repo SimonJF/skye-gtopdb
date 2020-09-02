@@ -42,7 +42,31 @@ fun transformDatabaseLinks(dbls) {
   }, groupedDBLs)
 }
 
-fun renderDatabaseLinks(dbLinks, reactionECs, speciesMap) {
+
+fun renderReactionECs(reactionECs) {
+  # Need to special-case enzymes, since we generate multiple links for each
+  # enzyme DB
+  fun renderURL(url) {
+    open MvuHTML;
+    open MvuAttrs;
+    
+    MvuHTML.concat(join([textNode(", ")],
+        map(fun(x) {
+          [a(href(url ^^ x), textNode(x))]
+        }, reactionECs)))
+  }
+
+  if (reactionECs == []) {
+    []
+  } else {
+      [
+        ("BRENDA", renderURL("http://www.brenda-enzymes.org/php/result_flat.php4?ecno=")),
+        ("KEGG Enzyme", renderURL("http://www.genome.jp/dbget-bin/www_bget?ec:"))
+      ]
+  }
+}
+
+fun renderDatabaseLinks(dbLinks, additionalRows, speciesMap) {
   open MvuHTML;
   open MvuAttrs;
 
@@ -66,6 +90,13 @@ fun renderDatabaseLinks(dbLinks, reactionECs, speciesMap) {
       td(class("info"), renderedLinks))
   }
 
+  fun renderAdditionalRow((name, data)) { 
+      tr(a0,
+        td(class("info") +@ style("min-width:250px;max-width:250px;width:250px;"),
+          textNode(name)) +*
+        td(class("info"), data))
+  }
+  var renderedAdditionalRows = MvuHTML.concatMap(renderAdditionalRow, additionalRows);
   var (specialist, others) =
     partition(fun(dbl) { dbl.dbSpecialist }, dbLinks);
   var specialist = sortBy(fun(db) { db.dbName }, specialist);
@@ -87,30 +118,7 @@ fun renderDatabaseLinks(dbLinks, reactionECs, speciesMap) {
       MvuHTML.concatMap(renderDBLink, others)
     };
 
-  # Need to special-case enzymes, since we generate multiple links for each
-  # enzyme DB
-  var renderedEnzymeDBs = {
-    fun render(name, url) {
-      var renderedECs =
-        MvuHTML.concat(join([textNode(", ")],
-            map(fun(x) {
-              [a(href(url ^^ x), textNode(x))]
-            }, reactionECs)));
-        tr(a0,
-          td(class("info") +@ style("min-width:250px;max-width:250px;width:250px;"),
-            textNode(name)) +*
-          td(class("info"), renderedECs))
-    }
-
-    if (reactionECs == []) {
-      MvuHTML.empty
-    } else {
-      render("BRENDA", "http://www.brenda-enzymes.org/php/result_flat.php4?ecno=") +*
-      render("KEGG Enzyme", "http://www.genome.jp/dbget-bin/www_bget?ec:")
-    }
-  };
-
-  if (listEmpty(dbLinks) && listEmpty(reactionECs)) {
+  if (listEmpty(dbLinks) && listEmpty(additionalRows)) {
     MvuHTML.empty
   } else {
     a(name("DatabaseLinks"), h0) +*
@@ -119,6 +127,6 @@ fun renderDatabaseLinks(dbLinks, reactionECs, speciesMap) {
         td(class("info category") +@ colSpan(2), textNode("Database Links"))) +*
       renderedSpecialists +*
       renderedOthers +*
-      renderedEnzymeDBs)
+      renderedAdditionalRows)
   }
 }

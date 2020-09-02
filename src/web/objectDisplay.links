@@ -3030,8 +3030,10 @@ fun view(model) {
 
     var dbLinksBox = {
       var ecs = map(fun(x) { x.ecNumber }, objectInfo.objectEnzymeReactions);
-      renderDatabaseLinks(objectInfo.objectDatabaseLinks,
-          ecs, objectInfo.objectSpeciesMap)
+      renderDatabaseLinks(
+          objectInfo.objectDatabaseLinks,
+          renderReactionECs(ecs),
+          objectInfo.objectSpeciesMap)
     };
 
     var endogenousLigandsBox = {
