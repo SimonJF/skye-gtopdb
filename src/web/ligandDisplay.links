@@ -637,6 +637,46 @@ fun getInitialModel() {
       # iter(fun((_, (_, x))) { print("PMID: " ^^ intToString(x.pubmedId)) }, refs);
       var ligandRefs = queryLigands(rawLigands);
 
+      var dbLinks = {
+        # These are relevant DB IDs. These are explicitly stated in the GtoPdb
+        # code -- so we have to do the same here.
+        var dbLinks = transformDatabaseLinks(rawInfo.databaseLinks);
+        var relevant =
+          [1, 3, 5, 8, 10, 11, 12, 15, 16, 17, 20, 21, 24,
+           25, 29, 31, 33, 39, 18, 63, 55, 58, 59, 40, 65];
+        var dbLinks = filter(fun(x) { listElem(x.dbID, relevant) }, dbLinks);
+        # If Links contains DB with ID 15, and does not have the Human Protein Atlas
+        # added, and the HPA link is nonempty, then add the HPA link.
+        var hpaLink = []; # TODO
+          # TODO
+
+        # if(InChIKey != null && !InChIKey.equals("")){
+        #     //  linkMap.put("Search ChemSpider using InChI key", getChemSpiderLink());
+        #       linkMap.put("Search Google for chemical match using the InChIKey", getGoogleExactLink());
+        #       linkMap.put("Search Google for chemicals with the same backbone", getGoogleLink());
+        #       linkMap.put("Search UniChem for chemical match using the InChIKey", getUniChemExactLink());
+        #       linkMap.put("Search UniChem for chemicals with the same backbone", getUniChemLink());
+        #   }
+        #   
+        #   for(INN inn : inns){
+        #       String plain_inn = inn.getInn().replaceAll("\\([\\w]+\\)", "").trim();
+        #       linkMap.put("Search PubMed clinical trials", getPubMedClinicalTrialLink(plain_inn));
+        #       linkMap.put("Search PubMed titles", getPubMedTitleLink(plain_inn));
+        #       linkMap.put("Search PubMed titles/abstracts", getPubMedTitleAbstractLink(plain_inn));
+        #   }
+        #   
+        #   if(!synpharmLinks.isEmpty()){
+        #       linkMap.put("SynPHARM", getSynPharmLink(synpharmLinks));
+        #   }
+        #   
+        #   if(pubchem_sid != 0){
+        #       linkMap.put("GtoPdb PubChem SID", getPubChemSubmittedSid());
+        #   
+        #   }
+       
+          dbLinks
+      };
+
       (ligandID = ligandId,
        rawLigand = rawInfo.ligand,
        ligandType = rawInfo.ligand.type,
@@ -1186,8 +1226,9 @@ fun view(model) {
         }
       };
 
-      var dbLinksBox =
-        renderDatabaseLinks(ligandInfo.ligandDBLinks, [], model.modelSpeciesMap);
+      var dbLinksBox = {
+        renderDatabaseLinks(ligandInfo.ligandDBLinks, [], model.modelSpeciesMap)
+      };
 
       classificationTable +*
       iupacBox +*

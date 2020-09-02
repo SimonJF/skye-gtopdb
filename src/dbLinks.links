@@ -96,7 +96,10 @@ fun renderDatabaseLinks(dbLinks, additionalRows, speciesMap) {
           textNode(name)) +*
         td(class("info"), data))
   }
-  var renderedAdditionalRows = MvuHTML.concatMap(renderAdditionalRow, additionalRows);
+
+  var renderedAdditionalRows =
+    MvuHTML.concatMap(renderAdditionalRow, additionalRows);
+
   var (specialist, others) =
     partition(fun(dbl) { dbl.dbSpecialist }, dbLinks);
   var specialist = sortBy(fun(db) { db.dbName }, specialist);
