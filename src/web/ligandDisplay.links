@@ -1481,8 +1481,33 @@ fun view(model) {
       };
 
       var rankPotencies = {
-        MvuHTML.empty
+        var rps = ligandInfo.ligandRankPotencies;
+
+        if (listEmpty(rps)) {
+          MvuHTML.empty
+        } else {
+          fun renderRow(x) {
+            # TODO: Go from here
+            MvuHTML.empty
+          }
+
+          # TODO: Fill me in
+          var headers = MvuHTML.empty;
+
+          var renderedRows =
+            MvuHTML.concatMap(renderRow, ligandInfo.ligandRankPotencies);
+
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("category") +@ colSpan(3),
+                  textNode("Additional information and targets (data relate to human unless otherwise stated)")))) +*
+            tbody(name("toggle"),
+              headers +*
+              renderedRows))
+        }
       };
+
       commentBox("Bioactivity Comments", ligandInfo.ligandComments.bioactivityComments) +*
       endogenousTargetsBox +*
       enzymeSubstrates +*
