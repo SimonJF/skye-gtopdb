@@ -167,6 +167,12 @@ typename MalariaTargetProfile = (
   tcpReferences: [ReferenceID]
 );
 
+typename RankPotency = (
+  description: Markup,
+  data: Markup,
+  references: [ReferenceID]
+);
+
 typename LigandInfo = (
   ligandID: Int,
   rawLigand: Tables.RawLigand, # TODO: A lot of the properties below are duplicated -- just use this instead.
@@ -198,6 +204,7 @@ typename LigandInfo = (
   ligandEndogenousTargets: [(id: Int, name: String)],
   ligandLigandRefs: [(Int, LigandName)],
   ligandClusters: LigandClusters,
+  ligandRankPotencies: [RankPotency],
   ligandTCPs: [MalariaTargetProfile]
 );
 
@@ -620,6 +627,22 @@ fun getInitialModel() {
 
       var (tcps, tcpRefs, tcpLigands) = transformTCPs(rawInfo.target_profiles);
 
+      fun transformRankPotencies(rps) {
+        fold_right(fun(x, (rps, rpRefs, rpLigands)) {
+            var glrp = x.glrp;
+            var references = x.refs;
+            
+            var description = parseOrError(glrp.description);
+            var data = parseOrError(glrp.rank_potency);
+            var (mRefs, mLigands) = collectAllIds([description, data]);
+            var x = (=description, =data, =references);
+            (x :: rps, references ++ mRefs ++ rpRefs, mLigands ++ rpLigands)
+        }, ([], [], []), rps)
+      }
+
+      var (rankPotencies, rpRefs, rpLigands) =
+        transformRankPotencies(rawInfo.rank_potencies);
+
       # Finally, resolve ligand and comment references
       var rawRefs =
         uniquify(
@@ -628,10 +651,15 @@ fun getInitialModel() {
             interactionRefs ++
             immunoDiseaseRefs ++
             tcpRefs ++
+            rpRefs ++
             cofactorRefs);
 
       var rawLigands =
-        uniquify(commentLigands ++ peptideLigands ++ immunoDiseaseLigands ++ tcpLigands);
+        uniquify(commentLigands ++
+            peptideLigands ++
+            immunoDiseaseLigands ++
+            rpLigands ++
+            tcpLigands);
 
       var refs = mkReferenceData(queryReferences(rawRefs));
       # iter(fun((_, (_, x))) { print("PMID: " ^^ intToString(x.pubmedId)) }, refs);
@@ -678,7 +706,8 @@ fun getInitialModel() {
        ligandActiveForms = rawInfo.activeForms,
        ligandLigandRefs = ligandRefs,
        ligandClusters = clusteredLigands,
-       ligandTCPs = tcps)
+       ligandTCPs = tcps,
+       ligandRankPotencies = rankPotencies)
     }
 
     var results =
@@ -835,7 +864,16 @@ fun getInitialModel() {
                       where (r.ligand2tcp_id == l2tcp.ligand2tcp_id)
                       [r.reference_id])],
             interactions_targeting =
-              InteractionUtilities.interactionsTargeting(ligandId)
+              InteractionUtilities.interactionsTargeting(ligandId),
+            rank_potencies =
+              for (glrp <-- Tables.grac_ligand_rank_potency)
+                where (glrp.rank_potency =~ /.*<Ligand id="{intToString(ligandId)}".*/)
+                [(=glrp,
+                  refs =
+                    for (r <-- Tables.grac_ligand_rank_potency_refs)
+                    where (r.grac_ligand_rank_potency_id ==
+                      glrp.grac_ligand_rank_potency_id)
+                      [r.reference_id])]
           )]
       };
 
