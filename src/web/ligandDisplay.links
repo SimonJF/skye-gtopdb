@@ -644,37 +644,7 @@ fun getInitialModel() {
         var relevant =
           [1, 3, 5, 8, 10, 11, 12, 15, 16, 17, 20, 21, 24,
            25, 29, 31, 33, 39, 18, 63, 55, 58, 59, 40, 65];
-        var dbLinks = filter(fun(x) { listElem(x.dbID, relevant) }, dbLinks);
-        # If Links contains DB with ID 15, and does not have the Human Protein Atlas
-        # added, and the HPA link is nonempty, then add the HPA link.
-        var hpaLink = []; # TODO
-          # TODO
-
-        # if(InChIKey != null && !InChIKey.equals("")){
-        #     //  linkMap.put("Search ChemSpider using InChI key", getChemSpiderLink());
-        #       linkMap.put("Search Google for chemical match using the InChIKey", getGoogleExactLink());
-        #       linkMap.put("Search Google for chemicals with the same backbone", getGoogleLink());
-        #       linkMap.put("Search UniChem for chemical match using the InChIKey", getUniChemExactLink());
-        #       linkMap.put("Search UniChem for chemicals with the same backbone", getUniChemLink());
-        #   }
-        #   
-        #   for(INN inn : inns){
-        #       String plain_inn = inn.getInn().replaceAll("\\([\\w]+\\)", "").trim();
-        #       linkMap.put("Search PubMed clinical trials", getPubMedClinicalTrialLink(plain_inn));
-        #       linkMap.put("Search PubMed titles", getPubMedTitleLink(plain_inn));
-        #       linkMap.put("Search PubMed titles/abstracts", getPubMedTitleAbstractLink(plain_inn));
-        #   }
-        #   
-        #   if(!synpharmLinks.isEmpty()){
-        #       linkMap.put("SynPHARM", getSynPharmLink(synpharmLinks));
-        #   }
-        #   
-        #   if(pubchem_sid != 0){
-        #       linkMap.put("GtoPdb PubChem SID", getPubChemSubmittedSid());
-        #   
-        #   }
-       
-          dbLinks
+        filter(fun(x) { listElem(x.dbID, relevant) }, dbLinks)
       };
 
       (ligandID = ligandId,
@@ -1227,7 +1197,72 @@ fun view(model) {
       };
 
       var dbLinksBox = {
-        renderDatabaseLinks(ligandInfo.ligandDBLinks, [], model.modelSpeciesMap)
+        var extraLinks = {
+          var hpaLinks = [];
+
+          var inchiLinks = {
+            switch (ligandInfo.ligandStructure) {
+              case Just(x) ->
+                if (x.inchiStandardKey <> "") {
+                  var inchi = x.inchiStandardKey;
+                  var inchiBackbone =
+                    hd(splitOnChar(x.inchiStandardKey, '-'));
+                  var inchiLinks =
+                    [
+                      ("Search Google for chemical match using the InChIKey",
+                        ("https://www.google.com/search?q=" ^^ inchi,
+                         inchi)),
+                      ("Search Google for chemicals with the same backbone",
+                        ("https://www.google.com/search?q=" ^^ inchiBackbone,
+                         inchiBackbone)),
+                      ("Search UniChem for chemical match using the InChIKey",
+                        ("https://www.ebi.ac.uk/unichem/widesearch/wideresults?queryText=" ^^
+                          inchi ^^
+                          "&kind=InChIKey&source=&nameXA=&kindXB=1&kindXC=0&DText=0&EText=0&kindXF=0&kindXG=0",
+                         inchi)),
+                      ("Search UniChem for chemicals with the same backbone",
+                        ("https://www.ebi.ac.uk/unichem/widesearch/wideresults?queryText=" ^^
+                          inchiBackbone ^^
+                          "&kind=InChIKey&source=&nameXA=&kindXB=1&kindXC=0&DText=0&EText=0&kindXF=0&kindXG=0",
+                         inchiBackbone))
+                    ];
+                  map(fun((name, (url, inchi))) { (name, a(href(url), textNode(inchi))) }, inchiLinks)
+                } else {
+                  []
+                }
+              case Nothing -> []
+            }
+          };
+
+          var innLinks : [(String, (String, String))]=
+            listConcatMap(fun(x) {
+                var inn = x.inn;
+                [
+                  ("Search PubMed clinical trials",
+                    ("http://www.ncbi.nlm.nih.gov/pubmed/?term="
+                       ^^ inn ^^
+                      "[Title]+AND+(\"clinical+trial+phase+i\"[Filter]+OR+\"clinical+trial+phase+ii\"[Filter]+OR+\"clinical+trial+phase+iii\"[Filter]+OR+\"clinical+trial+phase+iv\"[Filter])", inn)),
+                  ("Search PubMed clinical title",
+                     ("http://www.ncbi.nlm.nih.gov/pubmed/?term=" ^^ inn ^^ "[Title]&cmd=DetailsSearch", inn)),
+                  ("Search PubMed clinical titles/abstracts",
+                     ("http://www.ncbi.nlm.nih.gov/pubmed/?term=" ^^ inn ^^ "[Title%2FAbstract]&cmd=DetailsSearch", inn))
+                ]
+              }, ligandInfo.ligandINNs);
+          var innLinks : [(String, MvuHTML.HTML(%))]=
+            map(fun((name, (url, inchi))) { (name, a(href(url), textNode(inchi))) }, innLinks);
+
+
+          var pubchemLinks =
+            if (ligandInfo.rawLigand.pubchem_sid <> 0) {
+              var sid = intToString(ligandInfo.rawLigand.pubchem_sid);
+              [("GtoPdb PubChem SID", a(href("https://pubchem.ncbi.nlm.nih.gov/substance/" ^^ sid), textNode(sid)))]
+            } else {
+              []
+            };
+
+          hpaLinks ++ inchiLinks ++ innLinks ++ pubchemLinks
+        };
+        renderDatabaseLinks(ligandInfo.ligandDBLinks, extraLinks, model.modelSpeciesMap)
       };
 
       classificationTable +*
