@@ -180,6 +180,13 @@ typename MentionedIn = (
   comments: [(familyID: Int, familyName: String)]
 );
 
+typename MentionedInObject = (
+  objectID: Int,
+  objectName: String,
+  families: [(familyID: Int, familyName: String)],
+  comment: Markup
+);
+
 typename LigandInfo = (
   ligandID: Int,
   rawLigand: Tables.RawLigand, # TODO: A lot of the properties below are duplicated -- just use this instead.
@@ -213,7 +220,8 @@ typename LigandInfo = (
   ligandClusters: LigandClusters,
   ligandRankPotencies: [RankPotency],
   ligandTCPs: [MalariaTargetProfile],
-  ligandMentionedIn: MentionedIn
+  ligandMentionedIn: MentionedIn,
+  ligandMentionedInObjects: [MentionedInObject]
 );
 
 typename Model = Maybe((
@@ -649,8 +657,22 @@ fun getInitialModel() {
         }, ([], [], []), rps)
       }
 
+      fun transformMentionedInObjects(mios) {
+        fold_right(fun(x, (mios, mioRefs, mioLigands)) {
+            var o = x.o;
+            var comment = parseOrError(o.grac_comments);
+            var (refs, ligs) = collectIds(comment);
+            var mio = (objectID = o.object_id, objectName = o.name,
+                families = x.families, =comment);
+            (mio :: mios, refs ++ mioRefs, ligs ++ mioLigands)
+            }, ([], [], []), mios)
+      }
+
       var (rankPotencies, rpRefs, rpLigands) =
         transformRankPotencies(rawInfo.rank_potencies);
+
+      var (mentionedInObjs, mioRefs, mioLigands) =
+        transformMentionedInObjects(rawInfo.mentioned_in_objects);
 
       # print("Raw rank potencies: " ^^ show(rawInfo.rank_potencies));
       # print("Transformed rank potencies: " ^^ show(rankPotencies));
@@ -664,6 +686,7 @@ fun getInitialModel() {
             immunoDiseaseRefs ++
             tcpRefs ++
             rpRefs ++
+            mioRefs ++
             cofactorRefs);
 
       var rawLigands =
@@ -671,6 +694,7 @@ fun getInitialModel() {
             peptideLigands ++
             immunoDiseaseLigands ++
             rpLigands ++
+            mioLigands ++
             tcpLigands);
 
       var refs = mkReferenceData(queryReferences(rawRefs));
@@ -727,7 +751,8 @@ fun getInitialModel() {
        ligandClusters = clusteredLigands,
        ligandTCPs = tcps,
        ligandRankPotencies = rankPotencies,
-       ligandMentionedIn = transformMentionedIn(rawInfo.mentioned_in)
+       ligandMentionedIn = transformMentionedIn(rawInfo.mentioned_in),
+       ligandMentionedInObjects = mentionedInObjs 
        )
     }
 
@@ -910,7 +935,17 @@ fun getInitialModel() {
                    where (gft.comments =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
                      for (f <-- Tables.family)
                      where (f.family_id == gft.family_id)
-                     [ (familyID = f.family_id, familyName = f.name) ])]
+                     [ (familyID = f.family_id, familyName = f.name) ])],
+            mentioned_in_objects =
+              for (o <-- Tables.object)
+                where (o.grac_comments =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
+                  [(=o,
+                    families =
+                      for (r2f <-- Tables.receptor2family)
+                      where (r2f.object_id == o.object_id)
+                        for (f <-- Tables.family)
+                        where (f.family_id == r2f.family_id)
+                        [(familyID = f.family_id, familyName = f.name)])]
           )]
       };
 
