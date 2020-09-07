@@ -1614,6 +1614,51 @@ fun view(model) {
         }
       };
 
+      var objectComments = {
+        if (listEmpty(ligandInfo.ligandMentionedInObjects)) {
+          MvuHTML.empty
+        } else {
+          fun renderRow(x) {
+            var targetCol =
+              switch (x.families) {
+                case [] -> MvuHTML.empty
+                case [f] ->
+                  td(class("embedded_link"),
+                    a(href("/familyDisplay?familyId=" ^^ intToString(f.familyID)),
+                        unescapedTextNode(x.objectName)))
+                case _ ->
+                  var links =
+                    map(fun(f) {
+                          [a(href("/familyDisplay?familyId=" ^^ intToString(f.familyID)),
+                              unescapedTextNode(x.objectName)) +*
+                          small(a0,
+                            i(a0, textNode(" in ")) +*
+                            unescapedTextNode(f.familyName))]
+                        }, x.families);
+                  MvuHTML.concat(join([br(a0, h0)], links))
+              };
+            var commentCol =
+              td(class("embedded_link"), renderM(x.comment));
+
+            tr(class("info"),
+              targetCol +* commentCol)
+          }
+
+          var renderedRows =
+            MvuHTML.concatMap(renderRow, ligandInfo.ligandMentionedInObjects);
+
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            thead(a0,
+              tr(class("hotspot"),
+                td(class("category") +@ colSpan(2),
+                  textNode("Targets where the ligand is described in the comment field"))) +*
+              tr(class("heading"),
+                td(class("grac_receptor_ligand_table_header"), textNode("Target")) +*
+                td(a0, textNode("Comment")))) +*
+            tbody(name("toggle"), renderedRows))
+        }
+      };
+
       commentBox("Bioactivity Comments", ligandInfo.ligandComments.bioactivityComments) +*
       endogenousTargetsBox +*
       enzymeSubstrates +*
@@ -1621,7 +1666,8 @@ fun view(model) {
       transporters +*
       interactions +*
       rankPotencies +*
-      familyComments
+      familyComments +*
+      objectComments
     };
 
     var clinicalDataPage = {
