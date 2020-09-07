@@ -170,6 +170,8 @@ typename MalariaTargetProfile = (
 typename RankPotency = (
   description: Markup,
   data: Markup,
+  objectID: Int,
+  objectName: String,
   references: [ReferenceID]
 );
 
@@ -635,13 +637,17 @@ fun getInitialModel() {
             var description = parseOrError(glrp.description);
             var data = parseOrError(glrp.rank_potency);
             var (mRefs, mLigands) = collectAllIds([description, data]);
-            var x = (=description, =data, =references);
+            var (objectID, objectName) = x.object;
+            var x = (=description, =objectName, =objectID, =data, =references);
             (x :: rps, references ++ mRefs ++ rpRefs, mLigands ++ rpLigands)
         }, ([], [], []), rps)
       }
 
       var (rankPotencies, rpRefs, rpLigands) =
         transformRankPotencies(rawInfo.rank_potencies);
+
+      # print("Raw rank potencies: " ^^ show(rawInfo.rank_potencies));
+      # print("Transformed rank potencies: " ^^ show(rankPotencies));
 
       # Finally, resolve ligand and comment references
       var rawRefs =
@@ -867,8 +873,11 @@ fun getInitialModel() {
               InteractionUtilities.interactionsTargeting(ligandId),
             rank_potencies =
               for (glrp <-- Tables.grac_ligand_rank_potency)
-                where (glrp.rank_potency =~ /.*<Ligand id="{intToString(ligandId)}".*/)
+                where (glrp.rank_potency =~ /.*<Ligand\ id={intToString(ligandId)}.*/)
+                for (o <-- Tables.object)
+                where (o.object_id == glrp.object_id)
                 [(=glrp,
+                  object = (o.object_id, o.name),
                   refs =
                     for (r <-- Tables.grac_ligand_rank_potency_refs)
                     where (r.grac_ligand_rank_potency_id ==
@@ -1487,12 +1496,22 @@ fun view(model) {
           MvuHTML.empty
         } else {
           fun renderRow(x) {
-            # TODO: Go from here
-            MvuHTML.empty
+            var link =
+              a(href("/objectDisplay?objectId=" ^^
+                    intToString(x.objectID)), textNode(x.objectName));
+            tr(class("info"),
+              td(class("embedded_link"),
+                renderM(x.description) +* textNode(" at ") +* link) +*
+              td(class("embedded_link"), renderM(x.data)) +*
+              td(class("embedded_link"), renderCitations(x.references)))
           }
 
-          # TODO: Fill me in
-          var headers = MvuHTML.empty;
+          var headers = {
+            tr(class("heading"),
+              td(a0, textNode("Description")) +*
+              td(a0, textNode("Data")) +*
+              td(a0, textNode("Reference")))
+          };
 
           var renderedRows =
             MvuHTML.concatMap(renderRow, ligandInfo.ligandRankPotencies);
