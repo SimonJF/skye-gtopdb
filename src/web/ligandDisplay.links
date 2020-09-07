@@ -1912,30 +1912,7 @@ fun view(model) {
             case [] -> []
             case x :: _ -> map(fun((_, placeholder, _)) { placeholder }, x.dbEntries)
           };
-        # <table class="receptor_data_tables" style="width:100%;">
-        #     <tr name="hotspot" class="hotspot">
-        #         <td class="category" colspan="2">Selected 3D Structures</td>
-        #     </tr>
-        #     <c:if test="${not empty ligand.pdbStructures}">
-        #         <tr>
-        #             <td class="info" align="left" valign="center" colspan="2">
-        #                 <table>
-        #                      <tr>
-        #                         <c:forEach var="struct" items="${ligand.pdbStructures}">
-        #                             <td align="center" valign="center">
-        #                                 PDB Id: <a href="https://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=${struct.placeholderText}">
-        #                                 <c:out value="${struct.placeholderText}"/></a><br/>
-        #                                <a style="color:white;" href="https://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=${struct.placeholderText}" >
-        #                                <img src="https://www.rcsb.org/pdb/images/${struct.placeholderText}_bio_r_500.jpg"
-        #                                  height="150" width="150"/></a>
-        #                             </td>
-        #                         </c:forEach>
-        #                     </tr>
-        #                 </table>
-        #             </td>
-        #         </tr>
-        #     </c:if>
-        # </table>
+
         if (listEmpty(pdbIDs)) {
           MvuHTML.empty
         } else {
