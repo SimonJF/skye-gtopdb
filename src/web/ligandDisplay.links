@@ -1555,13 +1555,38 @@ fun view(model) {
         }
       };
 
+      var familyComments = {
+        var mi = ligandInfo.ligandMentionedIn;
+        fun renderRow(x, type) {
+          tr(class("info"),
+              td(class("embedded_link"),
+                a(href("/familyDisplay?familyId=" ^^ intToString(x.familyID)), unescapedTextNode(x.familyName))))
+        }
+
+        var renderedRows =
+          MvuHTML.concatMap(fun(x) { renderRow(x, "overview") }, mi.overviews) +*
+          MvuHTML.concatMap(fun(x) { renderRow(x, "comments") }, mi.comments);
+
+        if (not(listEmpty(mi.overviews ++ mi.comments))) {
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+            thead(a0,
+              tr(class("hotspot"),
+                td(class("category"),
+                  textNode("Ligand mentioned in the following text fields")))) +*
+            tbody(name("toggle"), renderedRows))
+        } else {
+          MvuHTML.empty
+        }
+      };
+
       commentBox("Bioactivity Comments", ligandInfo.ligandComments.bioactivityComments) +*
       endogenousTargetsBox +*
       enzymeSubstrates +*
       cofactorEnzymes +*
       transporters +*
       interactions +*
-      rankPotencies
+      rankPotencies +*
+      familyComments
     };
 
     var clinicalDataPage = {
@@ -2084,6 +2109,7 @@ fun view(model) {
     };
 
     var tabBox = {
+      # TODO: This needs to be tightened up
       var showBioActivity = true;
       var showClinicalData = {
         var comments = ligandInfo.ligandComments;
