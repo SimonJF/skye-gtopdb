@@ -419,6 +419,8 @@ fun getInitialModel() {
           # In other words, collect all the gene names and we can go from there
           # This isn't quite right, since equality is too strong: we require
           # case-sensitive equality (i.e., ilike). It's a reasonable approximation though.
+          # Update: Given the patch to use ILIKE in general when compiling regex
+          # queries, rather than LIKE, this should hopefully be fixed
           var geneNames =
             listConcatMap(fun(p) {
                 var gene = p.precursor.gene_name;
@@ -428,7 +430,7 @@ fun getInitialModel() {
                   []
                 }
               }, rawInfo.precursors);
-          var pred = contains(geneNames);
+          var pred = containsRegex(geneNames);
           var idsPred = contains(map(fun(x) { x.id }, sameName));
           var geneSimilar =
             query nested {
@@ -701,15 +703,7 @@ fun getInitialModel() {
       # iter(fun((_, (_, x))) { print("PMID: " ^^ intToString(x.pubmedId)) }, refs);
       var ligandRefs = queryLigands(rawLigands);
 
-      var dbLinks = {
-        # These are relevant DB IDs. These are explicitly stated in the GtoPdb
-        # code -- so we have to do the same here.
-        var dbLinks = transformDatabaseLinks(rawInfo.databaseLinks);
-        var relevant =
-          [1, 3, 5, 8, 10, 11, 12, 15, 16, 17, 20, 21, 24,
-           25, 29, 31, 33, 39, 18, 63, 55, 58, 59, 40, 65];
-        filter(fun(x) { listElem(x.dbID, relevant) }, dbLinks)
-      };
+      var dbLinks = transformDatabaseLinks(rawInfo.databaseLinks);
 
       fun transformMentionedIn(mis) {
         switch (mis) {
@@ -1372,7 +1366,18 @@ fun view(model) {
 
           hpaLinks ++ inchiLinks ++ innLinks ++ pubchemLinks
         };
-        renderDatabaseLinks(ligandInfo.ligandDBLinks, extraLinks, model.modelSpeciesMap)
+
+        var dbLinks = {
+          # These are relevant DB IDs. These are explicitly stated in the GtoPdb
+          # code -- so we have to do the same here.
+          var relevant =
+            [1, 3, 5, 8, 10, 11, 12, 15, 16, 17, 20, 21, 24,
+             25, 29, 31, 33, 39, 18, 63, 55, 58, 59, 40, 65];
+          filter(fun(x) { listElem(x.dbID, relevant) }, ligandInfo.ligandDBLinks)
+        };
+
+
+        renderDatabaseLinks(dbLinks, extraLinks, model.modelSpeciesMap)
       };
 
       classificationTable +*
@@ -1675,7 +1680,7 @@ fun view(model) {
       var commentsTable = {
         var commentsRows =
           [("Absorption/Distribution", comments.absorptionDistributionComments),
-           ("Metabolism", comments.metabolismComments),
+           ("Biotransformation/Metabolism", comments.metabolismComments),
            ("Elimination", comments.eliminationComments),
            ("Population Pharmacokinetics", comments.popnPharmacokineticsComments),
            ("Organ function impairment", comments.organFunctionImpairmentComments)];
@@ -1862,15 +1867,19 @@ fun view(model) {
         switch (ligandInfo.ligandPeptideInfo) {
           case Nothing -> MvuHTML.empty
           case Just(pi) ->
-            if (pi.peptideOneLetterSeq <> "" || pi.peptideThreeLetterSeq <> "") {
-              table_(class("receptor_data_tables") +@ style("width:100%;"),
+            var content =
+              if (pi.peptideOneLetterSeq <> "" || pi.peptideThreeLetterSeq <> "") {
+                renderIfNonempty(pi.peptideOneLetterSeq) +*
+                renderIfNonempty(pi.peptideThreeLetterSeq)
+              } else {
+                tr(class("info"),
+                  td(style("text-align:left;"), textNode("No information available.")))
+              };
+
+            table_(class("receptor_data_tables") +@ style("width:100%;"),
                 tr(a0,
                   td(class("category") +@ colSpan(2), textNode("Peptide Sequence"))) +*
-                renderIfNonempty(pi.peptideOneLetterSeq) +*
-                renderIfNonempty(pi.peptideThreeLetterSeq))
-            } else {
-              MvuHTML.empty
-            }
+                content)
         }
       };
 
@@ -2236,7 +2245,8 @@ fun view(model) {
       var showSimilarLigands =
         not(listEmpty(ls.clusters) &&
             listEmpty(ls.peptide_ligand_clusters) &&
-            listEmpty(ls.peptide_ligand_sequence_clusters));
+            listEmpty(ls.peptide_ligand_sequence_clusters) &&
+            listEmpty(ls.peptide_related_ligands));
       var showAnalogues = not(listEmpty(ls.analogue_clusters));
       var showImmuno = ligandInfo.ligandImmuno;
       var showMalaria = ligandInfo.ligandMalaria;

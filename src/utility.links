@@ -31,6 +31,21 @@ fun contains(xs) {
   containsInner(xs, fun(_) { false })
 }
 
+sig containsRegex : ([String]) ~> ((String) {}-> Bool)
+fun containsRegex(xs) {
+  fun containsInner(xs, q) {
+    switch(xs) {
+      case [] -> q
+      case x :: xs ->
+        containsInner(xs, fun(y) {
+          (x =~ /{y}/) || q(y)
+        })
+    }
+  }
+
+  containsInner(xs, fun(_) { false })
+}
+
 
 sig uniquify : ([a]) ~> [a]
 fun uniquify(xs) {
