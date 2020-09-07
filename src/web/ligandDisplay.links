@@ -175,6 +175,11 @@ typename RankPotency = (
   references: [ReferenceID]
 );
 
+typename MentionedIn = (
+  overviews: [(familyID: Int, familyName: String)],
+  comments: [(familyID: Int, familyName: String)]
+);
+
 typename LigandInfo = (
   ligandID: Int,
   rawLigand: Tables.RawLigand, # TODO: A lot of the properties below are duplicated -- just use this instead.
@@ -207,7 +212,8 @@ typename LigandInfo = (
   ligandLigandRefs: [(Int, LigandName)],
   ligandClusters: LigandClusters,
   ligandRankPotencies: [RankPotency],
-  ligandTCPs: [MalariaTargetProfile]
+  ligandTCPs: [MalariaTargetProfile],
+  ligandMentionedIn: MentionedIn
 );
 
 typename Model = Maybe((
@@ -681,6 +687,13 @@ fun getInitialModel() {
         filter(fun(x) { listElem(x.dbID, relevant) }, dbLinks)
       };
 
+      fun transformMentionedIn(mis) {
+        switch (mis) {
+          case [] -> (comments = [], overviews = [])
+          case x :: _ -> x
+        }
+      }
+
       (ligandID = ligandId,
        rawLigand = rawInfo.ligand,
        ligandType = rawInfo.ligand.type,
@@ -713,7 +726,9 @@ fun getInitialModel() {
        ligandLigandRefs = ligandRefs,
        ligandClusters = clusteredLigands,
        ligandTCPs = tcps,
-       ligandRankPotencies = rankPotencies)
+       ligandRankPotencies = rankPotencies,
+       ligandMentionedIn = transformMentionedIn(rawInfo.mentioned_in)
+       )
     }
 
     var results =
@@ -873,7 +888,7 @@ fun getInitialModel() {
               InteractionUtilities.interactionsTargeting(ligandId),
             rank_potencies =
               for (glrp <-- Tables.grac_ligand_rank_potency)
-                where (glrp.rank_potency =~ /.*<Ligand\ id={intToString(ligandId)}.*/)
+                where (glrp.rank_potency =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
                 for (o <-- Tables.object)
                 where (o.object_id == glrp.object_id)
                 [(=glrp,
@@ -882,7 +897,20 @@ fun getInitialModel() {
                     for (r <-- Tables.grac_ligand_rank_potency_refs)
                     where (r.grac_ligand_rank_potency_id ==
                       glrp.grac_ligand_rank_potency_id)
-                      [r.reference_id])]
+                      [r.reference_id])],
+            mentioned_in =
+              [(overviews =
+                   for (gft <-- Tables.grac_family_text)
+                   where (gft.overview =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
+                     for (f <-- Tables.family)
+                     where (f.family_id == gft.family_id)
+                     [ (familyID = f.family_id, familyName = f.name) ],
+                 comments =
+                   for (gft <-- Tables.grac_family_text)
+                   where (gft.comments =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
+                     for (f <-- Tables.family)
+                     where (f.family_id == gft.family_id)
+                     [ (familyID = f.family_id, familyName = f.name) ])]
           )]
       };
 
