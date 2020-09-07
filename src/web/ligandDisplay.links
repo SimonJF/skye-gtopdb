@@ -38,6 +38,7 @@ typename ClusteredLigand = (id: Int, name: String, targets: [(id: Int, name: Str
 
 typename LigandClusters =
   (clusters: [ClusteredLigand],
+   oldClusterCount: Int, # Needed to replicate a GtoPdb bug -- will report
    analogue_clusters: [ClusteredLigand],
    peptide_ligand_clusters: [ClusteredLigand],
    peptide_ligand_sequence_clusters: [ClusteredLigand],
@@ -479,7 +480,11 @@ fun getInitialModel() {
         var clusters =
           getClusteredLigands(Tables.ligand_cluster_new, rawInfo.clusters, []);
 
+        var old_clusters =
+          getClusteredLigands(Tables.ligand_cluster, rawInfo.old_clusters, []);
+
         (=clusters,
+         oldClusterCount = length(old_clusters),
          =analogue_clusters,
          =peptide_ligand_clusters,
          =peptide_ligand_sequence_clusters,
@@ -939,7 +944,11 @@ fun getInitialModel() {
                       where (r2f.object_id == o.object_id)
                         for (f <-- Tables.family)
                         where (f.family_id == r2f.family_id)
-                        [(familyID = f.family_id, familyName = f.name)])]
+                        [(familyID = f.family_id, familyName = f.name)])],
+            old_clusters =
+              for (cl <-- Tables.ligand_cluster)
+                where (cl.ligand_id == ligandId)
+                  [cl.cluster]
           )]
       };
 
@@ -1408,7 +1417,7 @@ fun view(model) {
           fun renderRow(t) {
             tr(class("info"),
               td(a0,
-                a(href("/objectDisplay?objectId=" ^^ intToString(t.id)), textNode(t.name))))
+                a(href("/objectDisplay?objectId=" ^^ intToString(t.id)), unescapedTextNode(t.name))))
           }
 
           var renderedRows =
@@ -1566,7 +1575,7 @@ fun view(model) {
           fun renderRow(x) {
             var link =
               a(href("/objectDisplay?objectId=" ^^
-                    intToString(x.objectID)), textNode(x.objectName));
+                    intToString(x.objectID)), unescapedTextNode(x.objectName));
             tr(class("info"),
               td(class("embedded_link"),
                 renderM(x.description) +* textNode(" at ") +* link) +*
@@ -1894,13 +1903,70 @@ fun view(model) {
         }
       };
 
-      var pdbStructureBox = MvuHTML.empty;
+      var pdbStructureBox = {
+        # 30: ID of PDB
+        var pdb =
+          filter(fun(x) { x.dbID == 30 }, ligandInfo.ligandDBLinks);
+        var pdbIDs =
+          switch(pdb) {
+            case [] -> []
+            case x :: _ -> map(fun((_, placeholder, _)) { placeholder }, x.dbEntries)
+          };
+        # <table class="receptor_data_tables" style="width:100%;">
+        #     <tr name="hotspot" class="hotspot">
+        #         <td class="category" colspan="2">Selected 3D Structures</td>
+        #     </tr>
+        #     <c:if test="${not empty ligand.pdbStructures}">
+        #         <tr>
+        #             <td class="info" align="left" valign="center" colspan="2">
+        #                 <table>
+        #                      <tr>
+        #                         <c:forEach var="struct" items="${ligand.pdbStructures}">
+        #                             <td align="center" valign="center">
+        #                                 PDB Id: <a href="https://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=${struct.placeholderText}">
+        #                                 <c:out value="${struct.placeholderText}"/></a><br/>
+        #                                <a style="color:white;" href="https://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=${struct.placeholderText}" >
+        #                                <img src="https://www.rcsb.org/pdb/images/${struct.placeholderText}_bio_r_500.jpg"
+        #                                  height="150" width="150"/></a>
+        #                             </td>
+        #                         </c:forEach>
+        #                     </tr>
+        #                 </table>
+        #             </td>
+        #         </tr>
+        #     </c:if>
+        # </table>
+        if (listEmpty(pdbIDs)) {
+          MvuHTML.empty
+        } else {
+
+          fun render(strID) {
+            var link = "https://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=" ^^ strID;
+            td(align("center") +@ valign("center"),
+                textNode("PDB Id: ") +*
+                a(href(link), unescapedTextNode(strID)) +*
+                br(a0, h0) +*
+                a(style("color:white;") +@ href(link),
+                  img(src("https://www.rcsb.org/pdb/images/" ^^ strID ^^ "_bio_r_500.jpg") +@
+                    height("150") +@ width("150"), h0)))
+          }
+
+          var rendered = MvuHTML.concatMap(render, pdbIDs);
+
+          table_(class("receptor_data_tables") +@ style("width:100%"),
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("category") +@ colSpan(2), textNode("Selected 3D Structures"))) +*
+              tr(class("info") +@ align("left") +@ valign("center") +@ colSpan(2),
+                table_(a0,
+                  tr(a0, rendered))))
+        }
+      };
 
       subunitsBox +*
       heteromersBox +*
       peptideStructureBox +*
-      pdbStructureBox +*
       peptideStructureCommentsBox +*
+      pdbStructureBox +*
       structureBox
     };
 
@@ -2243,7 +2309,8 @@ fun view(model) {
       };
       var ls = ligandInfo.ligandClusters;
       var showSimilarLigands =
-        not(listEmpty(ls.clusters) &&
+        not(ls.oldClusterCount <= 1 &&
+            # listEmpty(ls.clusters) &&
             listEmpty(ls.peptide_ligand_clusters) &&
             listEmpty(ls.peptide_ligand_sequence_clusters) &&
             listEmpty(ls.peptide_related_ligands));
