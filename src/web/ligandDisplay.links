@@ -69,25 +69,9 @@ typename Comments = (
   malariaComments: Markup
 );
 
-typename EnzymeSubstrate = (
-  enzyme: String,
-  enzymeID: Int,
-  ecNumber: String,
-  reaction: String,
-  references: [ReferenceID]
-);
-
 typename CofactorEnzyme = (
   enzyme: Markup,
   enzymeID: Int,
-  references: [ReferenceID]
-);
-
-typename TransporterSubstrate = (
-  transporter: String,
-  transporterID: Int,
-  ecNumber: String,
-  reaction: String,
   references: [ReferenceID]
 );
 
@@ -99,11 +83,20 @@ typename InteractionInfo = (
   speciesShort: String
 );
 
+typename Substrate = (
+  objectName: String,
+  objectID: Int,
+  ecNumber: String,
+  reaction: String,
+  references: [ReferenceID]
+);
+
+
 typename BioactivityTables = (
   # Special tables
-  enzymeSubstrates: SortableTable(EnzymeSubstrate, Message),
+  enzymeSubstrates: SortableTable(Substrate, Message),
   cofactorEnzymes: SortableTable(CofactorEnzyme, Message),
-  transporterSubstrates: SortableTable(TransporterSubstrate, Message),
+  transporterSubstrates: SortableTable(Substrate, Message),
   wholeOrganismAssays: SortableTable(InteractionInfo, Message),
   # Sorted interactions with different targets
   gpcrInteractions: SortableTable(InteractionInfo, Message),
@@ -187,6 +180,8 @@ typename MentionedInObject = (
   families: [(familyID: Int, familyName: String)],
   comment: Markup
 );
+
+typename Transporter = (objectID: Int, objectName: String, refs: [ReferenceID]);
 
 typename LigandInfo = (
   ligandID: Int,
@@ -951,7 +946,37 @@ fun getInitialModel() {
             old_clusters =
               for (cl <-- Tables.ligand_cluster)
                 where (cl.ligand_id == ligandId)
-                  [cl.cluster]
+                  [cl.cluster],
+            # Beginnings of what we need.
+            # We also need to do:
+            #   - Specific reactions
+            #   - Ligand potencies
+            #   - Object2reaction
+            #   - Products (for enzymes)
+            substrates =
+              for (s <-- Tables.substrate)
+                where (s.ligand_id == ligandId)
+                  for (o <-- Tables.object)
+                  where (o.object_id == s.object_id)
+                    [(substrate = s, object = o,
+                      reactions =
+                        for (o2r <-- Tables.object2reaction)
+                        where (o2r.object_id == o.object_id)
+                          for (r <-- Tables.reaction)
+                          where (r.reaction_id == o2r.reaction_id)
+                          [r],
+                      isTransporter = length(
+                        for (t <-- Tables.transporter)
+                        where (t.object_id == o.object_id)
+                        [t]) > 0,
+                      isEnzyme = length(
+                        for (e <-- Tables.enzyme)
+                        where (e.object_id == o.object_id)
+                        [e]) > 0,
+                      refs =
+                        for (sr <-- Tables.substrate_refs)
+                        where (sr.substrate_id == s.substrate_id)
+                        [sr.reference_id])]
           )]
       };
 
@@ -1406,11 +1431,11 @@ fun view(model) {
       # TO DO:
       # 1. ~~~Bioactivity comments~~~ DONE!
       # 2. ~~~Endogenous targets~~~ DONE!
-      # 3. ~~~Enzyme substrates~~~ DONE!
+      # 3. Enzyme substrates (Rendering logic done -- not data model)
       # 4. ~~~Cofactor enzymes~~~ DONE!
       # 5. Transporters
       # 6. ~~~Interactions~~~ DONE!
-      # 7. Rank potencies
+      # 7. ~~~Rank potencies~~~ DONE!
       # 8. ~~~Targeting ligands~~~ DONE!
 
       var endogenousTargetsBox = {
@@ -1451,8 +1476,8 @@ fun view(model) {
           fun renderRow(e) {
             tr(class("info"),
               td(a0,
-                a(href("/objectDisplay?objectId=" ^^ intToString(e.enzymeID)),
-                  unescapedTextNode(e.enzyme))) +*
+                a(href("/objectDisplay?objectId=" ^^ intToString(e.objectID)),
+                  unescapedTextNode(e.objectName))) +*
               td(a0, unescapedTextNode(e.ecNumber)) +*
               td(a0, unescapedTextNode(e.reaction)) +*
               td(a0,
