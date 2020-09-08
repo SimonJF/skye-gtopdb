@@ -492,6 +492,7 @@ fun getInitialModel() {
       }
 
       var clusteredLigands = transformClusters();
+      # print("Clustered Ligands: " ^^ show(clusteredLigands));
 
       var (immunoDiseases, immunoDiseaseRefs, immunoDiseaseLigands) =
         transformImmunoDiseases(rawInfo.immunoDiseases);
@@ -2286,7 +2287,7 @@ fun view(model) {
       };
       var ls = ligandInfo.ligandClusters;
       var showSimilarLigands =
-        not(ls.oldClusterCount <= 1 &&
+        not(ls.oldClusterCount < 1 &&
             # listEmpty(ls.clusters) &&
             listEmpty(ls.peptide_ligand_clusters) &&
             listEmpty(ls.peptide_ligand_sequence_clusters) &&
