@@ -431,6 +431,7 @@ fun getInitialModel() {
                   []
                 }
               }, rawInfo.precursors);
+          #print("Gene Names: " ^^ show(geneNames));
           var pred = containsRegex(geneNames);
           var idsPred = contains(map(fun(x) { x.id }, sameName));
           var geneSimilar =
@@ -449,8 +450,9 @@ fun getInitialModel() {
                             where (o.object_id == i.object_id)
                               [(id = o.object_id, name = o.name)])  ]
             };
+          #print("geneSimilar: " ^^ show(geneSimilar));
 
-          sameName ++ geneSimilar
+          uniquify(sameName ++ geneSimilar)
         };
 
         # Analogue clusters are handled separately.
@@ -492,7 +494,7 @@ fun getInitialModel() {
       }
 
       var clusteredLigands = transformClusters();
-      # print("Clustered Ligands: " ^^ show(clusteredLigands));
+      #print("Clustered Ligands: " ^^ show(clusteredLigands));
 
       var (immunoDiseases, immunoDiseaseRefs, immunoDiseaseLigands) =
         transformImmunoDiseases(rawInfo.immunoDiseases);

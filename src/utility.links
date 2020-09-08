@@ -38,7 +38,7 @@ fun containsRegex(xs) {
       case [] -> q
       case x :: xs ->
         containsInner(xs, fun(y) {
-          (x =~ /{y}/) || q(y)
+          (y =~ /{x}/) || q(y)
         })
     }
   }
