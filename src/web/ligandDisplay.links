@@ -22,6 +22,8 @@ typename Message =
   [| ChangeTab:Tab | SortPrecursorTable:(ColumnName, SortDirection)
    | SortInteractionTable:(InteractionTargetType, ColumnName, SortDirection)
    | SortCofactorTable:(ColumnName, SortDirection)
+   | SortTransporterTable:(ColumnName, SortDirection)
+   | SortEnzymeSubstratesTable:(ColumnName, SortDirection)
    | NoOp
   |];
 
@@ -502,6 +504,27 @@ fun getInitialModel() {
             (cf :: cfs, c.refs ++ refs)
         }, ([], []), rawInfo.cofactors);
 
+
+      var (enzymeSubstrates, transporterSubstrates, substrateRefs) =
+        fold_right(fun(s, (es, ts, rs)) {
+            var subs = {
+              var ecNumber = unwords(map(fun(r) { r.ec_number }, s.reactions));
+              var reaction = unwords(map(fun(r) { r.reaction }, s.reactions));
+              (objectName = s.object.name, objectID = s.object.object_id,
+               =ecNumber, =reaction, references = s.refs)
+            };
+            var rs = s.refs ++ rs;
+
+            if (s.isTransporter) {
+              (es, subs :: ts, rs)
+            } else if (s.isEnzyme) {
+              (subs :: es, ts, rs)
+            } else {
+              (es, ts, rs)
+            }
+        }, ([], [], []), rawInfo.substrates);
+        
+
       # Transform raw interactions into more structured form
       var interactions : [Interaction] =
         map(makeInteraction, rawInfo.interactions);
@@ -527,15 +550,31 @@ fun getInitialModel() {
         augmentInteractions(interactionsTargeting);
 
       var bioactivityTables = {
-        fun emptyTable() {
-          makeTable([], [], fun(colName, dir) { NoOp }) # TODO: Temporary
-        }
-
         var cofactorTable = {
           DataTable.makeTable(
             [("Enzyme", ("receptor_header", Sortable(fun(x, y) { markupCmp(x.enzyme, y.enzyme) }))),
              ("Reference", ("reference_header", Sortable(fun(x, y) { referenceCmp(x.references, y.references) })))],
             transformedCofactors, fun(col, dir) { SortCofactorTable(col, dir) })
+        };
+
+        var transporterSubstratesTable : SortableTable(Substrate, Message) = {
+          DataTable.makeTable(
+            [
+             ("Transporter", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.objectName, y.objectName) }))),
+             ("EC number", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.ecNumber, y.ecNumber) }))),
+             ("Reaction", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.reaction, y.reaction) }))),
+             ("Reference", ("reference_header", Sortable(fun(x, y) { referenceCmp(x.references, y.references) })))],
+            transporterSubstrates, fun(col, dir) { SortTransporterTable(col, dir) })
+        };
+
+        var enzymeSubstratesTable : SortableTable(Substrate, Message) = {
+          DataTable.makeTable(
+            [
+             ("Enzyme", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.objectName, y.objectName) }))),
+             ("EC number", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.ecNumber, y.ecNumber) }))),
+             ("Reaction", ("receptor_header", Sortable(fun(x, y) { simpleCmp(x.reaction, y.reaction) }))),
+             ("Reference", ("reference_header", Sortable(fun(x, y) { referenceCmp(x.references, y.references) })))],
+            enzymeSubstrates, fun(col, dir) { SortEnzymeSubstratesTable(col, dir) })
         };
 
         # Whole organism assays get a separate table.
@@ -584,9 +623,9 @@ fun getInitialModel() {
           makeTable(type, data)
         }
 
-        (enzymeSubstrates = emptyTable(), # TODO
+        (enzymeSubstrates = enzymeSubstratesTable,
          cofactorEnzymes = cofactorTable,
-         transporterSubstrates = emptyTable(), # TODO
+         transporterSubstrates = transporterSubstratesTable,
          wholeOrganismAssays = makeTable(WholeOrganismAssay, wholeOrganismAssays),
          gpcrInteractions = makeTableFromType(Object(GPCR)),
          icInteractions = makeTableFromType(Object(IC)),
@@ -692,7 +731,8 @@ fun getInitialModel() {
             tcpRefs ++
             rpRefs ++
             mioRefs ++
-            cofactorRefs);
+            cofactorRefs ++
+            substrateRefs);
 
       var rawLigands =
         uniquify(commentLigands ++
@@ -1052,6 +1092,20 @@ fun updt(msg, model) {
         var newTables =
           (tables with cofactorEnzymes =
             updateSortStatus(tables.cofactorEnzymes, colName, dir));
+        (model with modelLigand =
+          (model.modelLigand with ligandBioactivityTables = newTables))
+      case SortTransporterTable(colName, dir) ->
+        var tables = model.modelLigand.ligandBioactivityTables;
+        var newTables =
+          (tables with transporterSubstrates =
+            updateSortStatus(tables.transporterSubstrates, colName, dir));
+        (model with modelLigand =
+          (model.modelLigand with ligandBioactivityTables = newTables))
+      case SortEnzymeSubstratesTable(colName, dir) ->
+        var tables = model.modelLigand.ligandBioactivityTables;
+        var newTables =
+          (tables with enzymeSubstrates =
+            updateSortStatus(tables.enzymeSubstrates, colName, dir));
         (model with modelLigand =
           (model.modelLigand with ligandBioactivityTables = newTables))
       case NoOp -> model #temp
