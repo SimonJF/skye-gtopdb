@@ -1,0 +1,295 @@
+import InteractionUtilities;
+open import Ligand;
+open import DataTable;
+import Tables;
+open import Reference;
+import MvuHTML;
+import MvuAttrs;
+open import InteractionUtilities;
+open import Utility;
+open import Species;
+
+typename ParsedScreenInteraction =
+  (interaction: InteractionUtilities.ScreenInteraction,
+   speciesShort: String,
+   ligandSize: Ligand.LigandSize);
+
+typename ScreenID = Int;
+typename ScreenTableName = String;
+
+typename Screen(msg) =
+  (id: Int,
+   name: String,
+   description: String,
+   url: String,
+   affinityCutoff: Int,
+   companyLogoFilename: String,
+   technologyLogoFilename: String,
+   references: [ReferenceID],
+   data: [(String, SortableTable(ParsedScreenInteraction, msg))]);
+
+var a0 = MvuAttrs.empty;
+var h0 = MvuHTML.empty;
+
+fun dataBox(hdr, cols, contents) {
+  open MvuHTML;
+  open MvuAttrs;
+
+  var cs = if (cols == 1) { MvuAttrs.empty } else { colSpan(cols) };
+  table_(class("receptor_data_tables fullwidth"),
+    thead(a0,
+      tr(name("hotspot") +@ class("hotspot"),
+        td(class("info category") +@ cs,
+          unescapedTextNode(hdr)))) +*
+    tbody(name("toggle"), contents))
+}
+
+fun transformScreens(screens) {
+
+  var speciesMap = Species.getSpeciesMap();
+  fun speciesShortName(speciesID) { resolveSpeciesShortName(speciesID, speciesMap) }
+
+  # There are only, like, 4 screens. It makes life easier
+  # to grab these all into memory, because we need to merge
+  # screens 3 and 4.
+  var allScreens =
+    query nested {
+      for (scr <-- Tables.screen)
+        [(=scr,
+          refs =
+            for (r <-- Tables.screen_refs)
+            where (r.screen_id == scr.screen_id)
+            [r.reference_id])
+        ]
+    };
+
+  fun mkScreenTable(screenID, targetName, interactions) {
+    var cols = [
+      ("Ligand", ("", Sortable(fun(x, y) {
+          simpleCmp(x.interaction.interactionLigand.name,
+              y.interaction.interactionLigand.name) }))),
+      ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+      ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
+      ("", ("", NotSortable)), ("", ("", NotSortable)),
+      ("Sp.", ("keybox_header",
+        Sortable(fun(x, y) { simpleCmp(x.speciesShort, y.speciesShort) }))),
+      ("Type", ("action_header",
+        Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
+            y.interaction.interactionAction) }))),
+      ("Action", ("action_header",
+        Sortable(fun(x, y) { simpleCmp(x.interaction.interactionAction,
+            y.interaction.interactionAction) }))),
+      ("Value", ("affinity_header", Sortable(fun(x, y) {
+          InteractionUtilities.sortAffinity(x.interaction.affinity,
+              y.interaction.affinity)}))),
+      ("Parameter", ("units_header", Sortable(fun(x, y) {
+          simpleCmp(x.interaction.affinity.affinityUnits,
+                    y.interaction.affinity.affinityUnits) })))
+    ];
+    fun sortMessage(colName, sortDir) { SortScreenTable(screenID, targetName, colName, sortDir) }
+    DataTable.makeTable(cols, interactions, sortMessage)
+  }
+
+  fun findScreen(id) {
+    hd(filter(fun(x) { x.scr.screen_id == id }, allScreens))
+  }
+
+  var grouped = groupBy(fun(x) { x.si.screen_id }, screens);
+  # Transform each group into a screen
+  var (screens, refs) =
+    fold_left(fun((acc, refs), (screen_id, group)) {
+        var screen = findScreen(screen_id);
+        var scr = screen.scr;
+        var scrRefs = screen.refs;
+        var interactions : [ParsedScreenInteraction] =
+          map(fun(x) {
+            (interaction = InteractionUtilities.makeScreenInteraction(x),
+             ligandSize = parseLigandSize(x.ligand.type),
+             speciesShort = speciesShortName(x.si.species_id))
+          }, group);
+        # Now need to group by action comment
+        var groupedInteractions =
+          groupBy(fun(x) { x.interaction.interactionActionComment }, interactions);
+        var data = map(fun((name, interactions)) {
+            (name, mkScreenTable(scr.screen_id, name, interactions))
+          }, groupedInteractions);
+        var res =
+          (id = scr.screen_id, name = scr.name, description = scr.description,
+           url = scr.url, affinityCutoff = scr.affinity_cut_off_nm,
+           companyLogoFilename = scr.company_logo_filename,
+           technologyLogoFilename = scr.technology_logo_filename,
+           references = refs,
+           =data);
+        (res :: acc, scrRefs ++ refs)
+    }, ([], []), grouped);
+
+  # Finally, we need to merge screens 3 and 4.
+  var screen3 = hd(filter(fun(x) { x.scr.screen_id == 3 }, allScreens));
+  var screen4 = hd(filter(fun(x) { x.scr.screen_id == 4 }, allScreens));
+  var screens =
+    switch (partition(fun(x) { x.id == 3 || x.id == 4 }, screens)) {
+      case ([], screens) -> screens
+      case ([x], rest) ->
+        (x with
+           name = screen3.scr.name ^^ "/" ^^ screen4.scr.name,
+           description = screen3.scr.description ^^ " " ^^ screen4.scr.description,
+           references = screen3.refs ++ screen4.refs) :: rest
+      case ([x, y], rest) ->
+        (x with
+           name = screen3.scr.name ^^ "/" ^^ screen4.scr.name,
+           description = screen3.scr.description ^^ " " ^^ screen4.scr.description,
+           data = x.data ++ y.data,
+           references = screen3.refs ++ screen4.refs) :: rest
+    };
+
+  # If we have have anything with screen 4, add refs for screen 3 and 4
+  var refs =
+    if (not(listEmpty(filter(fun(x) { x.id == 3 || x.id == 4 }, screens)))) {
+        refs ++ screen3.refs ++ screen4.refs
+    } else {
+      refs
+    };
+  (screens, refs)
+}
+
+
+fun queryScreenInteractions(pred) {
+  query nested {
+    for (si <-- Tables.screen_interaction)
+      where (pred(si))
+      for (l <-- Tables.ligand)
+      where (l.ligand_id == si.ligand_id)
+        for (scr <-- Tables.screen)
+        where (si.screen_id == scr.screen_id)
+          [(=si, ligand = l)]
+  }
+}
+
+fun queryLigandScreens(ligandId) {
+  queryScreenInteractions(fun(si) { si.ligand_id == ligandId })
+}
+
+fun queryObjectScreens(objectId) {
+  queryScreenInteractions(fun(si) { si.object_id == objectId })
+}
+
+fun renderScreen(screen, references) {
+  open MvuHTML;
+  open MvuAttrs;
+
+  var contents = {
+    if (not(screen.description == "" && screen.url == "" && listEmpty(screen.references) &&
+        screen.companyLogoFilename == "" && screen.technologyLogoFilename == "")) {
+
+      var logosEmpty = not(screen.companyLogoFilename == "" && screen.technologyLogoFilename == "");
+      fun logoIfNonempty(url) {
+        if (url <> "") {
+          img(src("/images/" ^^ url), h0)
+        } else {
+          MvuHTML.empty
+        }
+      }
+
+      var colCount =
+        if (logosEmpty) { 2 } else { 3 };
+      var tdAttrs =
+        if (logosEmpty) {
+          colSpan(3)
+        } else {
+          style("border-style: solid none solid solid;") +@ colSpan(2)
+        };
+      var url =
+        if (screen.url <> "") {
+          p(style("font-size:small;"), a(href(screen.url), textNode(screen.url)))
+        } else {
+          MvuHTML.empty
+        };
+
+      var refs = p(a0, 
+        Reference.renderCitationList(screen.references, references));
+
+      var screenInfo =
+        td(class("table_instructions") +@ tdAttrs,
+           p(a0, unescapedTextNode(screen.description)) +*
+           url +*
+           refs);
+
+      var logoInfo =
+        if (not(logosEmpty)) {
+          td(class("not(table_instructions") +@
+              style("text-align:right; border-style: solid solid solid none;"),
+            logoIfNonempty(screen.companyLogoFilename) +*
+            logoIfNonempty(screen.technologyLogoFilename))
+        } else {
+          MvuHTML.empty
+        };
+
+      var tables = {
+        fun renderRow(row) {
+          # Ligand, size, approved, selective, endogenous, radioactive,
+          # has PDB, immuno, species, type, action, value, parameter
+          var i = row.interaction;
+          var sizeCol = ligandSizeCol(row.ligandSize);
+          var approvedCol = boolImage(("/images/approved.png", i.interactionLigand.approved, "Approved ligand"));
+          var selectiveCol =
+            boolCol(false, # I think this is false by default
+              a(href("/ligandInteractions?ligandId=" ^^
+                  intToString(i.ligandID) ^^ "&speciesId=" ^^ intToString(i.speciesID)), h0) +*
+              img(src("/images/select.gif") +@ alt("Click here for species-specific selectivity table"), h0));
+          var endogenousCol =
+            boolImage(("/images/endogenous.gif", i.endogenous,
+                  "Ligand is endogenous in the given species"));
+          var labelled = boolImage(("/images/probe.png", i.interactionLigand.labelled, "Ligand is labelled"));
+          var radioactive = boolImage(("/images/rad.gif", i.interactionLigand.radioactive, "Ligand is radioactive"));
+          var hasPDB =
+            boolImage(("/images/protein_structure_icon.png", false, "Ligand has a PDB structure"));
+          var immuno =
+            boolImage(("/images/immuno_ligand.png", i.interactionLigand.in_gtip, "Immunopharmacology Ligand"));
+
+
+          var ligandName = a(href("/ligandDisplay?ligandId=" ^^ intToString(i.interactionLigand.ligand_id)),
+              unescapedTextNode(i.interactionLigand.name));
+          var species = td(a0, textNode(row.speciesShort));
+          var interactionType = td(a0, textNode(i.interactionType));
+          var action = td(a0, textNode(i.interactionAction));
+          var value = td(a0, displayAffinity(i.affinity, false));
+          var parameter = td(a0, textNode(i.affinity.affinityUnits));
+
+          tr(class("info"),
+            ligandName +* sizeCol +* approvedCol +* selectiveCol +* endogenousCol +*
+              labelled +* radioactive +* hasPDB +* immuno +* species +* interactionType +*
+              action +* value +* parameter)
+        }
+
+        fun renderScreenTable((name, tbl)) {
+          var assayName = {
+            var interaction = hd(getTableData(tbl));
+            if (interaction.interaction.assayURL <> "") {
+              a(href(interaction.interaction.assayURL), unescapedTextNode(name))
+            } else {
+              unescapedTextNode(name)
+            }
+          };
+
+          var heading =
+            tr(class("info heading"),
+              th(class("info category embedded_link") +@ colSpan(3) +@ style("padding:8px"),
+                MvuHTML.i(a0, textNode("Target used in screen: ")) +* assayName));
+          var tbl =
+            tr(a0,
+              td(class("table_container") +@ style("border-style:solid solid none solid;") +@ colSpan(3),
+                DataTable.renderTable(tbl, renderRow)));
+          heading +* tbl
+        }
+        MvuHTML.concatMap(renderScreenTable, screen.data)
+      };
+
+      tr(a0, screenInfo +* logoInfo) +*
+      tr(a0, tables)
+
+    } else {
+      MvuHTML.empty
+    }
+  };
+  dataBox(screen.name, 3, contents)
+}
