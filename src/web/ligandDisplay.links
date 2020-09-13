@@ -1521,35 +1521,6 @@ fun view(model) {
         }
       };
 
-      var enzymeSubstrates = {
-        var tbl = ligandInfo.ligandBioactivityTables.enzymeSubstrates;
-        if (listEmpty(getTableData(tbl))) {
-          MvuHTML.empty
-        } else {
-
-          fun renderRow(e) {
-            tr(class("info"),
-              td(a0,
-                a(href("/objectDisplay?objectId=" ^^ intToString(e.objectID)),
-                  unescapedTextNode(e.objectName))) +*
-              td(a0, unescapedTextNode(e.ecNumber)) +*
-              td(a0, unescapedTextNode(e.reaction)) +*
-              td(a0,
-                renderCitationList(e.references, ligandInfo.ligandReferences)))
-          }
-
-          table_(class("receptor_data_tables") +@ style("width:100"),
-            thead(a0,
-              tr(name("hotspot") +@ class("hotspot"),
-                td(class("category") +@ colSpan(2),
-                  textNode("Enzymes Catalysing Reactions with this Compound as a Substrate or Product")))) +*
-            tbody(name("toggle"),
-              tr(a0,
-                td(class("table_container"),
-                  renderTable(tbl, renderRow)))))
-        }
-      };
-
       var cofactorEnzymes = {
         var tbl = ligandInfo.ligandBioactivityTables.cofactorEnzymes;
         if (listEmpty(getTableData(tbl))) {
@@ -1576,9 +1547,40 @@ fun view(model) {
                   renderTable(tbl, renderRow)))))
         }
       };
-      var transporters = {
-        MvuHTML.empty
-      };
+
+      fun renderSubstrateTable(header, tbl) {
+        if (listEmpty(getTableData(tbl))) {
+          MvuHTML.empty
+        } else {
+          fun renderRow(x) {
+            tr(class("info"),
+              td(a0,
+                a(href("/objectDisplay?objectId=" ^^ intToString(x.objectID)),
+                  unescapedTextNode(x.objectName))) +*
+              td(a0, unescapedTextNode(x.ecNumber)) +*
+              td(a0, unescapedTextNode(x.reaction)) +*
+              td(a0,
+                renderCitationList(x.references, ligandInfo.ligandReferences)))
+          }
+
+          table_(class("receptor_data_tables") +@ style("width:100"),
+            thead(a0,
+              tr(name("hotspot") +@ class("hotspot"),
+                td(class("category") +@ colSpan(2),
+                  textNode(header)))) +*
+            tbody(name("toggle"),
+              tr(a0,
+                td(class("table_container"),
+                  renderTable(tbl, renderRow)))))
+        }
+      }
+
+      var transporters =
+        renderSubstrateTable("Transporters Moving this Compound Across a Lipid Membrane",
+            ligandInfo.ligandBioactivityTables.transporterSubstrates);
+      var enzymeSubstrates =
+        renderSubstrateTable("Enzymes Catalysing Reactions with this Compound as a Substrate or Product",
+            ligandInfo.ligandBioactivityTables.enzymeSubstrates);
 
       var interactions = {
         var tables = ligandInfo.ligandBioactivityTables;
