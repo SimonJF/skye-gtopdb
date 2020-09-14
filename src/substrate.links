@@ -1,0 +1,91 @@
+import Tables;
+open import Utility;
+
+fun querySubstrates(pred) {
+  query nested {
+    for (s <-- Tables.substrate)
+    where (pred(s))
+      for (o <-- Tables.object)
+      where (o.object_id == s.object_id)
+        [(object = o,
+          reactions =
+            for (o2r <-- Tables.object2reaction)
+            where (o2r.object_id == o.object_id)
+              for (r <-- Tables.reaction)
+              where (r.reaction_id == o2r.reaction_id)
+              [r],
+          isTransporter = length(
+            for (t <-- Tables.transporter)
+            where (t.object_id == o.object_id)
+            [t]) > 0,
+          isEnzyme = length(
+            for (e <-- Tables.enzyme)
+            where (e.object_id == o.object_id)
+            [e]) > 0,
+          refs =
+            for (sr <-- Tables.substrate_refs)
+            where (sr.substrate_id == s.substrate_id)
+            [sr.reference_id])]
+  }
+}
+
+fun potencySubstrates(ligandID) {
+  var strID = intToString(ligandID);
+  query nested {
+    for (glrp <-- Tables.grac_ligand_rank_potency)
+    where (glrp.description =~ /.*substrate.*/ &&
+        glrp.rank_potency =~ /.*<Ligand\ id={strID}\/>.*/)
+        for (o <-- Tables.object)
+        where (o.object_id == glrp.object_id)
+          [(object = o,
+            reactions =
+              for (o2r <-- Tables.object2reaction)
+              where (o2r.object_id == o.object_id)
+                for (r <-- Tables.reaction)
+                where (r.reaction_id == o2r.reaction_id)
+                [r],
+            isTransporter = length(
+              for (t <-- Tables.transporter)
+              where (t.object_id == o.object_id)
+              [t]) > 0,
+            isEnzyme = length(
+              for (e <-- Tables.enzyme)
+              where (e.object_id == o.object_id)
+              [e]) > 0,
+            refs =
+              for (r <-- Tables.grac_ligand_rank_potency_refs)
+              where (r.grac_ligand_rank_potency_id == glrp.grac_ligand_rank_potency_id)
+              [r.reference_id])]
+  }
+}
+
+
+fun substratesForLigand(ligandID) {
+  # Substrates which are directly referenced in the table
+  var basic = querySubstrates(fun(s) { s.ligand_id == ligandID });
+
+  # Gather object IDs where the Ligand ID is contained in the reaction
+  # and specific_reaction tables.
+  var strID = intToString(ligandID);
+  var relevantIDs =
+    query nested {
+      (for (r <-- Tables.reaction)
+      where (r.reaction =~ /.*<Ligand\ id={strID}\/>.*/)
+        for (o2r <-- Tables.object2reaction)
+        where (o2r.reaction_id == r.reaction_id)
+          [(o2r.object_id)])
+      ++
+      (for (sr <-- Tables.specific_reaction)
+      where (sr.reaction =~ /.*<Ligand\ id={strID}\/>.*/)
+        for (o2r <-- Tables.object2reaction)
+        where (o2r.reaction_id == sr.reaction_id)
+          [(o2r.object_id)]) 
+    };
+#            query = "select distinct object_id from grac_ligand_rank_potency where description ILIKE '%substrate%' AND rank_potency ILIKE '%<Ligand id=" + ligand_id + "/>%' and object_id in (SELECT object_id FROM transporter)";
+
+  var relevantPred = Utility.contains(uniquify(relevantIDs));
+  var referenced = querySubstrates(fun(s) { relevantPred(s.object_id) });
+  var potencyReferenced = potencySubstrates(ligandID);
+  basic ++ referenced ++ potencyReferenced
+}
+

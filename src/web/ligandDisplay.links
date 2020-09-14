@@ -10,6 +10,7 @@ open import DataTable;
 open import InteractionUtilities;
 open import DbLinks;
 open import Screen;
+import Substrate;
 
 import MvuHTML;
 import MvuAttrs;
@@ -509,6 +510,7 @@ fun getInitialModel() {
         }, ([], []), rawInfo.cofactors);
 
 
+      var rawSubstrates = Substrate.substratesForLigand(ligandId);
       var (enzymeSubstrates, transporterSubstrates, substrateRefs) =
         fold_right(fun(s, (es, ts, rs)) {
             var subs = {
@@ -526,7 +528,7 @@ fun getInitialModel() {
             } else {
               (es, ts, rs)
             }
-        }, ([], [], []), rawInfo.substrates);
+        }, ([], [], []), rawSubstrates);
         
 
       # Transform raw interactions into more structured form
@@ -1004,30 +1006,14 @@ fun getInitialModel() {
             #   - Ligand potencies
             #   - Object2reaction
             #   - Products (for enzymes)
-            substrates =
-              for (s <-- Tables.substrate)
-                where (s.ligand_id == ligandId)
-                  for (o <-- Tables.object)
-                  where (o.object_id == s.object_id)
-                    [(substrate = s, object = o,
-                      reactions =
-                        for (o2r <-- Tables.object2reaction)
-                        where (o2r.object_id == o.object_id)
-                          for (r <-- Tables.reaction)
-                          where (r.reaction_id == o2r.reaction_id)
-                          [r],
-                      isTransporter = length(
-                        for (t <-- Tables.transporter)
-                        where (t.object_id == o.object_id)
-                        [t]) > 0,
-                      isEnzyme = length(
-                        for (e <-- Tables.enzyme)
-                        where (e.object_id == o.object_id)
-                        [e]) > 0,
-                      refs =
-                        for (sr <-- Tables.substrate_refs)
-                        where (sr.substrate_id == s.substrate_id)
-                        [sr.reference_id])],
+            # query =
+            # "SELECT distinct object_id FROM object2reaction WHERE reaction_id in 
+            #   (SELECT reaction_id FROM reaction WHERE reaction ILIKE '%<Ligand id=" + ligand_id + "/>%') 
+            #   and object_id in (SELECT object_id FROM transporter)
+            #   UNION 
+            # SELECT distinct object_id FROM object2reaction WHERE reaction_id in
+            # (SELECT reaction_id FROM specific_reaction WHERE reaction ILIKE '%<Ligand id=" + ligand_id + "/>%')
+            # and object_id in (SELECT object_id FROM transporter) ";
             screens = queryLigandScreens(ligandId)
           )]
       };

@@ -274,7 +274,7 @@ fun displayAffinityVoltage(af) {
 fun queryInteractions(pred) {
     query nested {
       for (i <-- Tables.interaction)
-        where (pred(i) && not(i.hide))
+        where (pred(i))
           [(interaction = i,
             ligand =
               for (l <-- Tables.ligand)
@@ -300,7 +300,7 @@ fun interactionsForLigand(ligandId) {
 }
 
 fun interactionsForObject(objectId) {
-  queryInteractions(fun(i) { i.object_id == objectId && not(i.only_grac) })
+  queryInteractions(fun(i) { i.object_id == objectId && not(i.only_grac) && not(i.hide) })
 }
 
 fun interactionsTargeting(ligandId) {
