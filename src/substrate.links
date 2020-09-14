@@ -1,7 +1,7 @@
 import Tables;
 open import Utility;
 
-fun querySubstrates(pred) {
+fun querySubstrates(pred, includeRefs) {
   query nested {
     for (s <-- Tables.substrate)
     where (pred(s))
@@ -23,9 +23,13 @@ fun querySubstrates(pred) {
             where (e.object_id == o.object_id)
             [e]) > 0,
           refs =
-            for (sr <-- Tables.substrate_refs)
-            where (sr.substrate_id == s.substrate_id)
-            [sr.reference_id])]
+            if (includeRefs) {
+              for (sr <-- Tables.substrate_refs)
+              where (sr.substrate_id == s.substrate_id)
+              [sr.reference_id]
+            } else {
+              []
+            })]
   }
 }
 
@@ -59,10 +63,35 @@ fun potencySubstrates(ligandID) {
   }
 }
 
+fun queryProducts(ligandID) {
+  query nested {
+    for (p <-- Tables.product)
+    where (p.ligand_id == ligandID)
+      for (o <-- Tables.object)
+      where (o.object_id == p.object_id &&
+          length(
+            for (e <-- Tables.enzyme)
+            where (e.object_id == o.object_id)
+            [e]) > 0)
+        [(object = o,
+          reactions =
+            for (o2r <-- Tables.object2reaction)
+            where (o2r.object_id == o.object_id)
+              for (r <-- Tables.reaction)
+              where (r.reaction_id == o2r.reaction_id)
+              [r],
+          isTransporter = false,
+          isEnzyme = true,
+          refs =
+            for (pr <-- Tables.product_refs)
+            where (pr.product_id == p.product_id)
+            [pr.reference_id])]
+  }
+}
 
 fun substratesForLigand(ligandID) {
   # Substrates which are directly referenced in the table
-  var basic = querySubstrates(fun(s) { s.ligand_id == ligandID });
+  var basic = querySubstrates(fun(s) { s.ligand_id == ligandID }, true);
 
   # Gather object IDs where the Ligand ID is contained in the reaction
   # and specific_reaction tables.
@@ -83,9 +112,10 @@ fun substratesForLigand(ligandID) {
     };
 #            query = "select distinct object_id from grac_ligand_rank_potency where description ILIKE '%substrate%' AND rank_potency ILIKE '%<Ligand id=" + ligand_id + "/>%' and object_id in (SELECT object_id FROM transporter)";
 
-  var relevantPred = Utility.contains(uniquify(relevantIDs));
-  var referenced = querySubstrates(fun(s) { relevantPred(s.object_id) });
+  var relevantPred = Utility.contains(relevantIDs);
+  var referenced = querySubstrates(fun(s) { relevantPred(s.object_id) }, false);
   var potencyReferenced = potencySubstrates(ligandID);
-  basic ++ referenced ++ potencyReferenced
+  var products = queryProducts(ligandID);
+  uniquifyBy(fun(x, y) { x.object.object_id == y.object.object_id }, basic ++ referenced ++ potencyReferenced ++ products)
 }
 
