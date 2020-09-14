@@ -9,13 +9,14 @@ open import Species;
 open import DataTable;
 open import InteractionUtilities;
 open import DbLinks;
+open import Screen;
 
 import MvuHTML;
 import MvuAttrs;
 
 typename Tab =
   [| Summary | BiologicalActivity | ClinicalData | References
-   | Structure | SimilarLigands | Analogues | Malaria | Immuno |];
+   | Structure | SimilarLigands | Analogues | Malaria | Immuno | Screens |];
 
 
 typename Message =
@@ -24,6 +25,7 @@ typename Message =
    | SortCofactorTable:(ColumnName, SortDirection)
    | SortTransporterTable:(ColumnName, SortDirection)
    | SortEnzymeSubstratesTable:(ColumnName, SortDirection)
+   | SortScreenTable:(ScreenID, ScreenTableName, ColumnName, SortDirection)
    | NoOp
   |];
 
@@ -219,7 +221,8 @@ typename LigandInfo = (
   ligandRankPotencies: [RankPotency],
   ligandTCPs: [MalariaTargetProfile],
   ligandMentionedIn: MentionedIn,
-  ligandMentionedInObjects: [MentionedInObject]
+  ligandMentionedInObjects: [MentionedInObject],
+  ligandScreens: [Screen(Message)]
 );
 
 typename Model = Maybe((
@@ -265,13 +268,13 @@ fun getInitialModel() {
       }
 
       fun transformSynonyms(ss) {
-        fold_right(fun(x, acc) {
+        fold_right(fun(x, (syns, refs)) {
             if (x.l2s.display) {
-              (synonymName = parseOrError(x.l2s.synonym), synonymRefs = x.refs) :: acc
+              ((synonymName = parseOrError(x.l2s.synonym), synonymRefs = x.refs) :: syns, x.refs ++ refs)
             } else {
-              acc
+              (syns, refs)
             }
-        }, [], ss)
+        }, ([], []), ss)
       }
 
       fun transformInns(inns) {
@@ -303,6 +306,7 @@ fun getInitialModel() {
         (parsed, refs, ligands)
       }
 
+      var (synonyms, synonymRefs) = transformSynonyms(rawInfo.synonyms);
       var (comments, commentRefs, commentLigands) =
         transformComments(rawLigand);
 
@@ -718,6 +722,9 @@ fun getInitialModel() {
       var (mentionedInObjs, mioRefs, mioLigands) =
         transformMentionedInObjects(rawInfo.mentioned_in_objects);
 
+      var (screens, screenRefs) =
+        transformScreens(rawInfo.screens, true);
+
       # print("Raw rank potencies: " ^^ show(rawInfo.rank_potencies));
       # print("Transformed rank potencies: " ^^ show(rankPotencies));
 
@@ -732,6 +739,8 @@ fun getInitialModel() {
             rpRefs ++
             mioRefs ++
             cofactorRefs ++
+            screenRefs ++
+            synonymRefs ++
             substrateRefs);
 
       var rawLigands =
@@ -740,6 +749,7 @@ fun getInitialModel() {
             immunoDiseaseLigands ++
             rpLigands ++
             mioLigands ++
+            synonymRefs ++
             tcpLigands);
 
       var refs = mkReferenceData(queryReferences(rawRefs));
@@ -771,7 +781,7 @@ fun getInitialModel() {
        ligandWithdrawn = rawLigand.withdrawn_drug,
        ligandIUPACName = rawLigand.iupac_name,
        ligandINNs = transformInns(rawInfo.inns),
-       ligandSynonyms = transformSynonyms(rawInfo.synonyms),
+       ligandSynonyms = synonyms,
        ligandComments = comments,
        ligandURLs = urls,
        ligandDBLinks = transformDatabaseLinks(rawInfo.databaseLinks),
@@ -789,7 +799,8 @@ fun getInitialModel() {
        ligandTCPs = tcps,
        ligandRankPotencies = rankPotencies,
        ligandMentionedIn = transformMentionedIn(rawInfo.mentioned_in),
-       ligandMentionedInObjects = mentionedInObjs 
+       ligandMentionedInObjects = mentionedInObjs,
+       ligandScreens = screens
        )
     }
 
@@ -1016,7 +1027,8 @@ fun getInitialModel() {
                       refs =
                         for (sr <-- Tables.substrate_refs)
                         where (sr.substrate_id == s.substrate_id)
-                        [sr.reference_id])]
+                        [sr.reference_id])],
+            screens = queryLigandScreens(ligandId)
           )]
       };
 
@@ -1108,6 +1120,28 @@ fun updt(msg, model) {
             updateSortStatus(tables.enzymeSubstrates, colName, dir));
         (model with modelLigand =
           (model.modelLigand with ligandBioactivityTables = newTables))
+
+      case SortScreenTable(screenID, tblName, colName, dir) ->
+        fun sortInnerTable(screens) {
+          map(fun((name, tbl)) {
+              if (name == tblName) {
+                (name, DataTable.updateSortStatus(tbl, colName, dir))
+              } else {
+                (name, tbl)
+              }
+          }, screens)
+        }
+
+        var screens =
+          map(fun(x) {
+                if (x.id == screenID) {
+                  (x with data = sortInnerTable(x.data))
+                } else {
+                  x
+                }
+              }, model.modelLigand.ligandScreens);
+        (model with modelLigand =
+          (model.modelLigand with ligandScreens = screens))
       case NoOp -> model #temp
     }
   }
@@ -1347,7 +1381,8 @@ fun view(model) {
 
       var synonymsBox = {
         var contents = MvuHTML.concat(join([textNode(" | ")],
-              map(fun(x) { [RenderMarkup.renderSimple(x.synonymName)] }, ligandInfo.ligandSynonyms)));
+              map(fun(x) { [RenderMarkup.renderSimple(x.synonymName) +*
+                textNode(" ") +* renderCitations(x.synonymRefs)] }, ligandInfo.ligandSynonyms)));
         if (listEmpty(ligandInfo.ligandSynonyms)) {
           MvuHTML.empty
         } else {
@@ -1897,6 +1932,13 @@ fun view(model) {
       }
     };
 
+
+    var screensPage = {
+      MvuHTML.concatMap(fun(x) {
+          renderScreen(x, true, ligandInfo.ligandReferences)},
+          ligandInfo.ligandScreens)
+    };
+
     var structurePage = {
       fun renderSubunit((id, name)) {
         tr(class("info"),
@@ -2342,6 +2384,7 @@ fun view(model) {
             urls.drugsURL == "" && urls.emaURL == "" && urls.emcURL == "")
       };
       var showReferences = not(listEmpty(ligandInfo.ligandReferences));
+      var showScreens = not(listEmpty(ligandInfo.ligandScreens));
       var showStructure = {
 
         var subunitsEmpty = listEmpty(ligandInfo.ligandSubunits);
@@ -2383,6 +2426,7 @@ fun view(model) {
         ("Biological activity", BiologicalActivity, showBioActivity),
         ("Clinical data", ClinicalData, showClinicalData),
         ("References", References, showReferences),
+        ("Screens", Screens, showScreens),
         ("Structure", Structure, showStructure),
         ("Similar ligands", SimilarLigands, showSimilarLigands),
         ("(Un)labelled forms", Analogues, showAnalogues),
@@ -2413,6 +2457,7 @@ fun view(model) {
           case BiologicalActivity -> biologicalActivityPage
           case ClinicalData -> clinicalDataPage
           case References -> referencesPage
+          case Screens -> screensPage
           case Structure -> structurePage
           case SimilarLigands -> similarLigandsPage
           case Analogues -> analoguesPage

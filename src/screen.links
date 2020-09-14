@@ -16,6 +16,7 @@ typename ParsedScreenInteraction =
 
 typename ScreenID = Int;
 typename ScreenTableName = String;
+typename ColumnName = String;
 
 typename Screen(msg) =
   (id: Int,
@@ -44,7 +45,9 @@ fun dataBox(hdr, cols, contents) {
     tbody(name("toggle"), contents))
 }
 
-fun transformScreens(screens) {
+# Screens are stored differently if we're displaying screens for an object
+# or for a ligand
+fun transformScreens(screens, isLigandPage) {
 
   var speciesMap = Species.getSpeciesMap();
   fun speciesShortName(speciesID) { resolveSpeciesShortName(speciesID, speciesMap) }
@@ -64,10 +67,19 @@ fun transformScreens(screens) {
     };
 
   fun mkScreenTable(screenID, targetName, interactions) {
-    var cols = [
-      ("Ligand", ("", Sortable(fun(x, y) {
-          simpleCmp(x.interaction.interactionLigand.name,
-              y.interaction.interactionLigand.name) }))),
+    var targetCol = {
+      if (isLigandPage) {
+        ("Target", ("", Sortable(fun(x, y) {
+            simpleCmp(x.interaction.objectName,
+                y.interaction.objectName) })))
+      } else {
+        ("Ligand", ("", Sortable(fun(x, y) {
+            simpleCmp(x.interaction.interactionLigand.name,
+                y.interaction.interactionLigand.name) })))
+      }
+    };
+    var cols = 
+      targetCol :: [
       ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
       ("", ("", NotSortable)), ("", ("", NotSortable)), ("", ("", NotSortable)),
       ("", ("", NotSortable)), ("", ("", NotSortable)),
@@ -107,9 +119,15 @@ fun transformScreens(screens) {
              ligandSize = parseLigandSize(x.ligand.type),
              speciesShort = speciesShortName(x.si.species_id))
           }, group);
-        # Now need to group by action comment
-        var groupedInteractions =
-          groupBy(fun(x) { x.interaction.interactionActionComment }, interactions);
+        # In the case of ObjectDisplay, we need to group by action comment --
+        # otherwise just have a single group
+        var groupedInteractions = {
+          if (not(isLigandPage)) {
+            groupBy(fun(x) { x.interaction.interactionActionComment }, interactions)
+          } else {
+            [("", interactions)]
+          }
+        };
         var data = map(fun((name, interactions)) {
             (name, mkScreenTable(scr.screen_id, name, interactions))
           }, groupedInteractions);
@@ -159,9 +177,11 @@ fun queryScreenInteractions(pred) {
       where (pred(si))
       for (l <-- Tables.ligand)
       where (l.ligand_id == si.ligand_id)
-        for (scr <-- Tables.screen)
-        where (si.screen_id == scr.screen_id)
-          [(=si, ligand = l)]
+        for (o <-- Tables.object)
+        where (o.object_id == si.object_id)
+          for (scr <-- Tables.screen)
+          where (si.screen_id == scr.screen_id)
+            [(=si, ligand = l, object = o)]
   }
 }
 
@@ -173,7 +193,7 @@ fun queryObjectScreens(objectId) {
   queryScreenInteractions(fun(si) { si.object_id == objectId })
 }
 
-fun renderScreen(screen, references) {
+fun renderScreen(screen, isLigandPage, references) {
   open MvuHTML;
   open MvuAttrs;
 
@@ -247,8 +267,14 @@ fun renderScreen(screen, references) {
             boolImage(("/images/immuno_ligand.png", i.interactionLigand.in_gtip, "Immunopharmacology Ligand"));
 
 
-          var ligandName = a(href("/ligandDisplay?ligandId=" ^^ intToString(i.interactionLigand.ligand_id)),
-              unescapedTextNode(i.interactionLigand.name));
+          var targetName = 
+            if (isLigandPage) {
+              a(href("/objectDisplay?objectId=" ^^ intToString(i.objectID)),
+                unescapedTextNode(i.objectName))
+            } else {
+              a(href("/ligandDisplay?ligandId=" ^^ intToString(i.interactionLigand.ligand_id)),
+                unescapedTextNode(i.interactionLigand.name))
+            };
           var species = td(a0, textNode(row.speciesShort));
           var interactionType = td(a0, textNode(i.interactionType));
           var action = td(a0, textNode(i.interactionAction));
@@ -256,7 +282,7 @@ fun renderScreen(screen, references) {
           var parameter = td(a0, textNode(i.affinity.affinityUnits));
 
           tr(class("info"),
-            ligandName +* sizeCol +* approvedCol +* selectiveCol +* endogenousCol +*
+            targetName +* sizeCol +* approvedCol +* selectiveCol +* endogenousCol +*
               labelled +* radioactive +* hasPDB +* immuno +* species +* interactionType +*
               action +* value +* parameter)
         }
@@ -279,7 +305,11 @@ fun renderScreen(screen, references) {
             tr(a0,
               td(class("table_container") +@ style("border-style:solid solid none solid;") +@ colSpan(3),
                 DataTable.renderTable(tbl, renderRow)));
-          heading +* tbl
+          if (name <> "") {
+            heading +* tbl
+          } else {
+            tbl
+          }
         }
         MvuHTML.concatMap(renderScreenTable, screen.data)
       };

@@ -2432,7 +2432,7 @@ fun getInitialModel() {
             raw.mutationsWithoutPathophysiology);
 
       var alleles = transformAlleles(raw.alleles);
-      var (screens, scrRefs) = transformScreens(raw.screens);
+      var (screens, scrRefs) = transformScreens(raw.screens, false);
 
       var ges : [GeneExpression] = transformGeneExpression(raw.geneInformation);
 
@@ -3235,7 +3235,7 @@ fun view(model) {
 
     var screens = {
       MvuHTML.concatMap(fun(x) {
-          renderScreen(x, objectInfo.objectReferences)
+          renderScreen(x, false, objectInfo.objectReferences)
       }, objectInfo.objectScreens)
     };
 
