@@ -13,14 +13,12 @@ open import Ligand;
 open import Species;
 open import ToggleBox;
 open import Contributor;
+open import Object;
 
 
 # TO DO
 
 ## For objects
-# Nomenclature / Systematic Nomenclature
-# Common abbreviation
-# Previous and unofficial names
 # Complexes
 # Subunits
 # Quaternary structure comments
@@ -30,7 +28,6 @@ open import Contributor;
 # BitterDB IDs
 # Bioparadigms SLC Tables
 # Reactions
-# Principal Transduction (always show if a GPCR; show '-' if GPCR but unavailable)
 # Rank potencies
 # Endogenous substrates
 # Exogenous substrates
@@ -102,11 +99,20 @@ open import Contributor;
 # Ensembl ID
 # UniProtKB AC
 # Comment
+# Nomenclature / Systematic Nomenclature
 
 
 # DONE
 # Target Id
 # Genes
+
+## Objects
+# Common abbreviation
+# Previous and unofficial names
+# Principal Transduction (always show if a GPCR; show '-' if GPCR but unavailable)
+
+
+
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -126,12 +132,13 @@ typename GeneRef = (geneName: Markup, geneSpeciesID: Int); # TODO: URL
 
 typename ObjectSummary = (
    objectId: Int,
-   objectNomenclature: Markup,
+   rawObject: RawObject,
+   objectType: ObjectType,
    objectSynonyms: [Synonym],
    objectGenes: [GeneRef],
    objectEnsemblRefs: [ExternalRef],
    objectUniprotRefs: [ExternalRef],
-   objectPrincipalTransductions: [Markup],
+   objectPrincipalTransductions: [String],
    objectInteractions: [Interaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
@@ -273,6 +280,14 @@ fun view(model) {
               td(class("grac_info_simple"), contents)))
         }
 
+        fun mkStrRowIfNonempty(name, str) {
+          if (str <> "") {
+            mkRow(name, unescapedTextNode(str))
+          } else {
+            MvuHTML.empty
+          }
+        }
+
         # In the case that an interaction is with a labelled ligand, it is
         # only classed as labelled. Similarly, if the interaction is endogenous,
         # it is only classed as endogenous.
@@ -357,10 +372,15 @@ fun view(model) {
         }
 
         var ptRow =
-          if (length(summary.objectPrincipalTransductions) > 0) {
-              mkRow("Principal transduction",
-                MvuHTML.concat(map(fun(x) { renderM(x) },
-                  summary.objectPrincipalTransductions)))
+          if (summary.objectType == GPCR) {
+              var contents =
+                if (length(summary.objectPrincipalTransductions) > 0) {
+                  MvuHTML.concat(map(fun(x) { unescapedTextNode(x) },
+                    summary.objectPrincipalTransductions))
+                } else {
+                  textNode("-")
+                };
+              mkRow("Principal transduction", contents)
           } else {
             MvuHTML.empty
           };
@@ -386,9 +406,24 @@ fun view(model) {
               }, summary.objectGenes);
             var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
+            var nomenclature = {
+              var o = summary.rawObject;
+              if (o.systematic_name <> "") {
+                if (o.name == o.systematic_name) {
+                  mkRow("Nomenclature", unescapedTextNode(o.name)) +*
+                  mkRow("Systematic nomenclature", unescapedTextNode(o.systematic_name))
+                } else {
+                  mkRow("Systematic nomenclature", unescapedTextNode(o.systematic_name))
+                }
+              } else {
+                mkRow("Nomenclature", unescapedTextNode(o.name))
+              }
+            };
+
             hr(class("divider_dashed"), MvuHTML.empty) +*
             mkRow("Target Id", textNode(intToString(summary.objectId))) +*
-            mkRow("Nomenclature", renderM(summary.objectNomenclature)) +*
+            nomenclature +*
+            mkStrRowIfNonempty("Common abbreviation", summary.rawObject.abbreviation) +*
             mkRow("Previous and unofficial names", separatedSynonyms) +*
             mkRow("Genes", separatedGenes) +*
             ptRow +*
@@ -408,7 +443,7 @@ fun view(model) {
         tr(a0,
           td(class("grac_info"),
             p(class("grac_heading split_para"),
-              renderM(box.objectSummary.objectNomenclature) +*
+              unescapedTextNode(box.objectSummary.rawObject.name) +*
               span(class("cgtp"), textNode(" C")) +*
               showHideLink +*
               span(class("split_para_right_text detailed_view_link"),
@@ -569,30 +604,31 @@ fun getInitialModel() {
          query nested {
             for (r2f <-- receptor2family)
               where (r2f.family_id == familyId)
-              for (receptor <-- object)
-                where (receptor.object_id == r2f.object_id)
+              for (o <-- object)
+                where (o.object_id == r2f.object_id)
                 [
-                   (id=receptor.object_id,
-                    nomenclature=receptor.name,
+                   (id=o.object_id,
+                    =o,
+                    nomenclature=o.name,
                     synonyms=
                      for (s <-- Tables.synonym)
-                       where (s.object_id == receptor.object_id && s.display)
+                       where (s.object_id == o.object_id && s.display)
                        [(name=s.synonym, order=s.display_order, refs=
                           for (sr <-- Tables.synonym_refs)
                           where (s.synonym_id == sr.synonym_id)
                           [sr.reference_id])],
                     genes=
                       for (g <-- structural_info)
-                        where (g.object_id == receptor.object_id)
+                        where (g.object_id == o.object_id)
                         [ (g.gene_name, g.species_id) ],
                    ensemblRefs=[emptyER], # TODO
                    uniprotRefs=[emptyER], # TODO
                    principalTransductions=
                       for (tr <-- Tables.grac_transduction)
-                        where (tr.object_id == receptor.object_id)
+                        where (tr.object_id == o.object_id)
                         [tr.transduction],
                    interactions =
-                     InteractionUtilities.interactionsForObject(receptor.object_id),
+                     InteractionUtilities.interactionsForObject(o.object_id),
                    displayOrder=r2f.display_order)
                 ]
          };
@@ -609,7 +645,8 @@ fun getInitialModel() {
 
             (
                 objectId=r.id,
-                objectNomenclature=parseOrError(r.nomenclature),
+                objectType = Object.classifyObject(r.id),
+                rawObject=r.o,
                 objectSynonyms=
                   map(fun (s) { (synonymName=parseOrError(s.name),
                         synonymOrder=s.order, synonymReferences=s.refs) }, r.synonyms),
@@ -617,8 +654,7 @@ fun getInitialModel() {
                   map(fun ((name, id)) { (geneName = parseOrError(name), geneSpeciesID = id) }, r.genes),
                 objectEnsemblRefs=r.ensemblRefs,
                 objectUniprotRefs=r.uniprotRefs,
-                objectPrincipalTransductions=
-                  map(parseOrError, r.principalTransductions),
+                objectPrincipalTransductions= r.principalTransductions,
                 objectInteractions = interactions,
                 objectDisplayOrder=r.displayOrder
             )
