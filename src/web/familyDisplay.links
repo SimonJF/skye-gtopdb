@@ -14,9 +14,102 @@ open import Species;
 open import ToggleBox;
 open import Contributor;
 
+
+# TO DO
+
+## For objects
+# Nomenclature / Systematic Nomenclature
+# Common abbreviation
+# Previous and unofficial names
+# Complexes
+# Subunits
+# Quaternary structure comments
+# Ensembl IDs
+# UniProt IDs
+# PlasmoDB IDs
+# BitterDB IDs
+# Bioparadigms SLC Tables
+# Reactions
+# Principal Transduction (always show if a GPCR; show '-' if GPCR but unavailable)
+# Rank potencies
+# Endogenous substrates
+# Exogenous substrates
+# Products
+# Cofactors
+### Interactions
+# Endogenous Ligands
+# Ligands
+# Sub/family-selective ligands
+# Selective ligands
+# Endogenous activators
+# Activators
+# Sub/family-selective activators
+# Selective activators
+# Endogenous inhibitors
+# Inhibitors
+# Sub/family-selective inhibitors
+# Selective inhibitors
+# Endogenous gating inhibitors
+# Gating inhibitors
+# Sub/family-selective gating inhibitors
+# Selective gating inhibitors
+# Endogenous agonists
+# Agonists
+# Sub/family-selective agonists
+# Selective agonists
+# Endogenous antagonists
+# Antagonists
+# Sub/family-selective antagonists
+# Selective antagonists
+# Endogenous channel blockers
+# Channel blockers
+# Sub/family-selective channel blockers
+# Selective channel blockers
+# Endogenous allosteric modulators
+# Allosteric modulators
+# Sub/family-selective allosteric modulators
+# Whole organism assays
+# Selective allosteric modulators
+# Antibodies
+# Sub/family-selective labelled ligands
+# Labelled ligands
+## END INTERACTIONS
+# Stoichiometry
+# Functional characteristics
+# Comments
+# Same entity ligands
+
+## For ligands
+# Ligand Id
+# Name
+# Common abbreviation
+# Synonyms
+# Complexes
+# Subunits
+# Genes
+# PubChem CID
+# UniProtKB AC
+
+
+
+# For accessory proteins (I think these are actually just a subset of the object ones)
+# Target ID
+# Nomenclature
+# Synonyms
+# Complexes
+# Structure comments
+# Genes
+# Ensembl ID
+# UniProtKB AC
+# Comment
+
+
+# DONE
+# Target Id
+# Genes
+
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
-
 
 typename ExternalRef = (
   refId: String,
