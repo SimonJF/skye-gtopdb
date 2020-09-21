@@ -22,16 +22,10 @@ open import DbLinks;
 # Complexes
 # Subunits
 # Quaternary structure comments
-# Bioparadigms SLC Tables
 # Reactions
 # Rank potencies
 # Endogenous substrates
 # Exogenous substrates
-# Products
-# Cofactors
-# Stoichiometry
-# Functional characteristics
-# Comments
 # Same entity ligands
 
 ## For ligands
@@ -90,8 +84,14 @@ open import DbLinks;
 # Common abbreviation
 # Previous and unofficial names
 # Principal Transduction (always show if a GPCR; show '-' if GPCR but unavailable)
-
-
+# Bioparadigms SLC Tables
+# PubChem CID
+# UniProtKB AC
+# Stoichiometry
+# Functional characteristics
+# Comments
+# Products
+# Cofactors
 
 
 typename ReferenceId = Int;
@@ -110,6 +110,22 @@ var emptyER = (refId="", refSpeciesName="", refUrl="");
 
 typename GeneRef = (geneName: Markup, geneSpeciesID: Int); # TODO: URL
 
+typename ObjectComments = (
+  generalComments: Markup,
+  quaternaryStructureComments: Markup,
+  functionalCharacteristics: Markup,
+  stoichiometry: Markup
+);
+
+# There's probably a better biochemistry name for "product or cofactor"...
+typename EnzymeReactionComponent = (
+  ligandID: Int,
+  ligandName: String,
+  speciesID: Int,
+  comments: Markup,
+  references: [ReferenceID]
+);
+
 typename ObjectSummary = (
    objectId: Int,
    rawObject: RawObject,
@@ -119,6 +135,9 @@ typename ObjectSummary = (
    objectDBLinks: [DatabaseLink],
    objectPrincipalTransductions: [String],
    objectInteractions: [(String, [Interaction])], # (Type, Interactions)
+   objectProducts: [EnzymeReactionComponent],
+   objectCofactors: [EnzymeReactionComponent],
+   objectComments: ObjectComments,
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
   );
@@ -267,6 +286,14 @@ fun view(model) {
           }
         }
 
+        fun mkMarkupRowIfNonempty(name, m) {
+          if (not(markupEmpty(m))) {
+            mkRow(name, renderM(m))
+          } else {
+            MvuHTML.empty
+          }
+        }
+
         fun showInteraction(x) {
           var interactionActionNode =
             if (not(x.interactionAction == "Agonist"
@@ -363,22 +390,40 @@ fun view(model) {
               switch(filter(fun(x) { x.dbID == dbID }, summary.objectDBLinks)) {
                 case [] -> MvuHTML.empty
                 case x :: _ ->
-                  # <c:if test="${!empty object.uniprotIds}">
-                  #     <tr>
-                  #         <td class="grac_category_simple">UniProtKB AC</td>
-                  #         <td class="grac_info_simple">
-                  #           <%--  <c:choose>
-                  #                 <c:when test="${!empty object.uniprotIds}">--%>
-                  #                     <c:out value="${object.uniprotIds}" escapeXml="false"/>
-                  #               <%--  </c:when>
-                  #                 <c:otherwise>-</c:otherwise>
-                  #             </c:choose>--%>
-                  #         </td>
-                  #     </tr>
-                  # </c:if>
-
                   var links = renderEntries(x, model.speciesMap);
                   mkRow(dbName, links)
+              }
+            }
+
+            fun renderEnzymeComponents(name, ecs) {
+              fun renderRow(x) {
+                var ligandInfo =
+                  a(href("/ligandDisplay?ligandId=" ^^ intToString(x.ligandID)),
+                      textNode(x.ligandName));
+                var speciesInfo = {
+                  var species = resolveSpeciesLongName(x.speciesID,
+                    model.speciesMap);
+                  if (species <> "Human") {
+                    textNode(species)
+                  } else {
+                    MvuHTML.empty
+                  }
+                };
+
+                tr(a0,
+                  td(class("grac_info_simple"),
+                    ligandInfo +*
+                    speciesInfo +*
+                    renderCitationList(x.references, model.references)))
+              }
+
+              if (listEmpty(ecs)) {
+                MvuHTML.empty
+              } else {
+                var renderedRows = MvuHTML.concatMap(renderRow, ecs);
+                var tbl =
+                  table_(class("grac_inner_table"), renderedRows);
+                mkRow(name, tbl)
               }
             }
 
@@ -386,10 +431,14 @@ fun view(model) {
             var uniprotIDs = mkIDRow("UniProtKB AC", 5);
             var plasmoIDs = mkIDRow("PlasmoDB", 64);
             var bitterIDs = mkIDRow("BitterDB", 54);
+            var slcIDs = mkIDRow("Bioparadigms SLC Tables", 61);
 
             var interactionRows =
               MvuHTML.concatMap(fun((name, xs)) { mkInteractionRow(name, xs) },
                   summary.objectInteractions);
+
+            var cofactorsRow = renderEnzymeComponents("Cofactors", summary.objectCofactors);
+            var productsRow = renderEnzymeComponents("Products", summary.objectProducts);
 
             hr(class("divider_dashed"), MvuHTML.empty) +*
             mkRow("Target Id", textNode(intToString(summary.objectId))) +*
@@ -401,8 +450,14 @@ fun view(model) {
             uniprotIDs +*
             plasmoIDs +*
             bitterIDs +*
+            slcIDs +*
             ptRow +*
-            interactionRows
+            productsRow +*
+            cofactorsRow +*
+            interactionRows +*
+            mkMarkupRowIfNonempty("Stoichiometry", summary.objectComments.stoichiometry) +*
+            mkMarkupRowIfNonempty("Functional characteristics", summary.objectComments.functionalCharacteristics) +*
+            mkMarkupRowIfNonempty("Comment", summary.objectComments.generalComments)
           } else {
             MvuHTML.empty
           }
@@ -597,6 +652,34 @@ fun getInitialModel() {
                       for (tr <-- Tables.grac_transduction)
                         where (tr.object_id == o.object_id)
                         [tr.transduction],
+                   functionalCharacteristics =
+                     for (fc <-- Tables.grac_functional_characteristics)
+                       where (fc.object_id == o.object_id)
+                       [fc.functional_characteristics],
+                   stoichiometry =
+                     for (t <-- Tables.transporter)
+                       where (t.object_id == o.object_id)
+                        [t.grac_stoichiometry],
+                   products =
+                     for (p <-- Tables.product)
+                       where (p.object_id == o.object_id)
+                         for (l <-- Tables.ligand)
+                         where (l.ligand_id == p.ligand_id)
+                         [(x = p, =l,
+                             refs =
+                               for (r <-- Tables.product_refs)
+                               where (r.product_id == p.product_id)
+                                 [r.reference_id])],
+                   cofactors =
+                     for (c <-- Tables.cofactor)
+                       where (c.object_id == o.object_id)
+                         for (l <-- Tables.ligand)
+                         where (l.ligand_id == c.ligand_id)
+                         [(x = c, =l,
+                             refs =
+                               for (r <-- Tables.cofactor_refs)
+                               where (r.cofactor_id == c.cofactor_id)
+                                 [r.reference_id])],
                    interactions =
                      InteractionUtilities.interactionsForObject(o.object_id),
                    displayOrder=r2f.display_order)
@@ -801,31 +884,104 @@ fun getInitialModel() {
            }, [], rawInteractions)
          }
 
-         # Rather silly to do the sorting during the render function!
-         var objects = map(fun(r) {
-            (
-                objectId=r.id,
+         fun transformComments(o) {
+           var generalComments = parseOrError(o.o.grac_comments);
+           var quaternaryStructureComments = parseOrError(o.o.quaternary_structure_comments);
+           var functionalCharacteristics =
+             parseOrError(unwords(o.functionalCharacteristics));
+           var stoichiometry = parseOrError(unwords(o.stoichiometry));
+           var (refs, ligands) =
+             collectAllIds([generalComments, quaternaryStructureComments,
+               functionalCharacteristics, stoichiometry]);
+
+           var comments = (=generalComments, =quaternaryStructureComments,
+               =functionalCharacteristics, =stoichiometry);
+           (comments, refs, ligands)
+         }
+
+         sig transformCofactors : (%) ~%~>
+           ([EnzymeReactionComponent], [Int], [Int])
+         fun transformCofactors(cs) {
+           fold_right(fun(x, (cs, refs, ligands)) {
+               var comments = parseOrError(x.x.comments);
+               var (commentRefs, commentLigands) = collectIds(comments);
+               var c =
+                 (ligandID = x.l.ligand_id,
+                  ligandName = x.l.name,
+                  speciesID = x.x.species_id,
+                  =comments,
+                  references = x.refs);
+               var cRefs = x.refs ++ commentRefs;
+               (c :: cs, cRefs ++ refs, commentLigands ++ ligands)
+           }, ([], [], []), cs)
+         }
+
+         sig transformProducts : (%) ~%~>
+           ([EnzymeReactionComponent], [Int])
+         fun transformProducts(ps) {
+           fold_right(fun(x, (ps, refs)) {
+               var p =
+                 (ligandID = x.l.ligand_id,
+                  ligandName = x.l.name,
+                  speciesID = x.x.species_id,
+                  comments = MarkupEmpty,
+                  references = x.refs);
+               (p :: ps, x.refs ++ refs)
+           }, ([], []), ps)
+         }
+
+         sig transformObjects : (%) ~%~> ([ObjectSummary], [Int], [Int])
+         fun transformObjects(os) {
+           fold_right(fun(r, (os, refs, ligands)) {
+
+             var (objectSynonyms, synRefs) =
+              fold_right(fun (s, (syns, synRefs)) {
+                  var x =
+                    (synonymName=parseOrError(s.name),
+                     synonymOrder=s.order, synonymReferences=s.refs);
+                  (x :: syns, s.refs ++ synRefs)
+                  }, ([], []), r.synonyms);
+
+             var (objectComments, commentRefs, commentLigands) =
+               transformComments(r);
+
+             var (objectCofactors, cofactorRefs, cofactorLigands) =
+               transformCofactors(r.cofactors);
+
+             var (objectProducts, productRefs) =
+               transformProducts(r.products);
+
+             var o =
+               (objectId=r.id,
                 objectType = Object.classifyObject(r.id),
                 rawObject=r.o,
-                objectSynonyms=
-                  map(fun (s) { (synonymName=parseOrError(s.name),
-                        synonymOrder=s.order, synonymReferences=s.refs) }, r.synonyms),
+                =objectSynonyms,
                 objectGenes=
-                  map(fun ((name, id)) { (geneName = parseOrError(name), geneSpeciesID = id) }, r.genes),
+                  map(fun ((name, id)) {
+                    (geneName = parseOrError(name), geneSpeciesID = id)
+                  }, r.genes),
                 objectDBLinks = transformDatabaseLinks(r.dbLinks),
                 objectPrincipalTransductions= r.principalTransductions,
                 objectInteractions = transformInteractions(r.interactions),
-                objectDisplayOrder=r.displayOrder
-            )
-          }, objects);
+                =objectComments,
+                =objectCofactors,
+                =objectProducts,
+                objectDisplayOrder=r.displayOrder);
 
-        var objectReferences = listConcatMap(fun (object) {
-            listConcatMap(fun((name, xs)) { 
-                  listConcatMap(fun(y) { y.references }, xs)
-                  }, object.objectInteractions) ++
-            listConcatMap(fun (synonym) { synonym.synonymReferences },
-                object.objectSynonyms)
-        }, objects);
+             var interactionRefs =
+               listConcatMap(fun((_, xs)) {
+                   listConcatMap(fun(x) { x.references }, xs)
+                  }, o.objectInteractions);
+
+             (o :: os,
+                synRefs ++ interactionRefs ++ commentRefs ++ cofactorRefs ++
+                productRefs ++ refs,
+              commentLigands ++ cofactorLigands ++ ligands)
+           }, ([], [], []), os)
+         }
+
+        # Rather silly to do the sorting during the render function!
+        var (objects, objectReferences, objectLigands) = transformObjects(objects);
 
         var objectBoxes =
           map(fun (r) { (objectSummary=r, objectBoxVisible=false) },
@@ -838,7 +994,7 @@ fun getInitialModel() {
         var (oRefs, oLigands) = collectIds(overviewMarkup);
         var (cRefs, cLigands) = collectIds(commentsMarkup);
         var refs = uniquify(oRefs ++ cRefs ++ objectReferences);
-        var ligands = uniquify(oLigands ++ cLigands);
+        var ligands = uniquify(oLigands ++ cLigands ++ objectLigands);
 
         var references = queryReferences(refs);
 
