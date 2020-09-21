@@ -66,6 +66,21 @@ fun renderReactionECs(reactionECs) {
   }
 }
 
+fun renderEntries(dbl, speciesMap) {
+  open MvuHTML;
+  open MvuAttrs;
+
+  fun renderEntry((speciesID, code, url)) {
+    a(href(url),
+      textNode(dbl.dbPrefix ^^ code)) +*
+    textNode(" (" ^^ resolveSpeciesShortName(speciesID, speciesMap) ^^ ")")
+  }
+  MvuHTML.concat(
+    join([textNode(", ")],
+          map(fun(l) { [renderEntry(l)] }, dbl.dbEntries)))
+}
+
+
 fun renderDatabaseLinks(dbLinks, additionalRows, speciesMap) {
   open MvuHTML;
   open MvuAttrs;
@@ -74,20 +89,11 @@ fun renderDatabaseLinks(dbLinks, additionalRows, speciesMap) {
   var h0 = MvuHTML.empty;
 
   fun renderDBLink(dbl) {
-    fun renderLink((speciesID, code, url)) {
-      a(href(url),
-        textNode(dbl.dbPrefix ^^ code)) +*
-      textNode(" (" ^^ resolveSpeciesShortName(speciesID, speciesMap) ^^ ")")
-    }
-    var renderedLinks =
-      MvuHTML.concat(
-        join([textNode(", ")],
-              map(fun(l) { [renderLink(l)] }, dbl.dbEntries)));
-
+    var renderedEntries = renderEntries(dbl, speciesMap);
     tr(a0,
       td(class("info") +@ style("min-width:250px;max-width:250px;width:250px;"),
         textNode(dbl.dbName)) +*
-      td(class("info"), renderedLinks))
+      td(class("info"), renderedEntries))
   }
 
   fun renderAdditionalRow((name, data)) { 

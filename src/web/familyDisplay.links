@@ -14,7 +14,7 @@ open import Species;
 open import ToggleBox;
 open import Contributor;
 open import Object;
-
+open import DbLinks;
 
 # TO DO
 
@@ -22,10 +22,6 @@ open import Object;
 # Complexes
 # Subunits
 # Quaternary structure comments
-# Ensembl IDs
-# UniProt IDs
-# PlasmoDB IDs
-# BitterDB IDs
 # Bioparadigms SLC Tables
 # Reactions
 # Rank potencies
@@ -33,6 +29,26 @@ open import Object;
 # Exogenous substrates
 # Products
 # Cofactors
+# Stoichiometry
+# Functional characteristics
+# Comments
+# Same entity ligands
+
+## For ligands
+# Ligand Id
+# Name
+# Common abbreviation
+# Synonyms
+# Complexes
+# Subunits
+# Genes
+# PubChem CID
+# UniProtKB AC
+
+
+# DONE
+# Target Id
+# Genes
 ### Interactions
 # Endogenous Ligands
 # Ligands
@@ -70,42 +86,6 @@ open import Object;
 # Antibodies
 # Sub/family-selective labelled ligands
 # Labelled ligands
-## END INTERACTIONS
-# Stoichiometry
-# Functional characteristics
-# Comments
-# Same entity ligands
-
-## For ligands
-# Ligand Id
-# Name
-# Common abbreviation
-# Synonyms
-# Complexes
-# Subunits
-# Genes
-# PubChem CID
-# UniProtKB AC
-
-
-
-# For accessory proteins (I think these are actually just a subset of the object ones)
-# Target ID
-# Nomenclature
-# Synonyms
-# Complexes
-# Structure comments
-# Genes
-# Ensembl ID
-# UniProtKB AC
-# Comment
-# Nomenclature / Systematic Nomenclature
-
-
-# DONE
-# Target Id
-# Genes
-
 ## Objects
 # Common abbreviation
 # Previous and unofficial names
@@ -136,10 +116,9 @@ typename ObjectSummary = (
    objectType: ObjectType,
    objectSynonyms: [Synonym],
    objectGenes: [GeneRef],
-   objectEnsemblRefs: [ExternalRef],
-   objectUniprotRefs: [ExternalRef],
+   objectDBLinks: [DatabaseLink],
    objectPrincipalTransductions: [String],
-   objectInteractions: [Interaction],
+   objectInteractions: [(String, [Interaction])], # (Type, Interactions)
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
   );
@@ -288,44 +267,6 @@ fun view(model) {
           }
         }
 
-        # In the case that an interaction is with a labelled ligand, it is
-        # only classed as labelled. Similarly, if the interaction is endogenous,
-        # it is only classed as endogenous.
-        fun splitInteractions(interactions) {
-          fun go(is, labelled, endogenous, selective, neither) {
-            switch(is) {
-              case [] -> (labelled, endogenous, selective, neither)
-              case x :: is ->
-              if (x.interactionLigand.labelled) {
-                go(is, x :: labelled, endogenous, selective, neither)
-              } else if (x.endogenous) {
-                go(is, labelled, x :: endogenous, selective, neither)
-              } else if (x.selectivity == "Selective") {
-                go(is, labelled, endogenous, x :: selective, neither)
-              } else {
-                go(is, labelled, endogenous, selective, x :: neither)
-              }
-            }
-          }
-
-          var (labelled, endogenous, selective, neither) = go(interactions, [], [], [], []);
-          (reverse(labelled), reverse(endogenous), reverse(selective), reverse(neither))
-        }
-
-        var allAgonists =
-          filter(fun(i) { i.interactionType == "Agonist" }, summary.objectInteractions);
-        var allAntagonists =
-          filter(fun(i) { i.interactionType == "Antagonist" }, summary.objectInteractions);
-        var allostericModulators =
-          filter(fun(i) { i.interactionType == "Allosteric modulator" }, summary.objectInteractions);
-
-        var (labelledAgonists, endogenousAgonists,
-            selectiveAgonists, otherAgonists) = splitInteractions(allAgonists);
-        var (labelledAntagonists, endogenousAntagonists,
-            selectiveAntagonists, otherAntagonists) = splitInteractions(allAntagonists);
-
-        var labelledLigands = labelledAgonists ++ labelledAntagonists;
-
         fun showInteraction(x) {
           var interactionActionNode =
             if (not(x.interactionAction == "Agonist"
@@ -385,8 +326,6 @@ fun view(model) {
             MvuHTML.empty
           };
 
-
-
         fun showSummary() {
           if (box.objectBoxVisible) {
             var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.objectSynonyms);
@@ -402,7 +341,7 @@ fun view(model) {
             var genes = map(fun(gene) {
                 var name = gene.geneName;
                 var id = gene.geneSpeciesID;
-              [renderM(name) +* textNode("(" ^^ resolveSpeciesShortName(id, model.speciesMap) ^^ ")")]
+              [renderM(name) +* textNode(" (" ^^ resolveSpeciesShortName(id, model.speciesMap) ^^ ")")]
               }, summary.objectGenes);
             var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
 
@@ -420,21 +359,50 @@ fun view(model) {
               }
             };
 
+            fun mkIDRow(dbName, dbID) {
+              switch(filter(fun(x) { x.dbID == dbID }, summary.objectDBLinks)) {
+                case [] -> MvuHTML.empty
+                case x :: _ ->
+                  # <c:if test="${!empty object.uniprotIds}">
+                  #     <tr>
+                  #         <td class="grac_category_simple">UniProtKB AC</td>
+                  #         <td class="grac_info_simple">
+                  #           <%--  <c:choose>
+                  #                 <c:when test="${!empty object.uniprotIds}">--%>
+                  #                     <c:out value="${object.uniprotIds}" escapeXml="false"/>
+                  #               <%--  </c:when>
+                  #                 <c:otherwise>-</c:otherwise>
+                  #             </c:choose>--%>
+                  #         </td>
+                  #     </tr>
+                  # </c:if>
+
+                  var links = renderEntries(x, model.speciesMap);
+                  mkRow(dbName, links)
+              }
+            }
+
+            var ensemblIDs = mkIDRow("Ensembl ID", 15);
+            var uniprotIDs = mkIDRow("UniProtKB AC", 5);
+            var plasmoIDs = mkIDRow("PlasmoDB", 64);
+            var bitterIDs = mkIDRow("BitterDB", 54);
+
+            var interactionRows =
+              MvuHTML.concatMap(fun((name, xs)) { mkInteractionRow(name, xs) },
+                  summary.objectInteractions);
+
             hr(class("divider_dashed"), MvuHTML.empty) +*
             mkRow("Target Id", textNode(intToString(summary.objectId))) +*
             nomenclature +*
             mkStrRowIfNonempty("Common abbreviation", summary.rawObject.abbreviation) +*
             mkRow("Previous and unofficial names", separatedSynonyms) +*
             mkRow("Genes", separatedGenes) +*
+            ensemblIDs +*
+            uniprotIDs +*
+            plasmoIDs +*
+            bitterIDs +*
             ptRow +*
-            mkInteractionRow("Endogenous agonists", endogenousAgonists) +*
-            mkInteractionRow("Endogenous antagonists", endogenousAntagonists) +*
-            mkInteractionRow("Agonists", otherAgonists) +*
-            mkInteractionRow("Selective agonists", selectiveAgonists) +*
-            mkInteractionRow("Antagonists", otherAntagonists) +*
-            mkInteractionRow("Selective antagonists", selectiveAntagonists) +*
-            mkInteractionRow("Allosteric modulators", allostericModulators) +*
-            mkInteractionRow("Labelled ligands", labelledLigands)
+            interactionRows
           } else {
             MvuHTML.empty
           }
@@ -621,8 +589,10 @@ fun getInitialModel() {
                       for (g <-- structural_info)
                         where (g.object_id == o.object_id)
                         [ (g.gene_name, g.species_id) ],
-                   ensemblRefs=[emptyER], # TODO
-                   uniprotRefs=[emptyER], # TODO
+                   dbLinks =
+                     for (dbl <-- Tables.database_link)
+                     where (dbl.object_id == o.object_id)
+                       [dbl],
                    principalTransductions=
                       for (tr <-- Tables.grac_transduction)
                         where (tr.object_id == o.object_id)
@@ -633,16 +603,206 @@ fun getInitialModel() {
                 ]
          };
 
-        # We can't run markup parsing from within a query, unfortunately,
-        # so need to construct a new record with the parsed markup.
-        # It's kind of a shame we need this boilerplate. I wonder whether
-        # it would be possible to relax the LINQ query constraint s.t. "leaf"
-        # queries needn't be tame, and we can do them in memory?
-        var objects = map(fun(r) {
-            var interactions =
-              filter(fun(x) { x.fromGrac },
-                  map(InteractionUtilities.makeInteraction, r.interactions));
+         sig transformInteractions : (%) ~%~> [(String, [Interaction])]
+         fun transformInteractions(rawInteractions) {
+           # Logic taken fairly directly from the GtoPdb source
 
+           # filterWholeOrganismInteractions: is whole organism assay
+           fun isWholeOrganism(i) {
+             i.wholeOrganismAssay
+           }
+           # filterInteractions: Type equal, not whole organism assay
+           fun typeEquals(i, ty) {
+             not(i.wholeOrganismAssay) && i.interactionType == ty
+           }
+           # getGracProbes: Labelled, selectivity null or not family selective,
+           #   and not whole organism assay
+           fun isGracProbe(i) {
+             i.interactionLigand.labelled && i.selectivity <> "Family selective"
+               && not(i.wholeOrganismAssay)
+           }
+
+           # getGracFamilySelectiveProbes: Labelled, selectivity is family
+           #   selective, not whole organism assay
+           fun isGracFamilySelectiveProbe(i) {
+             i.interactionLigand.labelled && i.selectivity == "Family selective"
+               && not(i.wholeOrganismAssay)
+           }
+
+           # filterGracInteractions: Type equal, not labelled, not whole org
+           #   assay
+           fun gracTypeEquals(i, ty) {
+             i.interactionType == ty && not(i.interactionLigand.labelled) &&
+               not(i.wholeOrganismAssay)
+           }
+
+           # filterGracNonSelectiveInteractions: Type equals, not labelled,
+           #  selectivity empty or Not Determined or Non-selective and not
+           #  endogenous and not whole organism assay
+           fun gracNonSelective(i, ty) {
+             i.interactionType == ty && not(i.interactionLigand.labelled) &&
+               (i.selectivity == "" || i.selectivity == "Not Determined" ||
+                i.selectivity == "Non-selective") && not(i.endogenous) &&
+               not(i.wholeOrganismAssay)
+           }
+
+           # filterGracEndogenousInteractions: Type equals, not labelled,
+           #  endogenous, not whole organism assay
+           fun gracEndogenous(i, ty) {
+             i.interactionType == ty && not(i.interactionLigand.labelled) &&
+               i.endogenous && not(i.wholeOrganismAssay)
+           }
+
+           # filterGracSelectiveInteractions: Type equals, not labelled,
+           #  selectivity is Selective or Isotope selectivity, not endogenous,
+           #  not whole organism assay
+           fun gracSelective(i, ty) {
+             i.interactionType == ty && not(i.interactionLigand.labelled) &&
+               (i.selectivity == "Selective" ||
+                i.selectivity == "Isotope selectivity") &&
+             not(i.endogenous) && not(i.wholeOrganismAssay)
+           }
+
+           # filterGracFamilySelectiveInteractions: Type equals, not labelled,
+           #  selectivity is "Family selective", not endogenous, not whole
+           #  organism assay
+           fun gracFamilySelective(i, ty) {
+             i.interactionType == ty && not(i.interactionLigand.labelled) &&
+               i.selectivity == "Family selective" && not(i.endogenous) &&
+               not(i.wholeOrganismAssay)
+           }
+
+           fold_right(fun(x, acc) {
+              fun addToListMap(xs, name, toAdd) {
+                switch(xs) {
+                  case [] -> [(name, [toAdd])]
+                  case (category_name, ys) :: xs ->
+                    if (category_name == name) {
+                      (category_name, toAdd :: ys) :: xs
+                    } else {
+                      (category_name, ys) :: addToListMap(xs, name, toAdd)
+                    }
+                }
+              }
+              fun add(name, toAdd) {
+                addToListMap(acc, name, toAdd)
+              }
+
+              var x = InteractionUtilities.makeInteraction(x);
+              if (not(x.fromGrac)) {
+                acc
+              # Endogenous Ligands
+              } else if (gracEndogenous(x, "None")) {
+                add("Endogenous ligands", x)
+              # Ligands
+              } else if (gracNonSelective(x, "None")) {
+                add("Ligands", x)
+              # Sub/family-selective ligands
+              } else if (gracFamilySelective(x, "None")) {
+                add("Sub/family-selective ligands", x)
+              # Selective ligands
+              } else if (gracSelective(x, "None")) {
+                add("Selective ligands", x)
+              # Endogenous activators
+              } else if (gracEndogenous(x, "Activator")) {
+                add("Endogenous activators", x)
+              # Activators
+              } else if (gracNonSelective(x, "Activator")) {
+                add("Activators", x)
+              # Sub/family-selective activators
+              } else if (gracFamilySelective(x, "Activator")) {
+                add("Sub/family-selective activators", x)
+              # Selective activators
+              } else if (gracSelective(x, "Activator")) {
+                add("Selective activators", x)
+              # Endogenous inhibitors
+              } else if (gracEndogenous(x, "Inhibitor")) {
+                add("Endogenous inhibitors", x)
+              # Inhibitors
+              } else if (gracNonSelective(x, "Inhibitor")) {
+                add("Inhibitors", x)
+              # Sub/family-selective inhibitors
+              } else if (gracFamilySelective(x, "Inhibitor")) {
+                add("Sub/family-selective inhibitors", x)
+              # Selective inhibitors
+              } else if (gracSelective(x, "Inhibitor")) {
+                add("Selective inhibitors", x)
+              # Endogenous gating inhibitors
+              } else if (gracEndogenous(x, "Gating inhibitor")) {
+                add("Endogenous gating inhibitors", x)
+              # Gating gating inhibitors
+              } else if (gracNonSelective(x, "Gating inhibitor")) {
+                add("Gating inhibitors", x)
+              # Sub/family-selective gating inhibitors
+              } else if (gracFamilySelective(x, "Gating inhibitor")) {
+                add("Sub/family-selective gating inhibitors", x)
+              # Selective gating inhibitors
+              } else if (gracSelective(x, "Gating inhibitor")) {
+                add("Selective gating inhibitors", x)
+              # Endogenous agonists
+              } else if (gracEndogenous(x, "Agonist")) {
+                add("Endogenous agonists", x)
+              # Agonists
+              } else if (gracNonSelective(x, "Agonist")) {
+                add("Agonists", x)
+              # Sub/family-selective agonists
+              } else if (gracFamilySelective(x, "Agonist")) {
+                add("Sub/family-selective agonists", x)
+              # Selective agonists
+              } else if (gracSelective(x, "Agonist")) {
+                add("Selective agonists", x)
+              # Endogenous antagonists
+              } else if (gracEndogenous(x, "Antagonist")) {
+                add("Endogenous antagonists", x)
+              # Antagonists
+              } else if (gracNonSelective(x, "Antagonist")) {
+                add("Antagonists", x)
+              # Sub/family-selective antagonists
+              } else if (gracFamilySelective(x, "Antagonist")) {
+                add("Sub/family-selective antagonists", x)
+              # Selective antagonists
+              } else if (gracSelective(x, "Antagonist")) {
+                add("Selective antagonists", x)
+              # Endogenous channel blockers
+              } else if (gracEndogenous(x, "Channel blocker")) {
+                add("Endogenous channel blockers", x)
+              # Channel blockers
+              } else if (gracNonSelective(x, "Channel blocker")) {
+                add("Channel blockers", x)
+              # Sub/family-selective channel blockers
+              } else if (gracFamilySelective(x, "Channel blocker")) {
+                add("Sub/family-selective channel blockers", x)
+              # Selective channel blocker
+              } else if (gracSelective(x, "Channel blocker")) {
+                add("Selective channel blockers", x)
+              # Endogenous allosteric modulators
+              } else if (gracEndogenous(x, "Allosteric modulator")) {
+                add("Endogenous allosteric modulators", x)
+              # Allosteric modulators
+              } else if (gracNonSelective(x, "Allosteric modulator")) {
+                add("Allosteric modulators", x)
+              # Sub/family-selective allosteric modulators
+              } else if (gracFamilySelective(x, "Allosteric modulator")) {
+                add("Sub/family-selective allosteric modulators", x)
+              # Selective allosteric modulators
+              } else if (gracSelective(x, "Allosteric modulator")) {
+                add("Selective allosteric modulators", x)
+              } else if (typeEquals(x, "Antibody")) {
+                add("Antibodies", x)
+              } else if (gracFamilySelective(x, "Allosteric modulator")) {
+                add("Sub/family-selective allosteric modulators", x)
+              } else if(isGracFamilySelectiveProbe(x)) {
+                add("Sub/family-selective labelled ligands", x)
+              } else if (isGracProbe(x)) {
+                add("Labelled ligands", x)
+              } else {
+                acc
+              }
+           }, [], rawInteractions)
+         }
+
+         # Rather silly to do the sorting during the render function!
+         var objects = map(fun(r) {
             (
                 objectId=r.id,
                 objectType = Object.classifyObject(r.id),
@@ -652,17 +812,17 @@ fun getInitialModel() {
                         synonymOrder=s.order, synonymReferences=s.refs) }, r.synonyms),
                 objectGenes=
                   map(fun ((name, id)) { (geneName = parseOrError(name), geneSpeciesID = id) }, r.genes),
-                objectEnsemblRefs=r.ensemblRefs,
-                objectUniprotRefs=r.uniprotRefs,
+                objectDBLinks = transformDatabaseLinks(r.dbLinks),
                 objectPrincipalTransductions= r.principalTransductions,
-                objectInteractions = interactions,
+                objectInteractions = transformInteractions(r.interactions),
                 objectDisplayOrder=r.displayOrder
             )
           }, objects);
 
         var objectReferences = listConcatMap(fun (object) {
-            listConcatMap(fun (x) { x.references },
-                object.objectInteractions) ++
+            listConcatMap(fun((name, xs)) { 
+                  listConcatMap(fun(y) { y.references }, xs)
+                  }, object.objectInteractions) ++
             listConcatMap(fun (synonym) { synonym.synonymReferences },
                 object.objectSynonyms)
         }, objects);
