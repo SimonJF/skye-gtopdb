@@ -360,22 +360,69 @@ fun view(model) {
 
         fun showSummary() {
           if (box.objectBoxVisible) {
-            var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.objectSynonyms);
-            var synonyms = map(fun(x) {
-                var citationNode =
-                  if (length(x.synonymReferences) > 0) {
-                    textNode(" ") +* renderCitationList(x.synonymReferences,
-                        model.references)
-                  } else { MvuHTML.empty };
-                [renderM(x.synonymName) +* citationNode]
-            }, synonyms);
-            var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
-            var genes = map(fun(gene) {
-                var name = gene.geneName;
-                var id = gene.geneSpeciesID;
-              [renderM(name) +* textNode(" (" ^^ resolveSpeciesShortName(id, model.speciesMap) ^^ ")")]
-              }, summary.objectGenes);
-            var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
+            
+            # Synonyms
+            var synonymsRow = {
+              if (listEmpty(summary.objectSynonyms)) {
+                MvuHTML.empty
+              } else {
+                var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.objectSynonyms);
+                var synonyms = map(fun(x) {
+                    var citationNode =
+                      if (length(x.synonymReferences) > 0) {
+                        textNode(" ") +* renderCitationList(x.synonymReferences,
+                            model.references)
+                      } else { MvuHTML.empty };
+                    [renderM(x.synonymName) +* citationNode]
+                }, synonyms);
+                var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
+                mkRow("Previous and unofficial names", separatedSynonyms)
+              }
+            };
+              
+            var genesRow = {
+              if (listEmpty(summary.objectGenes)) {
+                MvuHTML.empty
+              } else {
+                var genes = map(fun(gene) {
+                    var name = gene.geneName;
+                    var id = gene.geneSpeciesID;
+                  [renderM(name) +* textNode(" (" ^^ resolveSpeciesShortName(id, model.speciesMap) ^^ ")")]
+                  }, summary.objectGenes);
+                var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
+                mkRow("Genes", separatedGenes)
+              }
+            };
+
+            fun showSubunitSummary(name, xs) {
+              if (listEmpty(xs)) {
+                MvuHTML.empty
+              } else {
+                fun mkLink(x) {
+                  var name =
+                    if (x.systematicName == "") {
+                      x.name
+                    } else {
+                      x.name ^^ " / " ^^ x.systematicName 
+                    };
+
+                  var abbrev =
+                    if (x.abbreviation == "") {
+                      unescapedTextNode(name)
+                    } else {
+                      unescapedTextNode(x.abbreviation ^^
+                          "(" ^^ name ^^ ")")
+                    };
+                  [a(href("/objectDisplay?objectId=" ^^ intToString(x.id)), abbrev)]
+                }
+                var links = map(mkLink, xs);
+                var joinedLinks = MvuHTML.concat(join([br(a0, h0)], links));
+                mkRow(name, joinedLinks)
+              }
+            }
+
+            var subunitsRow = showSubunitSummary("Subunits", summary.objectSubunits);
+            var complexesRow = showSubunitSummary("Complexes", summary.objectComplexes);
 
             var nomenclature = {
               var o = summary.rawObject;
@@ -449,8 +496,10 @@ fun view(model) {
             mkRow("Target Id", textNode(intToString(summary.objectId))) +*
             nomenclature +*
             mkStrRowIfNonempty("Common abbreviation", summary.rawObject.abbreviation) +*
-            mkRow("Previous and unofficial names", separatedSynonyms) +*
-            mkRow("Genes", separatedGenes) +*
+            synonymsRow +*
+            complexesRow +*
+            subunitsRow +*
+            genesRow +*
             ensemblIDs +*
             uniprotIDs +*
             plasmoIDs +*
