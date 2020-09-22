@@ -18,10 +18,11 @@ open import DbLinks;
 
 # TO DO
 
+# Need to pick up accessory proteins to display.
+# This happens by looking through all of the objects in the family, and
+# aggregating their subunits which are also accessory proteins.
+
 ## For objects
-# Complexes
-# Subunits
-# Quaternary structure comments
 # Reactions
 # Rank potencies
 # Endogenous substrates
@@ -92,6 +93,9 @@ open import DbLinks;
 # Comments
 # Products
 # Cofactors
+# Complexes
+# Subunits
+# Quaternary structure comments
 
 
 typename ReferenceId = Int;
@@ -394,7 +398,8 @@ fun view(model) {
               }
             };
 
-            fun showSubunitSummary(name, xs) {
+            var qsc = summary.objectComments.quaternaryStructureComments;
+            fun showSubunitSummary(name, xs, showComments) {
               if (listEmpty(xs)) {
                 MvuHTML.empty
               } else {
@@ -417,12 +422,33 @@ fun view(model) {
                 }
                 var links = map(mkLink, xs);
                 var joinedLinks = MvuHTML.concat(join([br(a0, h0)], links));
-                mkRow(name, joinedLinks)
+                var structureComments = {
+                  if (not(markupEmpty(qsc)) && showComments) {
+                    br(a0, h0) +* renderM(qsc)
+                  } else {
+                    MvuHTML.empty
+                  }
+                };
+                mkRow(name, joinedLinks +* structureComments)
               }
             }
 
-            var subunitsRow = showSubunitSummary("Subunits", summary.objectSubunits);
-            var complexesRow = showSubunitSummary("Complexes", summary.objectComplexes);
+            # Only show structure comments as its own row if either the object has both
+            # complexes and subunits, or has neither
+            var structureCommentsRow = {
+              if ((listEmpty(summary.objectComplexes) && listEmpty(summary.objectSubunits)) ||
+                  (not(listEmpty(summary.objectComplexes)) && not(listEmpty(summary.objectSubunits))) &&
+                  not(markupEmpty(qsc))) {
+                mkRow("Structure comments", renderM(qsc))
+              } else {
+                MvuHTML.empty
+              }
+            };
+            var subunitsRow =
+              showSubunitSummary("Subunits",
+                  summary.objectSubunits, listEmpty(summary.objectComplexes));
+            var complexesRow = showSubunitSummary("Complexes",
+                  summary.objectComplexes, listEmpty(summary.objectSubunits));
 
             var nomenclature = {
               var o = summary.rawObject;
@@ -499,6 +525,7 @@ fun view(model) {
             synonymsRow +*
             complexesRow +*
             subunitsRow +*
+            structureCommentsRow +*
             genesRow +*
             ensemblIDs +*
             uniprotIDs +*
