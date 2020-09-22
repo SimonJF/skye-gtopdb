@@ -126,6 +126,9 @@ typename EnzymeReactionComponent = (
   references: [ReferenceID]
 );
 
+typename SubunitSummary =
+  (id: Int, name: String, abbreviation: String, systematicName: String);
+
 typename ObjectSummary = (
    objectId: Int,
    rawObject: RawObject,
@@ -137,6 +140,8 @@ typename ObjectSummary = (
    objectInteractions: [(String, [Interaction])], # (Type, Interactions)
    objectProducts: [EnzymeReactionComponent],
    objectCofactors: [EnzymeReactionComponent],
+   objectSubunits: [SubunitSummary],
+   objectComplexes: [SubunitSummary],
    objectComments: ObjectComments,
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
@@ -682,7 +687,21 @@ fun getInitialModel() {
                                  [r.reference_id])],
                    interactions =
                      InteractionUtilities.interactionsForObject(o.object_id),
-                   displayOrder=r2f.display_order)
+                       displayOrder=r2f.display_order,
+                   complexes =
+                     for (r2s <-- Tables.receptor2subunit)
+                     where (r2s.subunit_id == o.object_id)
+                       for (c <-- Tables.object)
+                       where (c.object_id == r2s.receptor_id)
+                         [(id = c.object_id, name = c.name,
+                             abbreviation = c.abbreviation, systematicName = c.systematic_name)],
+                   subunits =
+                     for (r2s <-- Tables.receptor2subunit)
+                     where (r2s.receptor_id == o.object_id)
+                       for (c <-- Tables.object)
+                       where (c.object_id == r2s.subunit_id)
+                         [(id = c.object_id, name = c.name,
+                             abbreviation = c.abbreviation, systematicName = c.systematic_name)])
                 ]
          };
 
@@ -966,6 +985,8 @@ fun getInitialModel() {
                 =objectComments,
                 =objectCofactors,
                 =objectProducts,
+                objectSubunits = r.subunits,
+                objectComplexes = r.complexes,
                 objectDisplayOrder=r.displayOrder);
 
              var interactionRefs =
