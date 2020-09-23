@@ -18,10 +18,6 @@ open import DbLinks;
 
 # TO DO
 
-# Need to pick up accessory proteins to display.
-# This happens by looking through all of the objects in the family, and
-# aggregating their subunits which are also accessory proteins.
-
 ## For objects
 # Reactions
 # Rank potencies
@@ -96,7 +92,7 @@ open import DbLinks;
 # Complexes
 # Subunits
 # Quaternary structure comments
-
+# Accessory proteins
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -163,7 +159,7 @@ typename Model =
          familyName: String,
          familyType: String,
          overview: ContentBox(Markup),
-         objects: ContentBox([ObjectBox]),
+         objects: ContentBox((objects: [ObjectBox], accessoryProteins: [ObjectBox])),
          comments: ContentBox(Markup),
          furtherReading: ContentBox([Reference]),
          showReferences: Bool,
@@ -202,17 +198,23 @@ fun setBoxVisibilities(visible, model) {
 fun toggleObject(objectBox, id) {
   var contents = boxContents(objectBox);
 
-  var newContents =
+  fun toggle(xs) {
     map(fun(objectBox) {
       if (objectBox.objectSummary.objectId == id) {
         (objectBox with objectBoxVisible = not(objectBox.objectBoxVisible))
       } else {
         objectBox
       }
-    }, contents);
+    }, xs)
+  }
+
+  var newContents = (objects = toggle(contents.objects),
+      accessoryProteins = toggle(contents.accessoryProteins));
   setContents(objectBox, newContents)
 }
 
+
+sig updt : (Message, Model) ~%~> Model
 fun updt(msg, model) {
   withModel(model, fun(model) {
       switch(msg) {
@@ -558,11 +560,29 @@ fun view(model) {
             ))
       }
 
+      var targets =
+        MvuHTML.concatMap(fun(x) { displayObjectBox(x) }, boxes.objects);
+
+      var aps = {
+        if (listEmpty(boxes.accessoryProteins)) {
+          MvuHTML.empty
+        } else {
+          var renderedAPs =
+            MvuHTML.concatMap(fun(x) { displayObjectBox(x) }, boxes.accessoryProteins);
+
+          h3(a0, textNode("Accessory proteins")) +*
+          div(class("data_tables_container"),
+            table_(class("receptor_data_tables fullwidth"),
+              tbody(a0, renderedAPs)))
+        }
+      };
+
       div(class("data_tables_container"),
         table_(class("receptor_data_tables fullwidth"),
           tbody(a0,
             MvuHTML.concat(
-              map(fun(x) { displayObjectBox(x) }, boxes)))))
+              map(fun(x) { displayObjectBox(x) }, boxes.objects))))) +*
+      aps
     }
 
     fun displayComments(commentMarkup) {
@@ -619,6 +639,79 @@ fun formatObjectName(dbName) {
 
 sig getInitialModel : () ~%~> Model
 fun getInitialModel() {
+  fun queryObjects(pred, displayOrder) {
+    for (o <-- object)
+      where (pred(o))
+      [
+         (id=o.object_id,
+          =o,
+          nomenclature=o.name,
+          synonyms=
+           for (s <-- Tables.synonym)
+             where (s.object_id == o.object_id && s.display)
+             [(name=s.synonym, order=s.display_order, refs=
+                for (sr <-- Tables.synonym_refs)
+                where (s.synonym_id == sr.synonym_id)
+                [sr.reference_id])],
+          genes=
+            for (g <-- structural_info)
+              where (g.object_id == o.object_id)
+              [ (g.gene_name, g.species_id) ],
+         dbLinks =
+           for (dbl <-- Tables.database_link)
+           where (dbl.object_id == o.object_id)
+             [dbl],
+         principalTransductions=
+            for (tr <-- Tables.grac_transduction)
+              where (tr.object_id == o.object_id)
+              [tr.transduction],
+         functionalCharacteristics =
+           for (fc <-- Tables.grac_functional_characteristics)
+             where (fc.object_id == o.object_id)
+             [fc.functional_characteristics],
+         stoichiometry =
+           for (t <-- Tables.transporter)
+             where (t.object_id == o.object_id)
+              [t.grac_stoichiometry],
+         products =
+           for (p <-- Tables.product)
+             where (p.object_id == o.object_id)
+               for (l <-- Tables.ligand)
+               where (l.ligand_id == p.ligand_id)
+               [(x = p, =l,
+                   refs =
+                     for (r <-- Tables.product_refs)
+                     where (r.product_id == p.product_id)
+                       [r.reference_id])],
+         cofactors =
+           for (c <-- Tables.cofactor)
+             where (c.object_id == o.object_id)
+               for (l <-- Tables.ligand)
+               where (l.ligand_id == c.ligand_id)
+               [(x = c, =l,
+                   refs =
+                     for (r <-- Tables.cofactor_refs)
+                     where (r.cofactor_id == c.cofactor_id)
+                       [r.reference_id])],
+         interactions =
+           InteractionUtilities.interactionsForObject(o.object_id),
+         =displayOrder,
+         complexes =
+           for (r2s <-- Tables.receptor2subunit)
+           where (r2s.subunit_id == o.object_id)
+             for (c <-- Tables.object)
+             where (c.object_id == r2s.receptor_id)
+               [(id = c.object_id, name = c.name,
+                   abbreviation = c.abbreviation, systematicName = c.systematic_name)],
+         subunits =
+           for (r2s <-- Tables.receptor2subunit)
+           where (r2s.receptor_id == o.object_id)
+             for (c <-- Tables.object)
+             where (c.object_id == r2s.subunit_id)
+               [(id = c.object_id, name = c.name,
+                   abbreviation = c.abbreviation, systematicName = c.systematic_name)])
+      ]
+  }
 
   fun getFamilyInfo(familyId) {
     # First, grab the basic information.
@@ -704,83 +797,11 @@ fun getInitialModel() {
           (subcommittee=subcommitteeMembers, additional=additionalContributors);
 
         # Object summaries
-        var objects =
-         query nested {
-            for (r2f <-- receptor2family)
-              where (r2f.family_id == familyId)
-              for (o <-- object)
-                where (o.object_id == r2f.object_id)
-                [
-                   (id=o.object_id,
-                    =o,
-                    nomenclature=o.name,
-                    synonyms=
-                     for (s <-- Tables.synonym)
-                       where (s.object_id == o.object_id && s.display)
-                       [(name=s.synonym, order=s.display_order, refs=
-                          for (sr <-- Tables.synonym_refs)
-                          where (s.synonym_id == sr.synonym_id)
-                          [sr.reference_id])],
-                    genes=
-                      for (g <-- structural_info)
-                        where (g.object_id == o.object_id)
-                        [ (g.gene_name, g.species_id) ],
-                   dbLinks =
-                     for (dbl <-- Tables.database_link)
-                     where (dbl.object_id == o.object_id)
-                       [dbl],
-                   principalTransductions=
-                      for (tr <-- Tables.grac_transduction)
-                        where (tr.object_id == o.object_id)
-                        [tr.transduction],
-                   functionalCharacteristics =
-                     for (fc <-- Tables.grac_functional_characteristics)
-                       where (fc.object_id == o.object_id)
-                       [fc.functional_characteristics],
-                   stoichiometry =
-                     for (t <-- Tables.transporter)
-                       where (t.object_id == o.object_id)
-                        [t.grac_stoichiometry],
-                   products =
-                     for (p <-- Tables.product)
-                       where (p.object_id == o.object_id)
-                         for (l <-- Tables.ligand)
-                         where (l.ligand_id == p.ligand_id)
-                         [(x = p, =l,
-                             refs =
-                               for (r <-- Tables.product_refs)
-                               where (r.product_id == p.product_id)
-                                 [r.reference_id])],
-                   cofactors =
-                     for (c <-- Tables.cofactor)
-                       where (c.object_id == o.object_id)
-                         for (l <-- Tables.ligand)
-                         where (l.ligand_id == c.ligand_id)
-                         [(x = c, =l,
-                             refs =
-                               for (r <-- Tables.cofactor_refs)
-                               where (r.cofactor_id == c.cofactor_id)
-                                 [r.reference_id])],
-                   interactions =
-                     InteractionUtilities.interactionsForObject(o.object_id),
-                       displayOrder=r2f.display_order,
-                   complexes =
-                     for (r2s <-- Tables.receptor2subunit)
-                     where (r2s.subunit_id == o.object_id)
-                       for (c <-- Tables.object)
-                       where (c.object_id == r2s.receptor_id)
-                         [(id = c.object_id, name = c.name,
-                             abbreviation = c.abbreviation, systematicName = c.systematic_name)],
-                   subunits =
-                     for (r2s <-- Tables.receptor2subunit)
-                     where (r2s.receptor_id == o.object_id)
-                       for (c <-- Tables.object)
-                       where (c.object_id == r2s.subunit_id)
-                         [(id = c.object_id, name = c.name,
-                             abbreviation = c.abbreviation, systematicName = c.systematic_name)])
-                ]
-         };
-
+        var objects = query nested {
+          for (r2f <-- Tables.receptor2family)
+            where (r2f.family_id == familyId)
+            queryObjects(fun(o) { o.object_id == r2f.object_id }, r2f.display_order)
+        };
          sig transformInteractions : (%) ~%~> [(String, [Interaction])]
          fun transformInteractions(rawInteractions) {
            # Logic taken fairly directly from the GtoPdb source
@@ -1025,9 +1046,17 @@ fun getInitialModel() {
            }, ([], []), ps)
          }
 
-         sig transformObjects : (%) ~%~> ([ObjectSummary], [Int], [Int])
+         # There are very few accessory proteins (10), so it's easier
+         # to just get them into memory, and check membership.
+         var apIDs =
+           query nested {
+             for (ap <-- Tables.accessory_protein)
+               [ap.object_id]
+           };
+
+         sig transformObjects : (%) ~%~> ([ObjectSummary], [Int], [Int], [Int])
          fun transformObjects(os) {
-           fold_right(fun(r, (os, refs, ligands)) {
+           fold_right(fun(r, (os, refs, ligands, aps)) {
 
              var (objectSynonyms, synRefs) =
               fold_right(fun (s, (syns, synRefs)) {
@@ -1045,6 +1074,14 @@ fun getInitialModel() {
 
              var (objectProducts, productRefs) =
                transformProducts(r.products);
+
+             var subunitAPs =
+               filterMap(fun(x) { 
+                   if (elem(x.id, apIDs)) {
+                    Just(x.id)
+                   } else {
+                    Nothing
+                   }}, r.subunits);
 
              var o =
                (objectId=r.id,
@@ -1073,16 +1110,23 @@ fun getInitialModel() {
              (o :: os,
                 synRefs ++ interactionRefs ++ commentRefs ++ cofactorRefs ++
                 productRefs ++ refs,
-              commentLigands ++ cofactorLigands ++ ligands)
-           }, ([], [], []), os)
+              commentLigands ++ cofactorLigands ++ ligands,
+              subunitAPs ++ aps)
+           }, ([], [], [], []), os)
          }
 
-        # Rather silly to do the sorting during the render function!
-        var (objects, objectReferences, objectLigands) = transformObjects(objects);
+        var (objects, objectReferences, objectLigands, objectAPs) =
+          transformObjects(objects);
+
+        var isAP = contains(objectAPs);
+        var apObjs = query nested { queryObjects(fun(o) { isAP(o.object_id) }, (-1)) };
+        var (relevantAPs, apReferences, apLigands, _) =
+          transformObjects(apObjs);
 
         var objectBoxes =
-          map(fun (r) { (objectSummary=r, objectBoxVisible=false) },
-            objects);
+          map(fun (r) { (objectSummary=r, objectBoxVisible=false) }, objects);
+        var accessoryProteinBoxes =
+          map(fun (r) { (objectSummary=r, objectBoxVisible=false) }, relevantAPs);
 
         # We need to parse the markup we get, and use it to
         # get the required information from the DB.
@@ -1090,8 +1134,8 @@ fun getInitialModel() {
         var commentsMarkup = parseOrError(comments);
         var (oRefs, oLigands) = collectIds(overviewMarkup);
         var (cRefs, cLigands) = collectIds(commentsMarkup);
-        var refs = uniquify(oRefs ++ cRefs ++ objectReferences);
-        var ligands = uniquify(oLigands ++ cLigands ++ objectLigands);
+        var refs = uniquify(oRefs ++ cRefs ++ apReferences ++ objectReferences);
+        var ligands = uniquify(oLigands ++ cLigands ++ apLigands ++ objectLigands);
 
         var references = queryReferences(refs);
 
@@ -1109,7 +1153,8 @@ fun getInitialModel() {
 
         Just((familyId=familyId, familyName=name, familyType=type,
            overview=mkTBox("Overview", true, overviewMarkup),
-           objects=mkTBox(objectName, true, objectBoxes),
+           objects=mkTBox(objectName, true,
+             (objects = objectBoxes, accessoryProteins = accessoryProteinBoxes)),
            comments=mkTBox("Comments", true, commentsMarkup),
            furtherReading=mkTBox("Further Reading", true, furtherReading),
            showReferences=true,
