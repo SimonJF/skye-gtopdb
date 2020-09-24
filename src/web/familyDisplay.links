@@ -19,7 +19,6 @@ open import DbLinks;
 # TO DO
 
 ## For objects
-# Reactions
 # Endogenous substrates
 # Exogenous substrates
 
@@ -93,6 +92,7 @@ open import DbLinks;
 # Accessory proteins
 # Same entity ligands
 # Rank potencies
+# Reactions
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -576,6 +576,41 @@ fun view(model) {
               }
             };
 
+            var reactionsRow = {
+              if (listEmpty(summary.objectReactions)) {
+                MvuHTML.empty
+              } else {
+                fun renderReaction(r) {
+                  fun renderSpecificReaction(sr) {
+                    [tr(a0,
+                        td(colSpan(2),
+                          textNode(sr.description ^^ " ") +*
+                          renderM(sr.reaction) +*
+                          textNode(" ") +*
+                          renderCitations(sr.references)))]
+                  }
+
+                  var specificReactions =
+                    MvuHTML.concat(
+                        join([br(a0, h0)],
+                          map(renderSpecificReaction, r.specificReactions)));
+
+                  var ec =
+                    a(href("http://www.genome.jp/dbget-bin/www_bget?ec:" ^^ r.ecNumber),
+                        textNode(r.ecNumber));
+                  table_(style("margin:0px"),
+                    tr(a0,
+                      td(style("vertical-align:top;") +@ width("100px;"), ec) +*
+                      td(a0, renderM(r.reaction)))
+                    +* specificReactions)
+                }
+
+                var contents =
+                  MvuHTML.concatMap(renderReaction, summary.objectReactions);
+                mkRow("EC number", contents)
+              }
+            };
+
             hr(class("divider_dashed"), MvuHTML.empty) +*
             mkRow("Target Id", textNode(intToString(summary.objectId))) +*
             nomenclature +*
@@ -590,6 +625,7 @@ fun view(model) {
             plasmoIDs +*
             bitterIDs +*
             slcIDs +*
+            reactionsRow +*
             rpRows +*
             ptRow +*
             productsRow +*
