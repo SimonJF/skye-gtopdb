@@ -23,7 +23,6 @@ open import DbLinks;
 # Rank potencies
 # Endogenous substrates
 # Exogenous substrates
-# Same entity ligands
 
 ## For ligands
 # Ligand Id
@@ -93,6 +92,7 @@ open import DbLinks;
 # Subunits
 # Quaternary structure comments
 # Accessory proteins
+# Same entity ligands
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -143,6 +143,7 @@ typename ObjectSummary = (
    objectSubunits: [SubunitSummary],
    objectComplexes: [SubunitSummary],
    objectComments: ObjectComments,
+   objectSameEntityLigands: [(name: String, id: Int)],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
   );
@@ -520,6 +521,24 @@ fun view(model) {
             var cofactorsRow = renderEnzymeComponents("Cofactors", summary.objectCofactors);
             var productsRow = renderEnzymeComponents("Products", summary.objectProducts);
 
+            var sameLigandsRow = {
+              var ligs = summary.objectSameEntityLigands;
+              if (listEmpty(ligs)) {
+                MvuHTML.empty
+              } else {
+                var ligLinks =
+                  MvuHTML.concat(
+                      join([textNode(", ")], map(fun(x) {
+                        [a(href("/ligandDisplay?ligandId=" ^^ intToString(x.id)),
+                            textNode(x.name))]
+                        }, ligs)));
+                tr(a0,
+                    td(class("grac_info_simple") +@ colSpan(2),
+                      textNode("This target is also described as a ligand entry: ")
+                      +* ligLinks))
+              }
+            };
+
             hr(class("divider_dashed"), MvuHTML.empty) +*
             mkRow("Target Id", textNode(intToString(summary.objectId))) +*
             nomenclature +*
@@ -540,7 +559,8 @@ fun view(model) {
             interactionRows +*
             mkMarkupRowIfNonempty("Stoichiometry", summary.objectComments.stoichiometry) +*
             mkMarkupRowIfNonempty("Functional characteristics", summary.objectComments.functionalCharacteristics) +*
-            mkMarkupRowIfNonempty("Comment", summary.objectComments.generalComments)
+            mkMarkupRowIfNonempty("Comment", summary.objectComments.generalComments) +*
+            sameLigandsRow
           } else {
             MvuHTML.empty
           }
@@ -709,7 +729,13 @@ fun getInitialModel() {
              for (c <-- Tables.object)
              where (c.object_id == r2s.subunit_id)
                [(id = c.object_id, name = c.name,
-                   abbreviation = c.abbreviation, systematicName = c.systematic_name)])
+                   abbreviation = c.abbreviation, systematicName = c.systematic_name)],
+         sameEntityLigands =
+           for (tl <-- Tables.target_ligand_same_entity)
+             where (tl.object_id == o.object_id)
+             for (l <-- Tables.ligand)
+             where (l.ligand_id == tl.ligand_id)
+               [ (name = l.name, id = l.ligand_id) ])
       ]
   }
 
@@ -1100,6 +1126,7 @@ fun getInitialModel() {
                 =objectProducts,
                 objectSubunits = r.subunits,
                 objectComplexes = r.complexes,
+                objectSameEntityLigands = r.sameEntityLigands,
                 objectDisplayOrder=r.displayOrder);
 
              var interactionRefs =
