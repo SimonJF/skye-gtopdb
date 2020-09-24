@@ -130,7 +130,7 @@ typename SubunitSummary =
   (id: Int, name: String, abbreviation: String, systematicName: String);
 
 typename RankPotency =
-  (description: Markup, rankPotency: Markup, speciesID: Int, references: [Int]);
+  (description: String, rankPotency: Markup, speciesID: Int, references: [Int]);
 
 typename ObjectSummary = (
    objectId: Int,
@@ -253,6 +253,14 @@ fun view(model) {
           model.references, model.ligandNames)
     }
 
+    fun renderCitations(refs) {
+      renderCitationList(refs, model.references)
+    }
+
+    fun speciesLongName(id) {
+      resolveSpeciesLongName(id, model.speciesMap)
+    }
+
     # headerBox: Header information for given family
     var headerBox =
       div(class("grid_16 alpha"),
@@ -368,6 +376,30 @@ fun view(model) {
           } else {
             MvuHTML.empty
           };
+
+        var rpRows = {
+          if (listEmpty(summary.objectRankPotencies)) {
+            MvuHTML.empty
+          } else {
+
+            fun renderRP(x) {
+              var sln = speciesLongName(x.speciesID);
+              var descWithSpecies = 
+                if (sln == "" || sln == "None" || sln == "Unknown" || sln == "Human") {
+                  x.description
+                } else {
+                  x.description ^^ " (" ^^ sln ^^ ")"
+                };
+              var contents =
+                renderM(x.rankPotency) +*
+                textNode(" ") +*
+                renderCitations(x.references);
+              mkRow(descWithSpecies, contents)
+            }
+
+            MvuHTML.concatMap(renderRP, summary.objectRankPotencies)
+          }
+        };
 
         fun showSummary() {
           if (box.objectBoxVisible) {
@@ -557,6 +589,7 @@ fun view(model) {
             plasmoIDs +*
             bitterIDs +*
             slcIDs +*
+            rpRows +*
             ptRow +*
             productsRow +*
             cofactorsRow +*
@@ -1091,10 +1124,10 @@ fun getInitialModel() {
          fun transformRankPotencies(rps) {
            fold_right(fun(x, (rps, refs, ligs)) {
              var rp = x.glrp;
-             var description = parseOrError(rp.description);
+             var description = rp.description;
              var rankPotency = parseOrError(rp.rank_potency);
              var (commentRefs, commentLigands) =
-               collectAllIds([description, rankPotency]);
+               collectIds(rankPotency);
              var res =
                (=description, =rankPotency, speciesID = rp.species_id,
               references = x.refs);
