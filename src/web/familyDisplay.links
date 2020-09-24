@@ -129,6 +129,9 @@ typename EnzymeReactionComponent = (
 typename SubunitSummary =
   (id: Int, name: String, abbreviation: String, systematicName: String);
 
+typename RankPotency =
+  (description: Markup, rankPotency: Markup, speciesID: Int, references: [Int]);
+
 typename ObjectSummary = (
    objectId: Int,
    rawObject: RawObject,
@@ -144,6 +147,7 @@ typename ObjectSummary = (
    objectComplexes: [SubunitSummary],
    objectComments: ObjectComments,
    objectSameEntityLigands: [(name: String, id: Int)],
+   objectRankPotencies: [RankPotency],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
   );
@@ -735,7 +739,17 @@ fun getInitialModel() {
              where (tl.object_id == o.object_id)
              for (l <-- Tables.ligand)
              where (l.ligand_id == tl.ligand_id)
-               [ (name = l.name, id = l.ligand_id) ])
+               [ (name = l.name, id = l.ligand_id) ],
+         rankPotencies =
+           for (glrp <-- Tables.grac_ligand_rank_potency)
+             where (glrp.object_id == o.object_id)
+             [(=glrp,
+               refs =
+                 for (r <-- Tables.grac_ligand_rank_potency_refs)
+                 where (r.grac_ligand_rank_potency_id ==
+                   glrp.grac_ligand_rank_potency_id)
+                 [r.reference_id])
+             ])
       ]
   }
 
@@ -1072,6 +1086,22 @@ fun getInitialModel() {
            }, ([], []), ps)
          }
 
+         sig transformRankPotencies : (%) ~%~>
+           ([RankPotency], [Int], [Int])
+         fun transformRankPotencies(rps) {
+           fold_right(fun(x, (rps, refs, ligs)) {
+             var rp = x.glrp;
+             var description = parseOrError(rp.description);
+             var rankPotency = parseOrError(rp.rank_potency);
+             var (commentRefs, commentLigands) =
+               collectAllIds([description, rankPotency]);
+             var res =
+               (=description, =rankPotency, speciesID = rp.species_id,
+              references = x.refs);
+             (res :: rps, refs ++ x.refs ++ commentRefs, ligs ++ commentLigands)
+           }, ([], [], []), rps)
+         }
+
          # There are very few accessory proteins (10), so it's easier
          # to just get them into memory, and check membership.
          var apIDs =
@@ -1101,6 +1131,9 @@ fun getInitialModel() {
              var (objectProducts, productRefs) =
                transformProducts(r.products);
 
+             var (objectRankPotencies, rpRefs, rpLigands) =
+               transformRankPotencies(r.rankPotencies);
+
              var subunitAPs =
                filterMap(fun(x) { 
                    if (elem(x.id, apIDs)) {
@@ -1126,6 +1159,7 @@ fun getInitialModel() {
                 =objectProducts,
                 objectSubunits = r.subunits,
                 objectComplexes = r.complexes,
+                =objectRankPotencies,
                 objectSameEntityLigands = r.sameEntityLigands,
                 objectDisplayOrder=r.displayOrder);
 
@@ -1136,8 +1170,8 @@ fun getInitialModel() {
 
              (o :: os,
                 synRefs ++ interactionRefs ++ commentRefs ++ cofactorRefs ++
-                productRefs ++ refs,
-              commentLigands ++ cofactorLigands ++ ligands,
+                productRefs ++ rpRefs ++ refs,
+              commentLigands ++ cofactorLigands ++ rpLigands ++ ligands,
               subunitAPs ++ aps)
            }, ([], [], [], []), os)
          }
