@@ -20,7 +20,6 @@ open import DbLinks;
 
 ## For objects
 # Reactions
-# Rank potencies
 # Endogenous substrates
 # Exogenous substrates
 
@@ -93,6 +92,7 @@ open import DbLinks;
 # Quaternary structure comments
 # Accessory proteins
 # Same entity ligands
+# Rank potencies
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -132,6 +132,10 @@ typename SubunitSummary =
 typename RankPotency =
   (description: String, rankPotency: Markup, speciesID: Int, references: [Int]);
 
+typename Reaction =
+  (ecNumber: String, reaction: Markup,
+   specificReactions: [(description: String, reaction: Markup, references: [Int])]);
+
 typename ObjectSummary = (
    objectId: Int,
    rawObject: RawObject,
@@ -148,16 +152,13 @@ typename ObjectSummary = (
    objectComments: ObjectComments,
    objectSameEntityLigands: [(name: String, id: Int)],
    objectRankPotencies: [RankPotency],
+   objectReactions: [Reaction],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
   );
 
 typename ObjectBox =
   (objectSummary: ObjectSummary, objectBoxVisible: Bool);
-
-# BUG (hacky workaround): Type arguments don't appear to be renamed
-typename Reference = Reference;
-typename Markup = Parser.Markup;
 
 typename Model =
   Maybe((familyId: Int,
@@ -782,7 +783,23 @@ fun getInitialModel() {
                  where (r.grac_ligand_rank_potency_id ==
                    glrp.grac_ligand_rank_potency_id)
                  [r.reference_id])
-             ])
+             ],
+          reactions =
+            for (o2r <-- Tables.object2reaction)
+              where (o2r.object_id == o.object_id)
+              for (r <-- Tables.reaction)
+                where (r.reaction_id == o2r.reaction_id)
+                [(=r,
+                   srs =
+                     for (sr <-- Tables.specific_reaction)
+                     where (sr.reaction_id == r.reaction_id)
+                     [(=sr,
+                       refs =
+                         for (srr <-- Tables.specific_reaction_refs)
+                         where (srr.specific_reaction_id == sr.specific_reaction_id)
+                         [srr.reference_id])])
+                ]
+        )
       ]
   }
 
@@ -1135,6 +1152,29 @@ fun getInitialModel() {
            }, ([], [], []), rps)
          }
 
+         sig transformReactions: (%) ~%~> ([Reaction], [Int], [Int])
+         fun transformReactions(rs) {
+           fun transformSpecificReactions(srs) {
+             fold_right(fun(x, (srs, refs, ligs)) {
+                 var reaction = parseOrError(x.sr.reaction);
+                 var sr = (description = x.sr.description, =reaction,
+                     references = x.refs);
+                 var (commentRefs, commentLigs) = collectIds(reaction);
+                 (sr :: srs, x.refs ++ commentRefs ++ refs, commentLigs ++ ligs)
+             }, ([], [], []), srs)
+           }
+
+           fold_right(fun(x, (rs, refs, ligs)) {
+               var reaction = parseOrError(x.r.reaction);
+               var (rRefs, rLigs) = collectIds(reaction);
+               var (srs, srRefs, srLigands) = transformSpecificReactions(x.srs);
+               var reaction =
+                 (ecNumber = x.r.ec_number, =reaction, specificReactions = srs);
+
+               (reaction :: rs, srRefs ++ rRefs ++ refs, srLigands ++ rLigs ++ ligs)
+           }, ([], [], []), rs)
+         }
+
          # There are very few accessory proteins (10), so it's easier
          # to just get them into memory, and check membership.
          var apIDs =
@@ -1167,6 +1207,9 @@ fun getInitialModel() {
              var (objectRankPotencies, rpRefs, rpLigands) =
                transformRankPotencies(r.rankPotencies);
 
+             var (objectReactions, rRefs, rLigands) =
+               transformReactions(r.reactions);
+
              var subunitAPs =
                filterMap(fun(x) { 
                    if (elem(x.id, apIDs)) {
@@ -1194,6 +1237,7 @@ fun getInitialModel() {
                 objectComplexes = r.complexes,
                 =objectRankPotencies,
                 objectSameEntityLigands = r.sameEntityLigands,
+                =objectReactions,
                 objectDisplayOrder=r.displayOrder);
 
              var interactionRefs =
@@ -1203,8 +1247,8 @@ fun getInitialModel() {
 
              (o :: os,
                 synRefs ++ interactionRefs ++ commentRefs ++ cofactorRefs ++
-                productRefs ++ rpRefs ++ refs,
-              commentLigands ++ cofactorLigands ++ rpLigands ++ ligands,
+                productRefs ++ rpRefs ++ rRefs ++ refs,
+              commentLigands ++ cofactorLigands ++ rpLigands ++ rLigands ++ ligands,
               subunitAPs ++ aps)
            }, ([], [], [], []), os)
          }
