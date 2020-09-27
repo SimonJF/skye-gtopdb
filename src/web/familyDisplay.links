@@ -198,6 +198,7 @@ typename Message = [|
   | ToggleFurtherReading | ToggleReferences | ToggleContributors
   | SetAllVisibilities:Bool
   | ToggleObjectSummary:Int
+  | ToggleLigandSummary:Int
 |];
 
 fun withModel(model, f) {
@@ -219,8 +220,6 @@ fun setBoxVisibilities(visible, model) {
     contributors=sbv(model.contributors))
 }
 
-## TODO: toggleLigands
-
 fun toggleObject(objectBox, id) {
   var contents = boxContents(objectBox);
 
@@ -240,6 +239,22 @@ fun toggleObject(objectBox, id) {
   setContents(objectBox, newContents)
 }
 
+fun toggleLigand(objectBox, id) {
+  var contents = boxContents(objectBox);
+
+  fun toggle(xs) {
+    map(fun(objectBox) {
+      if (objectBox.summary.rawLigand.ligand_id == id) {
+        (objectBox with summaryBoxVisible = not(objectBox.summaryBoxVisible))
+      } else {
+        objectBox
+      }
+    }, xs)
+  }
+
+  var newContents = (contents with ligands = toggle(contents.ligands));
+  setContents(objectBox, newContents)
+}
 
 sig updt : (Message, Model) ~%~> Model
 fun updt(msg, model) {
@@ -260,6 +275,8 @@ fun updt(msg, model) {
         case SetAllVisibilities(vis) -> setBoxVisibilities(vis, model)
         case ToggleObjectSummary(id) ->
           (model with objects=toggleObject(model.objects, id))
+        case ToggleLigandSummary(id) ->
+          (model with objects=toggleLigand(model.objects, id))
       }
   })
 }
@@ -304,6 +321,56 @@ fun view(model) {
     }
 
     fun displayObjects(boxes) {
+      fun mkRow(name, contents) {
+        table_(class("grac_data_table fullwidth"),
+          tr(a0,
+            td(class("grac_category_simple"), textNode(name)) +*
+            td(class("grac_info_simple"), contents)))
+      }
+
+      fun mkStrRowIfNonempty(name, str) {
+        if (str <> "") {
+          mkRow(name, unescapedTextNode(str))
+        } else {
+          MvuHTML.empty
+        }
+      }
+
+      fun mkMarkupRowIfNonempty(name, m) {
+        if (not(markupEmpty(m))) {
+          mkRow(name, renderM(m))
+        } else {
+          MvuHTML.empty
+        }
+      }
+
+      fun renderSynonyms(synonyms) {
+        if (listEmpty(synonyms)) {
+          MvuHTML.empty
+        } else {
+          var synonyms = sortBy(fun(syn) { syn.synonymOrder }, synonyms);
+          var synonyms = map(fun(x) {
+              var citationNode =
+                if (length(x.synonymReferences) > 0) {
+                  textNode(" ") +* renderCitationList(x.synonymReferences,
+                      model.references)
+                } else { MvuHTML.empty };
+              [unescapedTextNode(x.synonymName) +* citationNode]
+          }, synonyms);
+          var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
+          mkRow("Previous and unofficial names", separatedSynonyms)
+        }
+      }
+
+      fun mkIDRow(dbName, dbID, dbLinks) {
+        switch(filter(fun(x) { x.dbID == dbID }, dbLinks)) {
+          case [] -> MvuHTML.empty
+          case x :: _ ->
+            var links = renderEntries(x, model.speciesMap);
+            mkRow(dbName, links)
+        }
+      }
+
 
       fun displayObjectBox(box) {
         var summary = box.summary;
@@ -316,29 +383,6 @@ fun view(model) {
             a(onClick(fun() { toggleMsg }),
               small(class("object_summary_link"), textNode("  Show summary")))
           };
-
-        fun mkRow(name, contents) {
-          table_(class("grac_data_table fullwidth"),
-            tr(a0,
-              td(class("grac_category_simple"), textNode(name)) +*
-              td(class("grac_info_simple"), contents)))
-        }
-
-        fun mkStrRowIfNonempty(name, str) {
-          if (str <> "") {
-            mkRow(name, unescapedTextNode(str))
-          } else {
-            MvuHTML.empty
-          }
-        }
-
-        fun mkMarkupRowIfNonempty(name, m) {
-          if (not(markupEmpty(m))) {
-            mkRow(name, renderM(m))
-          } else {
-            MvuHTML.empty
-          }
-        }
 
         fun showInteraction(x) {
           var interactionActionNode =
@@ -427,23 +471,7 @@ fun view(model) {
           if (box.summaryBoxVisible) {
             
             # Synonyms
-            var synonymsRow = {
-              if (listEmpty(summary.objectSynonyms)) {
-                MvuHTML.empty
-              } else {
-                var synonyms = sortBy(fun(syn) { syn.synonymOrder }, summary.objectSynonyms);
-                var synonyms = map(fun(x) {
-                    var citationNode =
-                      if (length(x.synonymReferences) > 0) {
-                        textNode(" ") +* renderCitationList(x.synonymReferences,
-                            model.references)
-                      } else { MvuHTML.empty };
-                    [unescapedTextNode(x.synonymName) +* citationNode]
-                }, synonyms);
-                var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
-                mkRow("Previous and unofficial names", separatedSynonyms)
-              }
-            };
+            var synonymsRow = renderSynonyms(summary.objectSynonyms);
               
             var genesRow = {
               if (listEmpty(summary.objectGenes)) {
@@ -524,15 +552,6 @@ fun view(model) {
                 mkRow("Nomenclature", unescapedTextNode(o.name))
               }
             };
-
-            fun mkIDRow(dbName, dbID) {
-              switch(filter(fun(x) { x.dbID == dbID }, summary.objectDBLinks)) {
-                case [] -> MvuHTML.empty
-                case x :: _ ->
-                  var links = renderEntries(x, model.speciesMap);
-                  mkRow(dbName, links)
-              }
-            }
 
             fun renderEnzymeComponents(name, ecs) {
               fun renderRow(x) {
@@ -636,11 +655,11 @@ fun view(model) {
             var exoSubstratesRow =
               renderSubstrates("Exogenous substrates", exoSubstrates);
 
-            var ensemblIDs = mkIDRow("Ensembl ID", 15);
-            var uniprotIDs = mkIDRow("UniProtKB AC", 5);
-            var plasmoIDs = mkIDRow("PlasmoDB", 64);
-            var bitterIDs = mkIDRow("BitterDB", 54);
-            var slcIDs = mkIDRow("Bioparadigms SLC Tables", 61);
+            var ensemblIDs = mkIDRow("Ensembl ID", 15, summary.objectDBLinks);
+            var uniprotIDs = mkIDRow("UniProtKB AC", 5, summary.objectDBLinks);
+            var plasmoIDs = mkIDRow("PlasmoDB", 64, summary.objectDBLinks);
+            var bitterIDs = mkIDRow("BitterDB", 54, summary.objectDBLinks);
+            var slcIDs = mkIDRow("Bioparadigms SLC Tables", 61, summary.objectDBLinks);
 
             var interactionRows =
               MvuHTML.concatMap(fun((name, xs)) { mkInteractionRow(name, xs) },
@@ -764,12 +783,107 @@ fun view(model) {
         }
       };
 
+      fun displayLigandBox(box) {
+        var summary = box.summary;
+        var toggleMsg = ToggleLigandSummary(summary.rawLigand.ligand_id);
+        var showHideLink =
+          if(box.summaryBoxVisible) {
+            a(onClick(fun() { toggleMsg }),
+              span(class("object_summary_link"), textNode("  Hide summary")))
+          } else {
+            a(onClick(fun() { toggleMsg }),
+              small(class("object_summary_link"), textNode("  Show summary")))
+          };
+
+        fun showLigandSubunitSummary(name, xs) {
+          if (listEmpty(xs)) {
+            MvuHTML.empty
+          } else {
+            fun mkLink(x) {
+              var name =
+                if (x.systematicName == "") {
+                  x.name
+                } else {
+                  x.name ^^ " / " ^^ x.systematicName 
+                };
+
+              var abbrev =
+                if (x.abbreviation == "") {
+                  unescapedTextNode(name)
+                } else {
+                  unescapedTextNode(x.abbreviation ^^
+                      "(" ^^ name ^^ ")")
+                };
+              [a(href("/ligandDisplay?ligandId=" ^^ intToString(x.id)), abbrev)]
+            }
+            var links = map(mkLink, xs);
+            var joinedLinks = MvuHTML.concat(join([br(a0, h0)], links));
+            mkRow(name, joinedLinks)
+          }
+        }
+
+        var renderedSummary = {
+          var synonymsRow = renderSynonyms(summary.ligandSynonyms);
+          var subunitsRow = showLigandSubunitSummary("Subunits", summary.ligandSubunits);
+          var complexesRow = showLigandSubunitSummary("Complexes", summary.ligandComplexes);
+          var genesRow = MvuHTML.empty;
+          var dbLinksRows = {
+            var uniprotIDs = mkIDRow("UniProtKB AC", 5, summary.ligandDBLinks);
+            var pubchemIDs = mkIDRow("PubChem CID", 17, summary.ligandDBLinks);
+            uniprotIDs +* pubchemIDs
+          };
+
+          if (box.summaryBoxVisible) {
+            mkRow("Ligand Id", textNode(intToString(summary.rawLigand.ligand_id))) +*
+            mkRow("Name", unescapedTextNode(summary.rawLigand.name)) +*
+            mkStrRowIfNonempty("Common abbreviation", summary.rawLigand.abbreviation) +*
+            synonymsRow +*
+            complexesRow +*
+            subunitsRow +*
+            genesRow +*
+            dbLinksRows
+          } else {
+            MvuHTML.empty
+          }
+        };
+
+
+        tr(a0,
+          td(class("grac_info"),
+            p(class("grac_heading split_para"),
+              ## TODO: This needs to change: abbreviation / peptide species etc.
+              unescapedTextNode(box.summary.rawLigand.name) +*
+              span(class("cgtp"), textNode(" C")) +*
+              showHideLink +*
+              span(class("split_para_right_text detailed_view_link"),
+                a(href("/ligandDisplay?ligandId=" ^^ intToString(summary.rawLigand.ligand_id)),
+                  textNode("More detailed page") +*
+                  img(attr("src", "/images/go.jpg"), MvuHTML.empty)))) +*
+              renderedSummary
+            ))
+      }
+
+      var ligands = {
+        if (listEmpty(boxes.ligands)) {
+          MvuHTML.empty
+        } else {
+          var renderedLigands =
+            MvuHTML.concatMap(fun(x) { displayLigandBox(x) }, boxes.ligands);
+
+          h3(a0, textNode("Ligands")) +*
+          div(class("data_tables_container"),
+            table_(class("receptor_data_tables fullwidth"),
+              tbody(a0, renderedLigands)))
+        }
+      };
+
       div(class("data_tables_container"),
         table_(class("receptor_data_tables fullwidth"),
           tbody(a0,
             MvuHTML.concat(
               map(fun(x) { displayObjectBox(x) }, boxes.objects))))) +*
-      aps
+      aps +*
+      ligands
     }
 
     fun displayComments(commentMarkup) {
@@ -1477,7 +1591,7 @@ fun getInitialModel() {
                ligandComplexes = x.complexes,
                ligandSubunits = x.subunits,
                ligandGenes = [], # TODO
-               ligandDBLinks = [] # TODO
+               ligandDBLinks = transformDatabaseLinks(x.dbLinks)
               );
             (lig :: ls, refs)
           }, ([], []), ls)

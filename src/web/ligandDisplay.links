@@ -1469,7 +1469,7 @@ fun view(model) {
 
 
           var pubchemLinks =
-            if (ligandInfo.rawLigand.pubchem_sid <> 0) {
+            if (ligandInfo.rawLigand.pubchem_sid > 0) {
               var sid = intToString(ligandInfo.rawLigand.pubchem_sid);
               [("GtoPdb PubChem SID", a(href("https://pubchem.ncbi.nlm.nih.gov/substance/" ^^ sid), textNode(sid)))]
             } else {
