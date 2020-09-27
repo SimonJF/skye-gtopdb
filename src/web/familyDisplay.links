@@ -136,6 +136,10 @@ typename Reaction =
   (ecNumber: String, reaction: Markup,
    specificReactions: [(description: String, reaction: Markup, references: [Int])]);
 
+typename SubstrateSummary =
+  (rawLigand: RawLigand, comments: Markup, standardProperty: String,
+   standardValue: Float, speciesID: Int, references: [Int]);
+
 typename ObjectSummary = (
    objectId: Int,
    rawObject: RawObject,
@@ -153,6 +157,7 @@ typename ObjectSummary = (
    objectSameEntityLigands: [(name: String, id: Int)],
    objectRankPotencies: [RankPotency],
    objectReactions: [Reaction],
+   objectSubstrates: [SubstrateSummary],
    # Need to sort in-memory, since `orderby` not supported w/ shredding
    objectDisplayOrder: Int
   );
@@ -834,7 +839,17 @@ fun getInitialModel() {
                          for (srr <-- Tables.specific_reaction_refs)
                          where (srr.specific_reaction_id == sr.specific_reaction_id)
                          [srr.reference_id])])
-                ]
+                ],
+          substrates =
+            for (s <-- Tables.substrate)
+              where (s.object_id == o.object_id)
+              for (l <-- Tables.ligand)
+              where (l.ligand_id == s.ligand_id)
+                [(=s, =l,
+                 refs =
+                   for (r <-- Tables.substrate_refs)
+                   where (r.substrate_id == s.substrate_id)
+                   [r.reference_id])]
         )
       ]
   }
@@ -1211,6 +1226,19 @@ fun getInitialModel() {
            }, ([], [], []), rs)
          }
 
+         sig transformSubstrates : (%) ~%~> ([SubstrateSummary], [Int], [Int])
+         fun transformSubstrates(subs) {
+           fold_right(fun(x, (subs, refs, ligands)) {
+               var comments = parseOrError(x.s.comments);
+               var (commentRefs, commentLigs) = collectIds(comments);
+               var s =
+                 (rawLigand = x.l, =comments, standardProperty = x.s.standard_property,
+                  standardValue = x.s.standard_value, speciesID = x.s.species_id,
+                  references = x.refs);
+               (s :: subs, commentRefs ++ x.refs ++ refs, commentLigs ++ ligands)
+           }, ([], [], []), subs)
+         }
+
          # There are very few accessory proteins (10), so it's easier
          # to just get them into memory, and check membership.
          var apIDs =
@@ -1246,6 +1274,9 @@ fun getInitialModel() {
              var (objectReactions, rRefs, rLigands) =
                transformReactions(r.reactions);
 
+             var (objectSubstrates, subsRefs, subsLigands) =
+               transformSubstrates(r.substrates);
+
              var subunitAPs =
                filterMap(fun(x) { 
                    if (elem(x.id, apIDs)) {
@@ -1274,6 +1305,7 @@ fun getInitialModel() {
                 =objectRankPotencies,
                 objectSameEntityLigands = r.sameEntityLigands,
                 =objectReactions,
+                =objectSubstrates,
                 objectDisplayOrder=r.displayOrder);
 
              var interactionRefs =
@@ -1283,8 +1315,9 @@ fun getInitialModel() {
 
              (o :: os,
                 synRefs ++ interactionRefs ++ commentRefs ++ cofactorRefs ++
-                productRefs ++ rpRefs ++ rRefs ++ refs,
-              commentLigands ++ cofactorLigands ++ rpLigands ++ rLigands ++ ligands,
+                productRefs ++ rpRefs ++ rRefs ++ subsRefs ++ refs,
+              commentLigands ++ cofactorLigands ++ rpLigands ++ rLigands ++ 
+              subsLigands ++ ligands,
               subunitAPs ++ aps)
            }, ([], [], [], []), os)
          }
