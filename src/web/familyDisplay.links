@@ -164,15 +164,26 @@ typename ObjectSummary = (
    objectDisplayOrder: Int
   );
 
-typename ObjectBox =
-  (objectSummary: ObjectSummary, objectBoxVisible: Bool);
+typename LigandSummary = (
+   rawLigand: RawLigand,
+   ligandSynonyms: [Synonym],
+   ligandComplexes: [SubunitSummary],
+   ligandSubunits: [SubunitSummary],
+   ligandGenes: [GeneRef],
+   ligandDBLinks: [DatabaseLink]
+  );
+
+typename SummaryBox(summaryTy) =
+  (summary: summaryTy, summaryBoxVisible: Bool);
 
 typename Model =
   Maybe((familyId: Int,
          familyName: String,
          familyType: String,
          overview: ContentBox(Markup),
-         objects: ContentBox((objects: [ObjectBox], accessoryProteins: [ObjectBox])),
+         objects: ContentBox((objects: [SummaryBox(ObjectSummary)],
+             ligands: [SummaryBox(LigandSummary)],
+             accessoryProteins: [SummaryBox(ObjectSummary)])),
          comments: ContentBox(Markup),
          furtherReading: ContentBox([Reference]),
          showReferences: Bool,
@@ -208,13 +219,15 @@ fun setBoxVisibilities(visible, model) {
     contributors=sbv(model.contributors))
 }
 
+## TODO: toggleLigands
+
 fun toggleObject(objectBox, id) {
   var contents = boxContents(objectBox);
 
   fun toggle(xs) {
     map(fun(objectBox) {
-      if (objectBox.objectSummary.objectId == id) {
-        (objectBox with objectBoxVisible = not(objectBox.objectBoxVisible))
+      if (objectBox.summary.objectId == id) {
+        (objectBox with summaryBoxVisible = not(objectBox.summaryBoxVisible))
       } else {
         objectBox
       }
@@ -222,6 +235,7 @@ fun toggleObject(objectBox, id) {
   }
 
   var newContents = (objects = toggle(contents.objects),
+      ligands = contents.ligands,
       accessoryProteins = toggle(contents.accessoryProteins));
   setContents(objectBox, newContents)
 }
@@ -292,10 +306,10 @@ fun view(model) {
     fun displayObjects(boxes) {
 
       fun displayObjectBox(box) {
-        var summary = box.objectSummary;
+        var summary = box.summary;
         var toggleMsg = ToggleObjectSummary(summary.objectId);
         var showHideLink =
-          if(box.objectBoxVisible) {
+          if(box.summaryBoxVisible) {
             a(onClick(fun() { toggleMsg }),
               span(class("object_summary_link"), textNode("  Hide summary")))
           } else {
@@ -410,7 +424,7 @@ fun view(model) {
         };
 
         fun showSummary() {
-          if (box.objectBoxVisible) {
+          if (box.summaryBoxVisible) {
             
             # Synonyms
             var synonymsRow = {
@@ -722,7 +736,7 @@ fun view(model) {
         tr(a0,
           td(class("grac_info"),
             p(class("grac_heading split_para"),
-              unescapedTextNode(box.objectSummary.rawObject.name) +*
+              unescapedTextNode(box.summary.rawObject.name) +*
               span(class("cgtp"), textNode(" C")) +*
               showHideLink +*
               span(class("split_para_right_text detailed_view_link"),
@@ -1405,9 +1419,9 @@ fun getInitialModel() {
           transformObjects(apObjs);
 
         var objectBoxes =
-          map(fun (r) { (objectSummary=r, objectBoxVisible=false) }, objects);
+          map(fun (r) { (summary=r, summaryBoxVisible=false) }, objects);
         var accessoryProteinBoxes =
-          map(fun (r) { (objectSummary=r, objectBoxVisible=false) }, relevantAPs);
+          map(fun (r) { (summary=r, summaryBoxVisible=false) }, relevantAPs);
 
         # We need to parse the markup we get, and use it to
         # get the required information from the DB.
@@ -1432,10 +1446,13 @@ fun getInitialModel() {
         var speciesMap = Species.getSpeciesMap();
         var objectName = formatObjectName(type);
 
+        var ligandBoxes = []; ## TODO: FILL ME IN
+
         Just((familyId=familyId, familyName=name, familyType=type,
            overview=mkTBox("Overview", true, overviewMarkup),
            objects=mkTBox(objectName, true,
-             (objects = objectBoxes, accessoryProteins = accessoryProteinBoxes)),
+             (objects = objectBoxes, ligands = ligandBoxes,
+              accessoryProteins = accessoryProteinBoxes)),
            comments=mkTBox("Comments", true, commentsMarkup),
            furtherReading=mkTBox("Further Reading", true, furtherReading),
            showReferences=true,
