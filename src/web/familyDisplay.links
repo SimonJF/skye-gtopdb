@@ -105,7 +105,7 @@ typename ExternalRef = (
 );
 
 
-typename Synonym = (synonymName: Markup, synonymOrder: Int, synonymReferences: [ReferenceId]);
+typename Synonym = (synonymName: String, synonymOrder: Int, synonymReferences: [ReferenceId]);
 
 var emptyER = (refId="", refSpeciesName="", refUrl="");
 
@@ -438,7 +438,7 @@ fun view(model) {
                         textNode(" ") +* renderCitationList(x.synonymReferences,
                             model.references)
                       } else { MvuHTML.empty };
-                    [renderM(x.synonymName) +* citationNode]
+                    [unescapedTextNode(x.synonymName) +* citationNode]
                 }, synonyms);
                 var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
                 mkRow("Previous and unofficial names", separatedSynonyms)
@@ -1342,7 +1342,7 @@ fun getInitialModel() {
              var (objectSynonyms, synRefs) =
               fold_right(fun (s, (syns, synRefs)) {
                   var x =
-                    (synonymName=parseOrError(s.name),
+                    (synonymName=s.name,
                      synonymOrder=s.order, synonymReferences=s.refs);
                   (x :: syns, s.refs ++ synRefs)
                   }, ([], []), r.synonyms);
@@ -1423,13 +1423,80 @@ fun getInitialModel() {
         var accessoryProteinBoxes =
           map(fun (r) { (summary=r, summaryBoxVisible=false) }, relevantAPs);
 
+
+        ## Next, query referenced ligands
+        var rawLigands = {
+          query nested {
+            for (l2f <-- Tables.ligand2family)
+              where (l2f.family_id == familyId)
+              for (l <-- Tables.ligand)
+                where (l.ligand_id == l2f.ligand_id)
+                [
+                  (=l,
+                   synonyms =
+                     for (l2s <-- Tables.ligand2synonym)
+                     where (l2s.ligand_id == l.ligand_id && l2s.display)
+                     [(=l2s,
+                       refs =
+                         for (sr <-- Tables.ligand2synonym_refs)
+                         where (sr.ligand2synonym_id == l2s.ligand2synonym_id)
+                         [sr.reference_id])],
+                   subunits =
+                     for (l2s <-- Tables.ligand2subunit)
+                     where (l2s.ligand_id == l.ligand_id)
+                     [(id = l.ligand_id, name = l.name,
+                       abbreviation = l.abbreviation, systematicName = "")],
+                   complexes =
+                     for (l2s <-- Tables.ligand2subunit)
+                     where (l2s.subunit_id == l.ligand_id)
+                     [(id = l.ligand_id, name = l.name,
+                       abbreviation = l.abbreviation, systematicName = "")],
+                   dbLinks =
+                     for (dbl <-- Tables.ligand_database_link)
+                       where (dbl.ligand_id == l.ligand_id)
+                       [dbl]
+                  )
+                ]
+            
+          }
+        };
+
+        fun transformLigands(ls) {
+          fold_right(fun(x, (ls, refs)) {
+             var (ligandSynonyms, synRefs) =
+              fold_right(fun (s, (syns, synRefs)) {
+                  var x =
+                    (synonymName=s.l2s.synonym,
+                     synonymOrder=(-1), synonymReferences=s.refs);
+                  (x :: syns, s.refs ++ synRefs)
+                  }, ([], []), x.synonyms);
+
+            var lig =
+              (rawLigand = x.l,
+               =ligandSynonyms,
+               ligandComplexes = x.complexes,
+               ligandSubunits = x.subunits,
+               ligandGenes = [], # TODO
+               ligandDBLinks = [] # TODO
+              );
+            (lig :: ls, refs)
+          }, ([], []), ls)
+        }
+
+        var (familyLigands, familyLigandRefs) =
+          transformLigands(rawLigands);
+
+        var ligandBoxes =
+          map(fun (r) { (summary=r, summaryBoxVisible=false) }, familyLigands);
+
         # We need to parse the markup we get, and use it to
         # get the required information from the DB.
         var overviewMarkup = parseOrError(overview);
         var commentsMarkup = parseOrError(comments);
         var (oRefs, oLigands) = collectIds(overviewMarkup);
         var (cRefs, cLigands) = collectIds(commentsMarkup);
-        var refs = uniquify(oRefs ++ cRefs ++ apReferences ++ objectReferences);
+        var refs = uniquify(oRefs ++ cRefs ++ apReferences ++
+            familyLigandRefs ++ objectReferences);
         var ligands = uniquify(oLigands ++ cLigands ++ apLigands ++ objectLigands);
 
         var references = queryReferences(refs);
@@ -1445,8 +1512,6 @@ fun getInitialModel() {
         # and saves us the faff of doing joins.
         var speciesMap = Species.getSpeciesMap();
         var objectName = formatObjectName(type);
-
-        var ligandBoxes = []; ## TODO: FILL ME IN
 
         Just((familyId=familyId, familyName=name, familyType=type,
            overview=mkTBox("Overview", true, overviewMarkup),
