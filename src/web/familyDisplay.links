@@ -19,8 +19,7 @@ open import DbLinks;
 # TO DO
 
 ## For objects
-# Endogenous substrates
-# Exogenous substrates
+# DONE
 
 ## For ligands
 # Ligand Id
@@ -93,6 +92,8 @@ open import DbLinks;
 # Same entity ligands
 # Rank potencies
 # Reactions
+# Endogenous substrates
+# Exogenous substrates
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -138,6 +139,7 @@ typename Reaction =
 
 typename SubstrateSummary =
   (rawLigand: RawLigand, comments: Markup, standardProperty: String,
+   endogenous: Bool,
    standardValue: Float, speciesID: Int, references: [Int]);
 
 typename ObjectSummary = (
@@ -272,7 +274,7 @@ fun view(model) {
       div(class("grid_16 alpha"),
         a(name("top"), h0) +*
         div(class("contentboxfull"),
-          h2(style("margin-top: 0px;"), textNode(model.familyName)) +*
+          h2(style("margin-top: 0px;"), unescapedTextNode(model.familyName)) +*
           div(class("textright"),
             p(style("font-weight:normal;font-size:90%;"),
               textNode("Unless otherwise stated all data on this page refer to the human proteins. ") +*
@@ -481,8 +483,8 @@ fun view(model) {
             # Only show structure comments as its own row if either the object has both
             # complexes and subunits, or has neither
             var structureCommentsRow = {
-              if ((listEmpty(summary.objectComplexes) && listEmpty(summary.objectSubunits)) ||
-                  (not(listEmpty(summary.objectComplexes)) && not(listEmpty(summary.objectSubunits))) &&
+              if (((listEmpty(summary.objectComplexes) && listEmpty(summary.objectSubunits)) ||
+                  (not(listEmpty(summary.objectComplexes)) && not(listEmpty(summary.objectSubunits)))) &&
                   not(markupEmpty(qsc))) {
                 mkRow("Structure comments", renderM(qsc))
               } else {
@@ -549,6 +551,76 @@ fun view(model) {
                 mkRow(name, tbl)
               }
             }
+
+            fun renderSubstrates(name, subs) {
+              fun renderSubstrate(s) {
+                var ligandData =
+                  a(href("/ligandDisplay?ligandId=" ^^
+                        intToString(s.rawLigand.ligand_id)),
+                      unescapedTextNode(s.rawLigand.name));
+                var comments =
+                  if (markupEmpty(s.comments)) {
+                    MvuHTML.empty
+                  } else {
+                    textNode("(") +*
+                    renderM(s.comments) +*
+                    textNode(")")
+                  };
+                var interactionInfo = {
+                  var standardProperty = {
+                    if (s.standardProperty == "" || s.standardProperty == "-") {
+                      MvuHTML.empty
+                    } else {
+                      unescapedTextNode(s.standardProperty)
+                    }
+                  };
+                  var standardValue = {
+                    # Should be a null check, really
+                    if (s.standardValue == 0.0) {
+                      MvuHTML.empty
+                    } else {
+                      var species = speciesLongName(s.speciesID);
+                      var speciesNode =
+                        if (species == "Human" || species == "Unknown" || species == "") {
+                          MvuHTML.empty
+                        } else {
+                          textNode(" " ^^ species)
+                        };
+                      textNode(floatToString(s.standardValue)) +* speciesNode
+                    }
+                  };
+                  standardProperty +*
+                  standardValue
+                };
+                var refs = renderCitations(s.references);
+
+                var data =
+                  ligandData +*
+                  comments +*
+                  interactionInfo +*
+                  refs;
+                  
+                tr(a0,
+                  td(class("grac_info_simple"), data))
+              }
+
+              if (listEmpty(subs)) {
+                MvuHTML.empty
+              } else {
+                var rows = MvuHTML.concatMap(renderSubstrate, subs);
+                var contents =
+                  table_(class("grac_inner_table"), rows);
+                mkRow(name, contents)
+              }
+            }
+
+            var (endoSubstrates, exoSubstrates) =
+              partition(fun(x) { x.endogenous }, summary.objectSubstrates);
+
+            var endoSubstratesRow =
+              renderSubstrates("Endogenous substrates", endoSubstrates);
+            var exoSubstratesRow =
+              renderSubstrates("Exogenous substrates", exoSubstrates);
 
             var ensemblIDs = mkIDRow("Ensembl ID", 15);
             var uniprotIDs = mkIDRow("UniProtKB AC", 5);
@@ -632,6 +704,8 @@ fun view(model) {
             slcIDs +*
             reactionsRow +*
             rpRows +*
+            endoSubstratesRow +*
+            exoSubstratesRow +*
             ptRow +*
             productsRow +*
             cofactorsRow +*
@@ -842,7 +916,7 @@ fun getInitialModel() {
                 ],
           substrates =
             for (s <-- Tables.substrate)
-              where (s.object_id == o.object_id)
+              where (s.object_id == o.object_id && s.in_grac)
               for (l <-- Tables.ligand)
               where (l.ligand_id == s.ligand_id)
                 [(=s, =l,
@@ -1234,7 +1308,7 @@ fun getInitialModel() {
                var s =
                  (rawLigand = x.l, =comments, standardProperty = x.s.standard_property,
                   standardValue = x.s.standard_value, speciesID = x.s.species_id,
-                  references = x.refs);
+                  endogenous = x.s.endogenous, references = x.refs);
                (s :: subs, commentRefs ++ x.refs ++ refs, commentLigs ++ ligands)
            }, ([], [], []), subs)
          }
