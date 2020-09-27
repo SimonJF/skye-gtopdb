@@ -18,20 +18,15 @@ open import DbLinks;
 
 # TO DO
 
+# Need to make sure that the name of each target / ligand renders
+# correctly (need to ensure abbreviation / systematic name / species
+# is displayed)
+
 ## For objects
 # DONE
 
 ## For ligands
-# Ligand Id
-# Name
-# Common abbreviation
-# Synonyms
-# Complexes
-# Subunits
-# Genes
-# PubChem CID
-# UniProtKB AC
-
+# DONE
 
 # DONE
 # Target Id
@@ -94,6 +89,17 @@ open import DbLinks;
 # Reactions
 # Endogenous substrates
 # Exogenous substrates
+## Ligands
+# Ligand Id
+# Name
+# Common abbreviation
+# Synonyms
+# Complexes
+# Subunits
+# Genes
+# PubChem CID
+# UniProtKB AC
+
 
 typename ReferenceId = Int;
 typename ReferenceNumber = Int;
@@ -109,7 +115,7 @@ typename Synonym = (synonymName: String, synonymOrder: Int, synonymReferences: [
 
 var emptyER = (refId="", refSpeciesName="", refUrl="");
 
-typename GeneRef = (geneName: Markup, geneSpeciesID: Int); # TODO: URL
+typename GeneRef = (geneName: String, geneSpeciesID: Int); # TODO: URL
 
 typename ObjectComments = (
   generalComments: Markup,
@@ -344,7 +350,7 @@ fun view(model) {
         }
       }
 
-      fun renderSynonyms(synonyms) {
+      fun renderSynonyms(name, synonyms) {
         if (listEmpty(synonyms)) {
           MvuHTML.empty
         } else {
@@ -358,7 +364,21 @@ fun view(model) {
               [unescapedTextNode(x.synonymName) +* citationNode]
           }, synonyms);
           var separatedSynonyms = MvuHTML.concat(join([textNode(" | ")], synonyms));
-          mkRow("Previous and unofficial names", separatedSynonyms)
+          mkRow(name, separatedSynonyms)
+        }
+      }
+
+      fun renderGenes(genes) {
+        if (listEmpty(genes)) {
+          MvuHTML.empty
+        } else {
+          var genes = map(fun(gene) {
+              var name = gene.geneName;
+              var id = gene.geneSpeciesID;
+            [unescapedTextNode(name) +* textNode(" (" ^^ resolveSpeciesShortName(id, model.speciesMap) ^^ ")")]
+            }, genes);
+          var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
+          mkRow("Genes", separatedGenes)
         }
       }
 
@@ -471,21 +491,9 @@ fun view(model) {
           if (box.summaryBoxVisible) {
             
             # Synonyms
-            var synonymsRow = renderSynonyms(summary.objectSynonyms);
-              
-            var genesRow = {
-              if (listEmpty(summary.objectGenes)) {
-                MvuHTML.empty
-              } else {
-                var genes = map(fun(gene) {
-                    var name = gene.geneName;
-                    var id = gene.geneSpeciesID;
-                  [renderM(name) +* textNode(" (" ^^ resolveSpeciesShortName(id, model.speciesMap) ^^ ")")]
-                  }, summary.objectGenes);
-                var separatedGenes = MvuHTML.concat(join([textNode(", ")], genes));
-                mkRow("Genes", separatedGenes)
-              }
-            };
+            var synonymsRow = renderSynonyms("Previous and unofficial names",
+                summary.objectSynonyms);
+            var genesRow = renderGenes(summary.objectGenes);
 
             var qsc = summary.objectComments.quaternaryStructureComments;
             fun showSubunitSummary(name, xs, showComments) {
@@ -823,10 +831,10 @@ fun view(model) {
         }
 
         var renderedSummary = {
-          var synonymsRow = renderSynonyms(summary.ligandSynonyms);
+          var synonymsRow = renderSynonyms("Synonyms", summary.ligandSynonyms);
           var subunitsRow = showLigandSubunitSummary("Subunits", summary.ligandSubunits);
           var complexesRow = showLigandSubunitSummary("Complexes", summary.ligandComplexes);
-          var genesRow = MvuHTML.empty;
+          var genesRow = renderGenes(summary.ligandGenes);
           var dbLinksRows = {
             var uniprotIDs = mkIDRow("UniProtKB AC", 5, summary.ligandDBLinks);
             var pubchemIDs = mkIDRow("PubChem CID", 17, summary.ligandDBLinks);
@@ -1494,7 +1502,7 @@ fun getInitialModel() {
                 =objectSynonyms,
                 objectGenes=
                   map(fun ((name, id)) {
-                    (geneName = parseOrError(name), geneSpeciesID = id)
+                    (geneName = name, geneSpeciesID = id)
                   }, r.genes),
                 objectDBLinks = transformDatabaseLinks(r.dbLinks),
                 objectPrincipalTransductions= r.principalTransductions,
@@ -1568,7 +1576,13 @@ fun getInitialModel() {
                    dbLinks =
                      for (dbl <-- Tables.ligand_database_link)
                        where (dbl.ligand_id == l.ligand_id)
-                       [dbl]
+                       [dbl],
+                   genes =
+                     for (p2p <-- Tables.precursor2peptide)
+                     where (p2p.ligand_id == l.ligand_id)
+                       for (p <-- Tables.precursor)
+                       where (p.precursor_id == p2p.precursor_id)
+                         [(geneName = p.gene_name, geneSpeciesID = p.species_id)]
                   )
                 ]
             
@@ -1590,7 +1604,7 @@ fun getInitialModel() {
                =ligandSynonyms,
                ligandComplexes = x.complexes,
                ligandSubunits = x.subunits,
-               ligandGenes = [], # TODO
+               ligandGenes = x.genes,
                ligandDBLinks = transformDatabaseLinks(x.dbLinks)
               );
             (lig :: ls, refs)
