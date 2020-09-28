@@ -189,7 +189,8 @@ fun renderReferencesBox(showRefs, refs, toggleMsg) {
 
   var innerSection =
     if(showRefs) {
-      div(id("refs") +@ class("visibleSection"), inner)
+      div(id("refs") +@ class("visibleSection") +@
+          style("display: inline;"), inner)
     } else {
       MvuHTML.empty
     };

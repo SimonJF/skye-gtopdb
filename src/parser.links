@@ -61,6 +61,7 @@ mutual {
     markup() >>= fun (contents) {
     stringE("</") >>
     string(tagName) >>
+    maybeSpaces() >> # Handle some dodgy data
     char('>') >>
     return(mkHtmlTag(implode(tagName), attrs, contents))
     }}}

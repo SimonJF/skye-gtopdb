@@ -143,8 +143,10 @@ typename Reaction =
   (ecNumber: String, reaction: Markup,
    specificReactions: [(description: String, reaction: Markup, references: [Int])]);
 
+typename SubstrateName = [| Ligand:((name: String, id: Int)) | NoLigand:String |];
+
 typename SubstrateSummary =
-  (rawLigand: RawLigand, comments: Markup, standardProperty: String,
+  (name: SubstrateName, comments: Markup, standardProperty: String,
    endogenous: Bool,
    standardValue: Float, speciesID: Int, references: [Int]);
 
@@ -155,7 +157,7 @@ typename ObjectSummary = (
    objectSynonyms: [Synonym],
    objectGenes: [GeneRef],
    objectDBLinks: [DatabaseLink],
-   objectPrincipalTransductions: [String],
+   objectPrincipalTransductions: [Markup],
    objectInteractions: [(String, [Interaction])], # (Type, Interactions)
    objectProducts: [EnzymeReactionComponent],
    objectCofactors: [EnzymeReactionComponent],
@@ -306,6 +308,10 @@ fun view(model) {
       resolveSpeciesLongName(id, model.speciesMap)
     }
 
+    fun speciesShortName(id) {
+      resolveSpeciesShortName(id, model.speciesMap)
+    }
+
     # headerBox: Header information for given family
     var headerBox =
       div(class("grid_16 alpha"),
@@ -391,6 +397,21 @@ fun view(model) {
         }
       }
 
+      fun renderName(name, abbreviation, systematicName) {
+        var name =
+          if (systematicName == "" || systematicName == name) {
+            name
+          } else {
+            name ^^ " / " ^^ systematicName 
+          };
+
+        if (abbreviation == "") {
+          unescapedTextNode(name)
+        } else {
+          unescapedTextNode(abbreviation ^^
+              " (" ^^ name ^^ ")")
+        }
+      }
 
       fun displayObjectBox(box) {
         var summary = box.summary;
@@ -453,7 +474,7 @@ fun view(model) {
           if (summary.objectType == GPCR) {
               var contents =
                 if (length(summary.objectPrincipalTransductions) > 0) {
-                  MvuHTML.concat(map(fun(x) { unescapedTextNode(x) },
+                  MvuHTML.concat(map(fun(x) { renderM(x) },
                     summary.objectPrincipalTransductions))
                 } else {
                   textNode("-")
@@ -501,21 +522,8 @@ fun view(model) {
                 MvuHTML.empty
               } else {
                 fun mkLink(x) {
-                  var name =
-                    if (x.systematicName == "") {
-                      x.name
-                    } else {
-                      x.name ^^ " / " ^^ x.systematicName 
-                    };
-
-                  var abbrev =
-                    if (x.abbreviation == "") {
-                      unescapedTextNode(name)
-                    } else {
-                      unescapedTextNode(x.abbreviation ^^
-                          "(" ^^ name ^^ ")")
-                    };
-                  [a(href("/objectDisplay?objectId=" ^^ intToString(x.id)), abbrev)]
+                  var name = renderName(x.name, x.abbreviation, x.systematicName);
+                  [a(href("/objectDisplay?objectId=" ^^ intToString(x.id)), name)]
                 }
                 var links = map(mkLink, xs);
                 var joinedLinks = MvuHTML.concat(join([br(a0, h0)], links));
@@ -550,7 +558,7 @@ fun view(model) {
             var nomenclature = {
               var o = summary.rawObject;
               if (o.systematic_name <> "") {
-                if (o.name == o.systematic_name) {
+                if (o.name <> o.systematic_name) {
                   mkRow("Nomenclature", unescapedTextNode(o.name)) +*
                   mkRow("Systematic nomenclature", unescapedTextNode(o.systematic_name))
                 } else {
@@ -595,10 +603,14 @@ fun view(model) {
 
             fun renderSubstrates(name, subs) {
               fun renderSubstrate(s) {
-                var ligandData =
-                  a(href("/ligandDisplay?ligandId=" ^^
-                        intToString(s.rawLigand.ligand_id)),
-                      unescapedTextNode(s.rawLigand.name));
+                var name =
+                  switch (s.name) {
+                    case Ligand(x) ->
+                      a(href("/ligandDisplay?ligandId=" ^^
+                            intToString(x.id)),
+                          unescapedTextNode(x.name))
+                    case NoLigand(x) -> unescapedTextNode(x)
+                  };
                 var comments =
                   if (markupEmpty(s.comments)) {
                     MvuHTML.empty
@@ -636,7 +648,7 @@ fun view(model) {
                 var refs = renderCitations(s.references);
 
                 var data =
-                  ligandData +*
+                  name +*
                   comments +*
                   interactionInfo +*
                   refs;
@@ -661,7 +673,7 @@ fun view(model) {
             var endoSubstratesRow =
               renderSubstrates("Endogenous substrates", endoSubstrates);
             var exoSubstratesRow =
-              renderSubstrates("Exogenous substrates", exoSubstrates);
+              renderSubstrates("Substrates", exoSubstrates);
 
             var ensemblIDs = mkIDRow("Ensembl ID", 15, summary.objectDBLinks);
             var uniprotIDs = mkIDRow("UniProtKB AC", 5, summary.objectDBLinks);
@@ -760,11 +772,23 @@ fun view(model) {
           }
         }
 
+        var objectName =
+          renderName(summary.rawObject.name,
+              summary.rawObject.abbreviation, 
+              summary.rawObject.systematic_name);
+
+        var cgtp =
+          if (summary.rawObject.in_cgtp) {
+            span(class("cgtp"), textNode(" C"))
+          } else {
+            MvuHTML.empty
+          };
+
         tr(a0,
           td(class("grac_info"),
             p(class("grac_heading split_para"),
-              unescapedTextNode(box.summary.rawObject.name) +*
-              span(class("cgtp"), textNode(" C")) +*
+              objectName +*
+              cgtp +*
               showHideLink +*
               span(class("split_para_right_text detailed_view_link"),
                 a(href("objectDisplay?objectId=" ^^ intToString(summary.objectId)),
@@ -855,13 +879,32 @@ fun view(model) {
           }
         };
 
+        var ligandName =
+          renderName(summary.rawLigand.name, summary.rawLigand.abbreviation, "");
+
+        # If the species is a peptide, then we need to infer the species from the
+        # genes. It may be the case that we need to infer from the subunits, but let's
+        # see, first.
+        var species =
+          if (summary.rawLigand.type == "Peptide") {
+            var species =
+              uniquify(map(fun(x) { speciesLongName(x.geneSpeciesID) }, summary.ligandGenes));
+            if (listEmpty(species)) {
+              MvuHTML.empty
+            } else {
+              var species = sort(species);
+              var joined = MvuHTML.concat(join([textNode(", ")], map(fun(x) { [textNode(x)] }, species)));
+              span(style("font-weight: normal;"), textNode(" {Sp: ") +* joined +* textNode("}"))
+            }
+          } else {
+            MvuHTML.empty
+          };
 
         tr(a0,
           td(class("grac_info"),
             p(class("grac_heading split_para"),
-              ## TODO: This needs to change: abbreviation / peptide species etc.
-              unescapedTextNode(box.summary.rawLigand.name) +*
-              span(class("cgtp"), textNode(" C")) +*
+              ligandName +*
+              species +*
               showHideLink +*
               span(class("split_para_right_text detailed_view_link"),
                 a(href("/ligandDisplay?ligandId=" ^^ intToString(summary.rawLigand.ligand_id)),
@@ -994,7 +1037,7 @@ fun getInitialModel() {
                        [r.reference_id])],
          cofactors =
            for (c <-- Tables.cofactor)
-             where (c.object_id == o.object_id)
+             where (c.object_id == o.object_id && c.in_grac)
                for (l <-- Tables.ligand)
                where (l.ligand_id == c.ligand_id)
                [(x = c, =l,
@@ -1003,7 +1046,7 @@ fun getInitialModel() {
                      where (r.cofactor_id == c.cofactor_id)
                        [r.reference_id])],
          interactions =
-           InteractionUtilities.interactionsForObject(o.object_id),
+           InteractionUtilities.conciseInteractionsForObject(o.object_id),
          =displayOrder,
          complexes =
            for (r2s <-- Tables.receptor2subunit)
@@ -1053,9 +1096,11 @@ fun getInitialModel() {
           substrates =
             for (s <-- Tables.substrate)
               where (s.object_id == o.object_id && s.in_grac)
-              for (l <-- Tables.ligand)
-              where (l.ligand_id == s.ligand_id)
-                [(=s, =l,
+                [(=s,
+                 ls =
+                   for (l <-- Tables.ligand)
+                   where (l.ligand_id == s.ligand_id)
+                   [l],
                  refs =
                    for (r <-- Tables.substrate_refs)
                    where (r.substrate_id == s.substrate_id)
@@ -1439,10 +1484,15 @@ fun getInitialModel() {
          sig transformSubstrates : (%) ~%~> ([SubstrateSummary], [Int], [Int])
          fun transformSubstrates(subs) {
            fold_right(fun(x, (subs, refs, ligands)) {
+               var name =
+                 switch (x.ls) {
+                   case [] -> NoLigand(x.s.name)
+                   case l :: _ -> Ligand((name = l.name, id = l.ligand_id))
+                 };
                var comments = parseOrError(x.s.comments);
                var (commentRefs, commentLigs) = collectIds(comments);
                var s =
-                 (rawLigand = x.l, =comments, standardProperty = x.s.standard_property,
+                 (=name, =comments, standardProperty = x.s.standard_property,
                   standardValue = x.s.standard_value, speciesID = x.s.species_id,
                   endogenous = x.s.endogenous, references = x.refs);
                (s :: subs, commentRefs ++ x.refs ++ refs, commentLigs ++ ligands)
@@ -1495,6 +1545,13 @@ fun getInitialModel() {
                     Nothing
                    }}, r.subunits);
 
+             var (transductions, tRefs, tLigs) =
+               fold_right(fun(t, (ts, refs, ligs)) {
+                   var t = parseOrError(t);
+                   var (tRefs, tLigs) = collectIds(t);
+                   (t :: ts, tRefs ++ refs, tLigs ++ ligs)
+               }, ([], [], []), r.principalTransductions);
+
              var o =
                (objectId=r.id,
                 objectType = Object.classifyObject(r.id),
@@ -1505,7 +1562,7 @@ fun getInitialModel() {
                     (geneName = name, geneSpeciesID = id)
                   }, r.genes),
                 objectDBLinks = transformDatabaseLinks(r.dbLinks),
-                objectPrincipalTransductions= r.principalTransductions,
+                objectPrincipalTransductions= transductions,
                 objectInteractions = transformInteractions(r.interactions),
                 =objectComments,
                 =objectCofactors,
@@ -1525,9 +1582,9 @@ fun getInitialModel() {
 
              (o :: os,
                 synRefs ++ interactionRefs ++ commentRefs ++ cofactorRefs ++
-                productRefs ++ rpRefs ++ rRefs ++ subsRefs ++ refs,
+                productRefs ++ rpRefs ++ rRefs ++ subsRefs ++ tRefs ++ refs,
               commentLigands ++ cofactorLigands ++ rpLigands ++ rLigands ++ 
-              subsLigands ++ ligands,
+              subsLigands ++ tLigs ++ ligands,
               subunitAPs ++ aps)
            }, ([], [], [], []), os)
          }

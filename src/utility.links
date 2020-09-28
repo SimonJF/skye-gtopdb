@@ -297,3 +297,7 @@ fun splitOnChar(str, chr) {
   }
 }
 
+
+fun sort(xs) {
+  sortBy(fun(x) { x }, xs)
+}

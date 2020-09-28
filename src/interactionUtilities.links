@@ -303,6 +303,11 @@ fun interactionsForObject(objectId) {
   queryInteractions(fun(i) { i.object_id == objectId && not(i.only_grac) && not(i.hide) })
 }
 
+fun conciseInteractionsForObject(objectId) {
+  queryInteractions(fun(i) { i.object_id == objectId &&
+      i.from_grac && not(i.hide) })
+}
+
 fun interactionsTargeting(ligandId) {
   queryInteractions(fun(i) { i.target_ligand_id == ligandId } )
 }
