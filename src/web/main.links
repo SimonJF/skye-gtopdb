@@ -7,9 +7,9 @@ import Navigate;
 import TargetsDisplay;
 import LigandList;
 import DiseaseList;
-#import DiseaseDisplay;
-#import ObjectDisplay;
-#import LigandDisplay;
+import DiseaseDisplay;
+import ObjectDisplay;
+import LigandDisplay;
 
 # Main routing table.
 fun main() {
@@ -21,9 +21,9 @@ fun main() {
   addRoute("/navigate", fun(_) { Navigate.mainPage() });
   addRoute("/targetsDisplay", fun(_) { TargetsDisplay.mainPage() });
   addRoute("/diseaseList", fun(_) { DiseaseList.mainPage() });
-#  addRoute("/diseaseDisplay", fun(_) { DiseaseDisplay.mainPage() });
-#  addRoute("/objectDisplay", fun(_) { ObjectDisplay.mainPage() });
-#  addRoute("/ligandDisplay", fun(_) { LigandDisplay.mainPage() });
+  addRoute("/diseaseDisplay", fun(_) { DiseaseDisplay.mainPage() });
+  addRoute("/objectDisplay", fun(_) { ObjectDisplay.mainPage() });
+  addRoute("/ligandDisplay", fun(_) { LigandDisplay.mainPage() });
   addRoute("/", fun(_) { Home.mainPage() });
   addStaticRoute("/css", "css", [("css", "text/css")]);
   addStaticRoute("/js", "js", [("js", "text/javascript")]);

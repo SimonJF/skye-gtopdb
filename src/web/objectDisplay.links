@@ -2310,7 +2310,8 @@ fun getInitialModel() {
         # in the list obtained by splitting the accessions string by ','.
         var rawAlleles =
           filter(fun(x) {
-              listElem(x.strI.official_gene_id, splitOnChar(x.al.accessions, ','))
+              var splitAccessions = splitOnChar(x.al.accessions, ',');
+              listElem(x.strI.official_gene_id, splitAccessions)
           }, rawAlleles);
 
         var alleles =
