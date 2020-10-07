@@ -1552,10 +1552,25 @@ fun getInitialModel() {
                    (t :: ts, tRefs ++ refs, tLigs ++ ligs)
                }, ([], [], []), r.principalTransductions);
 
+             # There is some seriously weird logic in the Java version
+             # which requires random stars to be added to some targets in
+             # family 76...
+             var rawObject = {
+               var affected = [
+                 462, 463, 464, 465, 467, 468, 752, 469
+               ];
+               if (familyId == 76 && (listElem(r.o.object_id, affected))) {
+                 (r.o with name = r.o.name ^^ "*")
+               } else {
+                 r.o
+               }
+             };
+
+
              var o =
                (objectId=r.id,
                 objectType = Object.classifyObject(r.id),
-                rawObject=r.o,
+                =rawObject,
                 =objectSynonyms,
                 objectGenes=
                   map(fun ((name, id)) {
