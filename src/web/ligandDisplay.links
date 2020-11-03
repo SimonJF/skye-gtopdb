@@ -961,41 +961,41 @@ fun getInitialModel() {
                       [r.reference_id])],
             interactions_targeting =
               InteractionUtilities.interactionsTargeting(ligandId),
-            rank_potencies =
-              for (glrp <-- Tables.grac_ligand_rank_potency)
-                where (glrp.rank_potency =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
-                for (o <-- Tables.object)
-                where (o.object_id == glrp.object_id)
-                [(=glrp,
-                  object = (o.object_id, o.name),
-                  refs =
-                    for (r <-- Tables.grac_ligand_rank_potency_refs)
-                    where (r.grac_ligand_rank_potency_id ==
-                      glrp.grac_ligand_rank_potency_id)
-                      [r.reference_id])],
-            mentioned_in =
-              [(overviews =
-                   for (gft <-- Tables.grac_family_text)
-                   where (gft.overview =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
-                     for (f <-- Tables.family)
-                     where (f.family_id == gft.family_id)
-                     [ (familyID = f.family_id, familyName = f.name) ],
-                 comments =
-                   for (gft <-- Tables.grac_family_text)
-                   where (gft.comments =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
-                     for (f <-- Tables.family)
-                     where (f.family_id == gft.family_id)
-                     [ (familyID = f.family_id, familyName = f.name) ])],
-            mentioned_in_objects =
-              for (o <-- Tables.object)
-                where (o.grac_comments =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
-                  [(=o,
-                    families =
-                      for (r2f <-- Tables.receptor2family)
-                      where (r2f.object_id == o.object_id)
-                        for (f <-- Tables.family)
-                        where (f.family_id == r2f.family_id)
-                        [(familyID = f.family_id, familyName = f.name)])],
+            rank_potencies = [], # Disabled until I land the regex patch
+            # for (glrp <-- Tables.grac_ligand_rank_potency)
+            #   where (glrp.rank_potency =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
+            #   for (o <-- Tables.object)
+            #   where (o.object_id == glrp.object_id)
+            #   [(=glrp,
+            #     object = (o.object_id, o.name),
+            #     refs =
+            #       for (r <-- Tables.grac_ligand_rank_potency_refs)
+            #       where (r.grac_ligand_rank_potency_id ==
+            #         glrp.grac_ligand_rank_potency_id)
+            #         [r.reference_id])],
+            mentioned_in = [], # Disabled until I land the regex patch
+             #[(overviews =
+             #     for (gft <-- Tables.grac_family_text)
+             #     where (gft.overview =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
+             #       for (f <-- Tables.family)
+             #       where (f.family_id == gft.family_id)
+             #       [ (familyID = f.family_id, familyName = f.name) ],
+             #   comments =
+             #     for (gft <-- Tables.grac_family_text)
+             #     where (gft.comments =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
+             #       for (f <-- Tables.family)
+             #       where (f.family_id == gft.family_id)
+             #       [ (familyID = f.family_id, familyName = f.name) ])],
+            mentioned_in_objects = [], # As above
+             #for (o <-- Tables.object)
+             #  where (o.grac_comments =~ /.*<Ligand\ id={intToString(ligandId)}\/>.*/)
+             #    [(=o,
+             #      families =
+             #        for (r2f <-- Tables.receptor2family)
+             #        where (r2f.object_id == o.object_id)
+             #          for (f <-- Tables.family)
+             #          where (f.family_id == r2f.family_id)
+             #          [(familyID = f.family_id, familyName = f.name)])],
             old_clusters =
               for (cl <-- Tables.ligand_cluster)
                 where (cl.ligand_id == ligandId)
