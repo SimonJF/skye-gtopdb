@@ -167,7 +167,7 @@ module Selecting {
        deleteDisease = deleteDisease, getDiseases = getDiseases)
     };
 
-    Mvu.runSimple("placeholder", initialModel, view, updt);
+    Mvu.runSimple("placeholder", initialModel, view, updt)
   }
 
 }
@@ -873,7 +873,7 @@ module Editing {
                     "Attempting to insert virtual ID");
                 insert Tables.disease_synonym2database_link values
                   [(disease2synonym_id = dbID, disease_database_link_id = dbl)]
-              }, x.dbLinkIDs);
+              }, x.dbLinkIDs)
             }, toInsert)
 
          }

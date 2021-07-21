@@ -378,7 +378,7 @@ fun commit(objectID, oldInfo, newInfo) server {
             assay_url = newI.interaction.assay_url, primary_target = newI.interaction.primary_target,
             # target_ligand_id = newI.interaction.target_ligand_id,
             whole_organism_assay = newI.interaction.whole_organism_assay,
-            hide = newI.interaction.hide);
+            hide = newI.interaction.hide)
       } else { () };
 
    #  # Update affinity references
@@ -429,7 +429,7 @@ fun commit(objectID, oldInfo, newInfo) server {
           values (interaction_id, malaria_stage_id)
           insertRecords
 
-      } else { () };
+      } else { () }
 
     }, modified);
 
@@ -495,7 +495,7 @@ fun commit(objectID, oldInfo, newInfo) server {
       insert Tables.malaria_stage2interaction
         values (interaction_id, malaria_stage_id) malariaStages
 
-    }, toInsert);
+    }, toInsert)
   }
 
   updateComments();
