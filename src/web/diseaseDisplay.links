@@ -223,8 +223,8 @@ fun getModel(diseaseId) {
     # Now we've grouped, we need to merge
     fun max2(x, y) {
       switch(max([x, y])) {
-        case Some(z) -> z
-        case None -> x
+        case Just(z) -> z
+        case Nothing -> x
       }
     }
 
